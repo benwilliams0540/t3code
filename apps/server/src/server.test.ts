@@ -126,6 +126,25 @@ import * as Data from "effect/Data";
 const defaultProjectId = ProjectId.make("project-default");
 const defaultThreadId = ThreadId.make("thread-default");
 const defaultDesktopBootstrapToken = "test-desktop-bootstrap-token";
+const makeRawOrchestrationEvent = (
+  sequence: number,
+  eventId = `event-raw-${sequence}`,
+): Extract<OrchestrationEvent, { type: "thread.deleted" }> => ({
+  sequence,
+  eventId: EventId.make(eventId),
+  aggregateKind: "thread",
+  aggregateId: defaultThreadId,
+  occurredAt: "2026-01-01T00:00:00.000Z",
+  commandId: null,
+  causationEventId: null,
+  correlationId: null,
+  metadata: {},
+  type: "thread.deleted",
+  payload: {
+    threadId: defaultThreadId,
+    deletedAt: "2026-01-01T00:00:00.000Z",
+  },
+});
 const defaultModelSelection = {
   instanceId: ProviderInstanceId.make("codex"),
   model: "gpt-5-codex",
@@ -5808,6 +5827,255 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assertTrue(result.failure._tag === "OrchestrationGetSnapshotError");
       assertTrue(result.failure.cause instanceof Error);
       assert.include(result.failure.cause.message, projectionError.message);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("subscribeEvents replays the raw durable log from sequence zero", () =>
+    Effect.gen(function* () {
+      const events = [makeRawOrchestrationEvent(1), makeRawOrchestrationEvent(2)];
+      const readCalls: Array<readonly [number, number | undefined]> = [];
+      yield* buildAppUnderTest({
+        layers: {
+          orchestrationEngine: {
+            latestSequence: Effect.succeed(2),
+            readEvents: (afterSequence, limit) => {
+              readCalls.push([afterSequence, limit]);
+              return Stream.fromIterable(events);
+            },
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const items = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.subscribeEvents]({
+            afterSequence: 0,
+            requestCompletionMarker: true,
+          }).pipe(Stream.take(3), Stream.runCollect),
+        ),
+      );
+
+      assert.deepEqual(readCalls, [[0, 2]]);
+      assert.deepEqual(
+        Array.from(items, (item) => (item.kind === "event" ? item.event.sequence : item.kind)),
+        [1, 2, "synchronized"],
+      );
+      assert.equal(items[0]?.kind === "event" ? items[0].event.type : null, "thread.deleted");
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("subscribeEvents resumes after an exclusive mid-log cursor", () =>
+    Effect.gen(function* () {
+      const events = [
+        makeRawOrchestrationEvent(1),
+        makeRawOrchestrationEvent(2),
+        makeRawOrchestrationEvent(3),
+      ];
+      yield* buildAppUnderTest({
+        layers: {
+          orchestrationEngine: {
+            latestSequence: Effect.succeed(3),
+            readEvents: (afterSequence, limit) => {
+              assert.equal(afterSequence, 1);
+              assert.equal(limit, 2);
+              return Stream.fromIterable(events.filter((event) => event.sequence > afterSequence));
+            },
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const items = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.subscribeEvents]({
+            afterSequence: 1,
+            requestCompletionMarker: true,
+          }).pipe(Stream.take(3), Stream.runCollect),
+        ),
+      );
+
+      assert.deepEqual(
+        Array.from(items, (item) => (item.kind === "event" ? item.event.sequence : item.kind)),
+        [2, 3, "synchronized"],
+      );
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("subscribeEvents closes the replay-live gap without duplicates", () =>
+    Effect.gen(function* () {
+      const liveEvents = yield* PubSub.unbounded<OrchestrationEvent>();
+      const replayed = [makeRawOrchestrationEvent(1), makeRawOrchestrationEvent(2)];
+      const overlap = makeRawOrchestrationEvent(2);
+      const live = makeRawOrchestrationEvent(3);
+      yield* buildAppUnderTest({
+        layers: {
+          orchestrationEngine: {
+            latestSequence: Effect.succeed(2),
+            streamDomainEvents: Stream.fromPubSub(liveEvents),
+            readEvents: () =>
+              Stream.fromEffect(
+                Effect.gen(function* () {
+                  yield* PubSub.publish(liveEvents, overlap);
+                  yield* PubSub.publish(liveEvents, live);
+                  return replayed;
+                }),
+              ).pipe(Stream.flatMap(Stream.fromIterable)),
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const items = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.subscribeEvents]({
+            afterSequence: 0,
+            requestCompletionMarker: true,
+          }).pipe(Stream.take(4), Stream.runCollect),
+        ),
+      );
+
+      assert.deepEqual(
+        Array.from(items, (item) => (item.kind === "event" ? item.event.sequence : item.kind)),
+        [1, 2, "synchronized", 3],
+      );
+      const eventIds = Array.from(items).flatMap((item) =>
+        item.kind === "event" ? [item.event.eventId] : [],
+      );
+      assert.equal(new Set(eventIds).size, eventIds.length);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("subscribeEvents requires orchestration read scope", () =>
+    Effect.gen(function* () {
+      yield* buildAppUnderTest();
+      const { response: exchangeResponse, body: tokenBody } = yield* exchangeAccessToken(
+        defaultDesktopBootstrapToken,
+        { scope: "access:write" },
+      );
+      assert.equal(exchangeResponse.status, 200);
+      assert.isDefined(tokenBody.access_token);
+
+      const wsTicketResponse = yield* HttpClient.post("/api/auth/websocket-ticket", {
+        headers: {
+          authorization: `Bearer ${tokenBody.access_token ?? ""}`,
+        },
+      });
+      const wsTicketBody = (yield* wsTicketResponse.json) as { readonly ticket: string };
+      const wsUrl = `${yield* getWsServerUrl("/ws", { authenticated: false })}?wsTicket=${encodeURIComponent(wsTicketBody.ticket)}`;
+      const rpcError = yield* Effect.flip(
+        Effect.scoped(
+          withWsRpcClient(wsUrl, (client) =>
+            client[ORCHESTRATION_WS_METHODS.subscribeEvents]({
+              afterSequence: 0,
+            }).pipe(Stream.runHead),
+          ),
+        ),
+      );
+
+      assert.equal(rpcError._tag, "EnvironmentAuthorizationError");
+      if (rpcError._tag === "EnvironmentAuthorizationError") {
+        assert.equal(rpcError.requiredScope, "orchestration:read");
+      }
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("subscribeEvents supports simultaneous subscribers", () =>
+    Effect.gen(function* () {
+      const liveEvents = yield* PubSub.unbounded<OrchestrationEvent>();
+      const firstSynchronized = yield* Deferred.make<void>();
+      const secondSynchronized = yield* Deferred.make<void>();
+      yield* buildAppUnderTest({
+        layers: {
+          orchestrationEngine: {
+            latestSequence: Effect.succeed(0),
+            streamDomainEvents: Stream.fromPubSub(liveEvents),
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const items = yield* Effect.scoped(
+        Effect.gen(function* () {
+          const subscribe = (synchronized: Deferred.Deferred<void>) =>
+            withWsRpcClient(wsUrl, (client) =>
+              client[ORCHESTRATION_WS_METHODS.subscribeEvents]({
+                afterSequence: 0,
+                requestCompletionMarker: true,
+              }).pipe(
+                Stream.tap((item) =>
+                  item.kind === "synchronized"
+                    ? Deferred.succeed(synchronized, undefined).pipe(Effect.ignore)
+                    : Effect.void,
+                ),
+                Stream.take(2),
+                Stream.runCollect,
+              ),
+            );
+          const first = yield* subscribe(firstSynchronized).pipe(Effect.forkScoped);
+          const second = yield* subscribe(secondSynchronized).pipe(Effect.forkScoped);
+          yield* Effect.all([
+            Deferred.await(firstSynchronized),
+            Deferred.await(secondSynchronized),
+          ]);
+          yield* PubSub.publish(liveEvents, makeRawOrchestrationEvent(1));
+          return yield* Effect.all([Fiber.join(first), Fiber.join(second)]);
+        }),
+      );
+
+      for (const subscriberItems of items) {
+        assert.deepEqual(
+          Array.from(subscriberItems, (item) =>
+            item.kind === "event" ? item.event.sequence : item.kind,
+          ),
+          ["synchronized", 1],
+        );
+      }
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("subscribeEvents fails a slow consumer before its live buffer grows unbounded", () =>
+    Effect.gen(function* () {
+      const liveDrainFinished = yield* Deferred.make<void>();
+      const releaseReplay = yield* Deferred.make<void>();
+      yield* buildAppUnderTest({
+        layers: {
+          orchestrationEngine: {
+            latestSequence: Effect.succeed(0),
+            streamDomainEvents: Stream.fromIterable(
+              Array.from({ length: 1_025 }, (_unused, index) =>
+                makeRawOrchestrationEvent(index + 1),
+              ),
+            ).pipe(
+              Stream.ensuring(Deferred.succeed(liveDrainFinished, undefined).pipe(Effect.ignore)),
+            ),
+            readEvents: () => Stream.fromEffect(Deferred.await(releaseReplay)).pipe(Stream.drain),
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const result = yield* Effect.scoped(
+        Effect.gen(function* () {
+          const subscriber = yield* withWsRpcClient(wsUrl, (client) =>
+            client[ORCHESTRATION_WS_METHODS.subscribeEvents]({
+              afterSequence: 0,
+            }).pipe(Stream.runDrain, Effect.result),
+          ).pipe(Effect.forkScoped);
+          yield* Deferred.await(liveDrainFinished);
+          yield* Deferred.succeed(releaseReplay, undefined);
+          return yield* Fiber.join(subscriber);
+        }),
+      );
+
+      assert.equal(result._tag, "Failure");
+      if (result._tag === "Failure") {
+        assert.equal(result.failure._tag, "OrchestrationGetSnapshotError");
+        assert.equal(
+          result.failure.message,
+          "Orchestration event subscriber fell behind the live stream",
+        );
+      }
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 

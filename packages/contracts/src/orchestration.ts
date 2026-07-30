@@ -27,6 +27,7 @@ export const ORCHESTRATION_WS_METHODS = {
   getTurnDiff: "orchestration.getTurnDiff",
   getFullThreadDiff: "orchestration.getFullThreadDiff",
   getArchivedShellSnapshot: "orchestration.getArchivedShellSnapshot",
+  subscribeEvents: "orchestration.subscribeEvents",
   subscribeShell: "orchestration.subscribeShell",
   subscribeThread: "orchestration.subscribeThread",
 } as const;
@@ -487,6 +488,19 @@ export const OrchestrationSubscribeShellInput = Schema.Struct({
   requestCompletionMarker: Schema.optionalKey(Schema.Boolean),
 });
 export type OrchestrationSubscribeShellInput = typeof OrchestrationSubscribeShellInput.Type;
+
+export const OrchestrationSubscribeEventsInput = Schema.Struct({
+  /**
+   * Exclusive cursor into the durable global orchestration event log. Pass
+   * zero to replay from the beginning.
+   */
+  afterSequence: NonNegativeInt,
+  /**
+   * Requests an explicit marker after durable catch-up and before live events.
+   */
+  requestCompletionMarker: Schema.optionalKey(Schema.Boolean),
+});
+export type OrchestrationSubscribeEventsInput = typeof OrchestrationSubscribeEventsInput.Type;
 
 export const OrchestrationSubscribeThreadInput = Schema.Struct({
   threadId: ThreadId,
@@ -1261,6 +1275,17 @@ export const OrchestrationEvent = Schema.Union([
 ]);
 export type OrchestrationEvent = typeof OrchestrationEvent.Type;
 
+export const OrchestrationEventStreamItem = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("synchronized"),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("event"),
+    event: OrchestrationEvent,
+  }),
+]);
+export type OrchestrationEventStreamItem = typeof OrchestrationEventStreamItem.Type;
+
 export const OrchestrationThreadStreamItem = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal("synchronized"),
@@ -1378,6 +1403,10 @@ export const OrchestrationRpcSchemas = {
   getArchivedShellSnapshot: {
     input: Schema.Struct({}),
     output: OrchestrationShellSnapshot,
+  },
+  subscribeEvents: {
+    input: OrchestrationSubscribeEventsInput,
+    output: OrchestrationEventStreamItem,
   },
   subscribeThread: {
     input: OrchestrationSubscribeThreadInput,
