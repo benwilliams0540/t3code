@@ -1,0 +1,647 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rooms.local/contracts/workspace-read/v1/schema.json",
+  "title": "Rooms workspace-read contract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "semantics",
+    "principals",
+    "rooms",
+    "workspace",
+    "states"
+  ],
+  "properties": {
+    "contract": { "$ref": "#/$defs/contract" },
+    "semantics": { "$ref": "#/$defs/semantics" },
+    "principals": {
+      "type": "array",
+      "minItems": 3,
+      "items": { "$ref": "#/$defs/principal" }
+    },
+    "rooms": {
+      "type": "array",
+      "minItems": 2,
+      "items": { "$ref": "#/$defs/room" }
+    },
+    "workspace": { "$ref": "#/$defs/workspace" },
+    "states": {
+      "type": "array",
+      "minItems": 5,
+      "items": { "$ref": "#/$defs/stateExample" }
+    }
+  },
+  "$defs": {
+    "uuidV7": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "typedId": {
+      "type": "string",
+      "pattern": "^(fixture|room|channel|thread|task|document|revision|workflow|stage|evidence|feed-item|atlas):[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "principalId": {
+      "type": "string",
+      "pattern": "^[ham]:[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "gitObjectId": {
+      "type": "string",
+      "description": "Lowercase SHA-1 or SHA-256 Git object id.",
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "nullableSequence": {
+      "oneOf": [
+        { "type": "integer", "minimum": 0 },
+        { "type": "null" }
+      ]
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "schema_uri", "fixture_id", "captured_at"],
+      "properties": {
+        "id": { "const": "rooms.workspace-read" },
+        "version": { "const": 1 },
+        "schema_uri": { "const": "https://rooms.local/contracts/workspace-read/v1/schema.json" },
+        "fixture_id": { "$ref": "#/$defs/typedId" },
+        "captured_at": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "semantics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pagination", "unread", "authorization", "freshness"],
+      "properties": {
+        "pagination": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["order", "cursor", "snapshot", "next_cursor", "has_more", "stale_cursor"],
+          "properties": {
+            "order": { "const": "global_seq_ascending" },
+            "cursor": { "const": "exclusive_after_seq" },
+            "snapshot": { "const": "first_page_pins_snapshot_head_seq" },
+            "next_cursor": { "const": "last_item_seq_or_request_after_seq" },
+            "has_more": { "const": "matching_item_exists_through_snapshot_head" },
+            "stale_cursor": { "const": "error_with_restart_cursor" }
+          }
+        },
+        "unread": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scope", "cursor", "count", "mark_read"],
+          "properties": {
+            "scope": { "const": "member_and_stream" },
+            "cursor": { "const": "monotonic_read_through_seq" },
+            "count": { "const": "counted_items_after_read_through_through_latest_visible" },
+            "mark_read": { "const": "explicit_server_write_not_render_side_effect" }
+          }
+        },
+        "authorization": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["layers", "roles", "reachable_is_membership"],
+          "properties": {
+            "layers": {
+              "type": "array",
+              "const": ["authentication", "membership", "role_authorization"]
+            },
+            "roles": {
+              "type": "array",
+              "const": ["observer", "operator", "admin"]
+            },
+            "reachable_is_membership": { "const": false }
+          }
+        },
+        "freshness": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reachability", "mirror", "disagreement"],
+          "properties": {
+            "reachability": { "const": "independent_machine_fact" },
+            "mirror": { "const": "as_of_and_upstream_sequence" },
+            "disagreement": { "const": "surface_reachable_but_stale" }
+          }
+        }
+      }
+    },
+    "unread": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["read_through_seq", "latest_visible_seq", "count", "counted_event_seqs"],
+      "properties": {
+        "read_through_seq": { "type": "integer", "minimum": 0 },
+        "latest_visible_seq": { "type": "integer", "minimum": 0 },
+        "count": { "type": "integer", "minimum": 0 },
+        "counted_event_seqs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "principal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "display_name"],
+      "properties": {
+        "id": { "$ref": "#/$defs/principalId" },
+        "type": { "enum": ["human", "agent", "machine"] },
+        "display_name": { "type": "string", "minLength": 1 },
+        "machine_id": { "$ref": "#/$defs/principalId" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "agent" } } },
+          "then": { "required": ["machine_id"] }
+        }
+      ]
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "principal_id", "membership", "role"],
+      "properties": {
+        "status": { "const": "authorized" },
+        "principal_id": { "$ref": "#/$defs/principalId" },
+        "membership": { "const": "member" },
+        "role": { "enum": ["observer", "operator", "admin"] }
+      }
+    },
+    "room": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "slug", "name", "locality", "declared_by", "membership", "unread"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typedId" },
+        "slug": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "name": { "type": "string", "minLength": 1 },
+        "locality": { "enum": ["local_only", "shared"] },
+        "declared_by": { "$ref": "#/$defs/principalId" },
+        "membership": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "role"],
+          "properties": {
+            "status": { "enum": ["member", "not_member"] },
+            "role": {
+              "oneOf": [
+                { "enum": ["observer", "operator", "admin"] },
+                { "type": "null" }
+              ]
+            }
+          }
+        },
+        "unread": { "$ref": "#/$defs/unread" }
+      }
+    },
+    "sourceEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "event_id", "type", "schema"],
+      "properties": {
+        "seq": { "type": "integer", "minimum": 1 },
+        "event_id": { "$ref": "#/$defs/uuidV7" },
+        "type": { "type": "string", "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$" },
+        "schema": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "feedItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "actor_id", "occurred_at", "summary", "source_event", "data"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typedId" },
+        "kind": {
+          "enum": [
+            "human_message",
+            "reaction",
+            "story_lifecycle",
+            "run_lifecycle",
+            "evidence_attached",
+            "approval_decided"
+          ]
+        },
+        "actor_id": { "$ref": "#/$defs/principalId" },
+        "occurred_at": { "$ref": "#/$defs/timestamp" },
+        "summary": { "type": "string", "minLength": 1 },
+        "source_event": { "$ref": "#/$defs/sourceEvent" },
+        "data": { "type": "object" }
+      }
+    },
+    "pageInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["after_seq", "limit", "snapshot_head_seq", "next_cursor", "has_more"],
+      "properties": {
+        "after_seq": { "$ref": "#/$defs/nullableSequence" },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "snapshot_head_seq": { "type": "integer", "minimum": 1 },
+        "next_cursor": { "$ref": "#/$defs/nullableSequence" },
+        "has_more": { "type": "boolean" }
+      }
+    },
+    "feed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["room_id", "channel_id", "page_info", "items"],
+      "properties": {
+        "room_id": { "$ref": "#/$defs/typedId" },
+        "channel_id": { "$ref": "#/$defs/typedId" },
+        "page_info": { "$ref": "#/$defs/pageInfo" },
+        "items": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/feedItem" }
+        }
+      }
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "key", "name", "position", "gate"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typedId" },
+        "key": { "enum": ["backlog", "in_progress", "human_qa", "done"] },
+        "name": { "type": "string", "minLength": 1 },
+        "position": { "type": "integer", "minimum": 0 },
+        "gate": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["allowed_principal_types", "required_evidence_kinds", "self_review"],
+              "properties": {
+                "allowed_principal_types": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": { "enum": ["human", "agent", "machine"] }
+                },
+                "required_evidence_kinds": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "enum": ["command-output", "diff", "test-run", "artifact", "screenshot", "annotation", "link"]
+                  }
+                },
+                "self_review": { "enum": ["allowed", "forbidden"] }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "story": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "story_type", "stage_id", "owner_id", "delegate", "labels", "evidence", "gate_state"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typedId" },
+        "title": { "type": "string", "minLength": 1 },
+        "story_type": { "type": "string", "minLength": 1 },
+        "stage_id": { "$ref": "#/$defs/typedId" },
+        "owner_id": { "$ref": "#/$defs/principalId" },
+        "delegate": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["agent_id", "thread_id", "run_status"],
+              "properties": {
+                "agent_id": { "$ref": "#/$defs/principalId" },
+                "thread_id": { "$ref": "#/$defs/typedId" },
+                "run_status": { "enum": ["queued", "running", "blocked", "completed", "failed"] }
+              }
+            }
+          ]
+        },
+        "labels": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["required_kinds", "attached_ids"],
+          "properties": {
+            "required_kinds": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "enum": ["command-output", "diff", "test-run", "artifact", "screenshot", "annotation", "link"]
+              }
+            },
+            "attached_ids": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/typedId" }
+            }
+          }
+        },
+        "gate_state": { "enum": ["not_applicable", "waiting_for_evidence", "waiting_for_review", "passed"] }
+      }
+    },
+    "channel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "purpose", "unread"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typedId" },
+        "name": { "type": "string", "pattern": "^# [a-z0-9-]+$" },
+        "purpose": { "type": "string", "minLength": 1 },
+        "unread": { "$ref": "#/$defs/unread" }
+      }
+    },
+    "thread": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "agent_id", "machine_id", "provider", "environment", "status", "as_of", "mirror", "machine"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typedId" },
+        "title": { "type": "string", "minLength": 1 },
+        "agent_id": { "$ref": "#/$defs/principalId" },
+        "machine_id": { "$ref": "#/$defs/principalId" },
+        "provider": { "type": "string", "minLength": 1 },
+        "environment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "name"],
+          "properties": {
+            "id": { "type": "string", "pattern": "^env:[a-z0-9-]+$" },
+            "name": { "type": "string", "minLength": 1 }
+          }
+        },
+        "status": { "enum": ["queued", "running", "blocked", "completed", "failed", "archived"] },
+        "as_of": { "$ref": "#/$defs/timestamp" },
+        "mirror": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["upstream_sequence", "last_synced_at", "freshness"],
+          "properties": {
+            "upstream_sequence": { "type": "integer", "minimum": 0 },
+            "last_synced_at": { "$ref": "#/$defs/timestamp" },
+            "freshness": { "enum": ["fresh", "stale", "unknown"] }
+          }
+        },
+        "machine": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reachable", "checked_at"],
+          "properties": {
+            "reachable": { "type": "boolean" },
+            "checked_at": { "$ref": "#/$defs/timestamp" }
+          }
+        }
+      }
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "current_revision_id", "source", "freshness", "revisions", "atlas"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typedId" },
+        "title": { "type": "string", "minLength": 1 },
+        "current_revision_id": { "$ref": "#/$defs/typedId" },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["remote_url", "sha", "source_head"],
+          "properties": {
+            "remote_url": { "type": "string", "format": "uri" },
+            "sha": { "$ref": "#/$defs/gitObjectId" },
+            "source_head": { "$ref": "#/$defs/gitObjectId" }
+          }
+        },
+        "freshness": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "compared_at", "source_head"],
+          "properties": {
+            "state": { "enum": ["current", "queued", "stale"] },
+            "compared_at": { "$ref": "#/$defs/timestamp" },
+            "source_head": { "$ref": "#/$defs/gitObjectId" }
+          }
+        },
+        "revisions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "author_id", "state", "created_at", "source_hash", "body_markdown"],
+            "properties": {
+              "id": { "$ref": "#/$defs/typedId" },
+              "author_id": { "$ref": "#/$defs/principalId" },
+              "state": { "enum": ["current", "queued", "superseded"] },
+              "created_at": { "$ref": "#/$defs/timestamp" },
+              "source_hash": { "$ref": "#/$defs/gitObjectId" },
+              "body_markdown": { "type": "string" }
+            }
+          }
+        },
+        "atlas": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "revision_id", "state", "route"],
+          "properties": {
+            "id": { "$ref": "#/$defs/typedId" },
+            "revision_id": { "$ref": "#/$defs/typedId" },
+            "state": { "enum": ["current", "queued", "stale"] },
+            "route": { "type": "string", "pattern": "^/rooms/" }
+          }
+        }
+      }
+    },
+    "projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "stage_order", "groups"],
+      "properties": {
+        "kind": { "enum": ["desktop_board", "mobile_vertical_stages"] },
+        "stage_order": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/typedId" }
+        },
+        "groups": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["stage_id", "story_ids"],
+            "properties": {
+              "stage_id": { "$ref": "#/$defs/typedId" },
+              "story_ids": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": { "$ref": "#/$defs/typedId" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "workspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selected_room_id", "authorization", "vision", "workflow", "stories", "channels", "feeds", "threads", "project_navigation", "documents", "presence", "projections"],
+      "properties": {
+        "selected_room_id": { "$ref": "#/$defs/typedId" },
+        "authorization": { "$ref": "#/$defs/authorization" },
+        "vision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["document_id", "headline", "summary"],
+          "properties": {
+            "document_id": { "$ref": "#/$defs/typedId" },
+            "headline": { "type": "string", "minLength": 1 },
+            "summary": { "type": "string", "minLength": 1 }
+          }
+        },
+        "workflow": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "story_type", "version", "stages"],
+          "properties": {
+            "id": { "$ref": "#/$defs/typedId" },
+            "story_type": { "type": "string", "minLength": 1 },
+            "version": { "type": "integer", "minimum": 1 },
+            "stages": {
+              "type": "array",
+              "minItems": 4,
+              "maxItems": 4,
+              "items": { "$ref": "#/$defs/stage" }
+            }
+          }
+        },
+        "stories": {
+          "type": "array",
+          "minItems": 4,
+          "items": { "$ref": "#/$defs/story" }
+        },
+        "channels": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/channel" }
+        },
+        "feeds": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/feed" }
+        },
+        "threads": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/thread" }
+        },
+        "project_navigation": {
+          "type": "array",
+          "minItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "label", "route"],
+            "properties": {
+              "key": { "enum": ["vision", "stories", "evidence", "audit_decisions"] },
+              "label": { "type": "string", "minLength": 1 },
+              "route": { "type": "string", "pattern": "^/rooms/" }
+            }
+          }
+        },
+        "documents": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/document" }
+        },
+        "presence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["human_ids", "agent_ids", "machine_ids"],
+          "properties": {
+            "human_ids": { "type": "array", "items": { "$ref": "#/$defs/principalId" } },
+            "agent_ids": { "type": "array", "items": { "$ref": "#/$defs/principalId" } },
+            "machine_ids": { "type": "array", "items": { "$ref": "#/$defs/principalId" } }
+          }
+        },
+        "projections": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "$ref": "#/$defs/projection" }
+        }
+      }
+    },
+    "stateExample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "request", "result"],
+      "properties": {
+        "name": {
+          "enum": [
+            "unauthenticated",
+            "unauthorized",
+            "empty",
+            "stale_cursor",
+            "reachable_but_stale"
+          ]
+        },
+        "request": { "type": "object" },
+        "result": { "type": "object" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "name": { "const": "unauthenticated" } }
+          },
+          "then": {
+            "properties": {
+              "result": {
+                "type": "object",
+                "required": ["status", "http_status", "code"],
+                "properties": {
+                  "status": { "const": "error" },
+                  "http_status": { "const": 401 },
+                  "code": { "const": "authorization_context_missing" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "name": { "const": "unauthorized" } }
+          },
+          "then": {
+            "properties": {
+              "result": {
+                "type": "object",
+                "required": ["status", "http_status", "code"],
+                "properties": {
+                  "status": { "const": "error" },
+                  "http_status": { "const": 403 },
+                  "code": { "const": "room_membership_required" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

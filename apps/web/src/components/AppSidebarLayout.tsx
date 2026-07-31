@@ -34,8 +34,10 @@ import {
   useSidebarVisibility,
 } from "./ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { RoomsWorkspaceRail } from "../features/rooms/shell/RoomsWorkspaceRail";
 
 const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "90px";
+const ROOMS_WORKSPACE_RAIL_WIDTH = "3.5rem";
 
 function subscribeToViewportWidth(onChange: () => void): () => void {
   window.addEventListener("resize", onChange);
@@ -123,8 +125,10 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   // and is identical for both sidebars — so v1 stays mounted there.
   const pathname = useLocation({ select: (location) => location.pathname });
   const isOnSettings = pathname === "/settings" || pathname.startsWith("/settings/");
-  const useSidebarV2 = sidebarV2Enabled && !isOnSettings;
-  const useSidebarV2Theme = useSidebarV2 || isOnSettings;
+  const { useSidebarV2, useSidebarV2Theme } = resolveAppSidebarVariant({
+    isOnSettings,
+    sidebarV2Enabled,
+  });
   const isMacosDesktop = isElectron && isMacPlatform(navigator.platform);
   const [sidebarWidth, setSidebarWidth] = useState(readInitialThreadSidebarWidth);
   // Subscribed rather than read once: the clamp must track live window size,
@@ -138,11 +142,14 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
       ? getWindowFullscreenState()
       : false;
   });
+  const workspaceControlsLeft =
+    isMacosDesktop && !isWindowFullscreen
+      ? "calc(" + MACOS_TRAFFIC_LIGHTS_LEFT_INSET + " + var(--rooms-workspace-rail-width))"
+      : "calc(env(safe-area-inset-left) + var(--rooms-workspace-rail-width) + 0.75rem)";
   const sidebarProviderStyle = {
-    "--sidebar-width": `${sidebarWidth}px`,
-    ...(isMacosDesktop && !isWindowFullscreen
-      ? { "--workspace-controls-left": MACOS_TRAFFIC_LIGHTS_LEFT_INSET }
-      : {}),
+    "--rooms-workspace-rail-width": ROOMS_WORKSPACE_RAIL_WIDTH,
+    "--sidebar-width": sidebarWidth + "px",
+    "--workspace-controls-left": workspaceControlsLeft,
   } as CSSProperties;
 
   useEffect(() => {
@@ -184,12 +191,13 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider className="h-dvh! min-h-0!" defaultOpen style={sidebarProviderStyle}>
+      <RoomsWorkspaceRail />
       <Sidebar
         side="left"
         collapsible="offcanvas"
         data-app-sidebar=""
         data-sidebar-version={useSidebarV2Theme ? "v2" : "v1"}
-        className="border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
+        className="left-[var(--rooms-workspace-rail-width)] border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
         resizable={{
           maxWidth: sidebarMaximumWidth,
           minWidth: THREAD_SIDEBAR_MIN_WIDTH,
@@ -207,4 +215,18 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
       <SidebarControl />
     </SidebarProvider>
   );
+}
+
+export function resolveAppSidebarVariant(input: {
+  readonly isOnSettings: boolean;
+  readonly sidebarV2Enabled: boolean;
+}): {
+  readonly useSidebarV2: boolean;
+  readonly useSidebarV2Theme: boolean;
+} {
+  const useSidebarV2 = input.sidebarV2Enabled && !input.isOnSettings;
+  return {
+    useSidebarV2,
+    useSidebarV2Theme: useSidebarV2 || input.isOnSettings,
+  };
 }
