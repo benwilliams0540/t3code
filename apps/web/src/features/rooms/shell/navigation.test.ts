@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { roomsWorkspaceFixture } from "../fixtures";
+import { resolveRoomsInternalHref } from "./internalHref";
 import { buildRoomsBreadcrumbs, channelSlugFromName, projectSectionSlug } from "./navigation";
 
 describe("Rooms shell navigation", () => {
@@ -25,5 +26,12 @@ describe("Rooms shell navigation", () => {
         projectView: "atlas",
       }).map((crumb) => crumb.label),
     ).toEqual(["Rooms", "Project", "Vision", "Atlas"]);
+  });
+
+  it("keeps web routes path-based and adapts internal links to Electron hash history", () => {
+    const route = "/rooms/rooms-local/project/vision/atlas";
+
+    expect(resolveRoomsInternalHref(route, "https:")).toBe(route);
+    expect(resolveRoomsInternalHref(route, "t3code-dev:")).toBe(`#${route}`);
   });
 });

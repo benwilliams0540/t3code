@@ -1,5 +1,6 @@
 import { BookOpenIcon, FileTextIcon, FolderOpenIcon, GitCommitHorizontalIcon } from "lucide-react";
 
+import { resolveRoomsInternalHref } from "../shell/internalHref";
 import type { RoomsWorkspaceSlotProps } from "../shell/slots";
 import { projectRoomsProjectIndex } from "./projection";
 
@@ -99,7 +100,7 @@ export function RoomsProjectIndex(props: RoomsWorkspaceSlotProps) {
                   <li key={item.key}>
                     <a
                       className="block rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground hover:bg-muted/50"
-                      href={item.route}
+                      href={resolveRoomsInternalHref(item.route)}
                     >
                       {item.label}
                     </a>

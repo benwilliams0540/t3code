@@ -12,6 +12,7 @@ import {
 
 import { cn } from "~/lib/utils";
 
+import { resolveRoomsInternalHref } from "../shell/internalHref";
 import type { RoomsProjectedActivity } from "./projection";
 
 const cardCopy = {
@@ -108,7 +109,7 @@ function ActivityDetails({ activity }: { readonly activity: RoomsProjectedActivi
           {activity.threadHref ? (
             <a
               className="mt-3 inline-flex items-center gap-1.5 rounded-md text-xs font-semibold text-violet-700 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring dark:text-violet-300"
-              href={activity.threadHref}
+              href={resolveRoomsInternalHref(activity.threadHref)}
             >
               Open detailed T3 thread
               <ExternalLinkIcon aria-hidden className="size-3" />

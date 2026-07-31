@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import type { RoomsStage, RoomsStateExample } from "../model/workspace";
+import { resolveRoomsInternalHref } from "../shell/internalHref";
 import type { RoomsWorkspaceSlotProps } from "../shell/slots";
 import {
   buildRoomsDashboardProjection,
@@ -145,14 +146,14 @@ function VisionCard({ projection }: { readonly projection: RoomsDashboardProject
         <div className="flex flex-wrap gap-2">
           <a
             className="inline-flex items-center gap-2 rounded-lg bg-foreground px-3 py-2 text-sm font-medium text-background"
-            href={route}
+            href={resolveRoomsInternalHref(route)}
           >
             Open vision
             <ArrowUpRightIcon aria-hidden className="size-3.5" />
           </a>
           <a
             className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground"
-            href={document.atlas.route}
+            href={resolveRoomsInternalHref(document.atlas.route)}
           >
             Atlas
           </a>
