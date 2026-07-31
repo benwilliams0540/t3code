@@ -3,7 +3,8 @@ import { useAtomValue } from "@effect/atom-react";
 import { useEffect, useMemo } from "react";
 
 import { isCommandPaletteOpen } from "../commandPaletteBus";
-import { useClientSettings, useSidebarV2Enabled } from "../hooks/useSettings";
+import { useClientSettings } from "../hooks/useSettings";
+import { useAppSidebarVariantSelection } from "../components/appSidebarVariant";
 import { openCommandPalette } from "../commandPaletteBus";
 import { useProjects } from "../state/entities";
 import { usePrimaryEnvironmentId } from "../state/environments";
@@ -28,7 +29,8 @@ function ChatRouteGlobalShortcuts() {
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread, routeThreadRef } =
     useHandleNewThread();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
-  const sidebarV2Enabled = useSidebarV2Enabled();
+  const [sidebarVariant] = useAppSidebarVariantSelection();
+  const sidebarV2Enabled = sidebarVariant === "v2";
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const projects = useProjects();
   const primaryEnvironmentId = usePrimaryEnvironmentId();

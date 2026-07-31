@@ -14,9 +14,10 @@ import { getLocalStorageItem } from "../hooks/useLocalStorage";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import { cn, isMacPlatform } from "../lib/utils";
 import { primaryServerKeybindingsAtom } from "../state/server";
-import { useEnvironmentIdentificationMode, useSidebarV2Enabled } from "../hooks/useSettings";
+import { useEnvironmentIdentificationMode } from "../hooks/useSettings";
 import ThreadSidebar from "./Sidebar";
 import ThreadSidebarV2 from "./SidebarV2";
+import { type AppSidebarVariant, useAppSidebarVariantSelection } from "./appSidebarVariant";
 import { useSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
 import {
   resolveInitialThreadSidebarWidth,
@@ -120,14 +121,14 @@ function SidebarControl() {
 
 export function AppSidebarLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
-  const sidebarV2Enabled = useSidebarV2Enabled();
+  const [sidebarVariant] = useAppSidebarVariantSelection();
   // Settings routes render the settings nav, which lives in the v1 component
   // and is identical for both sidebars — so v1 stays mounted there.
   const pathname = useLocation({ select: (location) => location.pathname });
   const isOnSettings = pathname === "/settings" || pathname.startsWith("/settings/");
-  const { useSidebarV2, useSidebarV2Theme } = resolveAppSidebarVariant({
+  const { showRoomsSidebar, useSidebarV2, useSidebarV2Theme } = resolveAppSidebarPresentation({
     isOnSettings,
-    sidebarV2Enabled,
+    sidebarVariant,
   });
   const isMacosDesktop = isElectron && isMacPlatform(navigator.platform);
   const [sidebarWidth, setSidebarWidth] = useState(readInitialThreadSidebarWidth);
@@ -144,10 +145,10 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   });
   const workspaceControlsLeft =
     isMacosDesktop && !isWindowFullscreen
-      ? "calc(" + MACOS_TRAFFIC_LIGHTS_LEFT_INSET + " + var(--rooms-workspace-rail-width))"
+      ? MACOS_TRAFFIC_LIGHTS_LEFT_INSET
       : "calc(env(safe-area-inset-left) + var(--rooms-workspace-rail-width) + 0.75rem)";
   const sidebarProviderStyle = {
-    "--rooms-workspace-rail-width": ROOMS_WORKSPACE_RAIL_WIDTH,
+    "--rooms-workspace-rail-width": showRoomsSidebar ? ROOMS_WORKSPACE_RAIL_WIDTH : "0rem",
     "--sidebar-width": sidebarWidth + "px",
     "--workspace-controls-left": workspaceControlsLeft,
   } as CSSProperties;
@@ -191,42 +192,55 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider className="h-dvh! min-h-0!" defaultOpen style={sidebarProviderStyle}>
-      <RoomsWorkspaceRail />
-      <Sidebar
-        side="left"
-        collapsible="offcanvas"
-        data-app-sidebar=""
-        data-sidebar-version={useSidebarV2Theme ? "v2" : "v1"}
-        className="left-[var(--rooms-workspace-rail-width)] border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
-        resizable={{
-          maxWidth: sidebarMaximumWidth,
-          minWidth: THREAD_SIDEBAR_MIN_WIDTH,
-          shouldAcceptWidth: ({ currentWidth, nextWidth, wrapper }) =>
-            nextWidth <= currentWidth ||
-            wrapper.clientWidth - nextWidth >= THREAD_MAIN_CONTENT_MIN_WIDTH,
-          storageKey: THREAD_SIDEBAR_WIDTH_STORAGE_KEY,
-          onResize: setSidebarWidth,
-        }}
-      >
-        {useSidebarV2 ? <ThreadSidebarV2 /> : <ThreadSidebar />}
-        <SidebarRail />
-      </Sidebar>
+      {showRoomsSidebar ? <RoomsWorkspaceRail /> : null}
+      {showRoomsSidebar ? null : (
+        <Sidebar
+          side="left"
+          collapsible="offcanvas"
+          data-app-sidebar=""
+          data-sidebar-version={useSidebarV2Theme ? "v2" : "v1"}
+          className="left-[var(--rooms-workspace-rail-width)] border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
+          resizable={{
+            maxWidth: sidebarMaximumWidth,
+            minWidth: THREAD_SIDEBAR_MIN_WIDTH,
+            shouldAcceptWidth: ({ currentWidth, nextWidth, wrapper }) =>
+              nextWidth <= currentWidth ||
+              wrapper.clientWidth - nextWidth >= THREAD_MAIN_CONTENT_MIN_WIDTH,
+            storageKey: THREAD_SIDEBAR_WIDTH_STORAGE_KEY,
+            onResize: setSidebarWidth,
+          }}
+        >
+          {useSidebarV2 ? <ThreadSidebarV2 /> : <ThreadSidebar />}
+          <SidebarRail />
+        </Sidebar>
+      )}
       {children}
-      <SidebarControl />
+      {showRoomsSidebar ? null : <SidebarControl />}
     </SidebarProvider>
   );
 }
 
-export function resolveAppSidebarVariant(input: {
+export function resolveAppSidebarPresentation(input: {
   readonly isOnSettings: boolean;
-  readonly sidebarV2Enabled: boolean;
+  readonly sidebarVariant: AppSidebarVariant;
 }): {
+  readonly showRoomsSidebar: boolean;
   readonly useSidebarV2: boolean;
   readonly useSidebarV2Theme: boolean;
 } {
-  const useSidebarV2 = input.sidebarV2Enabled && !input.isOnSettings;
+  // Settings navigation currently belongs to v1. It replaces the selected
+  // sidebar while Settings is open; it is never mounted beside v2 or v3.
+  if (input.isOnSettings) {
+    return {
+      showRoomsSidebar: false,
+      useSidebarV2: false,
+      useSidebarV2Theme: input.sidebarVariant !== "v1",
+    };
+  }
+
   return {
-    useSidebarV2,
-    useSidebarV2Theme: useSidebarV2 || input.isOnSettings,
+    showRoomsSidebar: input.sidebarVariant === "v3",
+    useSidebarV2: input.sidebarVariant === "v2",
+    useSidebarV2Theme: input.sidebarVariant === "v2",
   };
 }

@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
 
-import {
-  useClientSettings,
-  useSidebarV2Enabled,
-  useUpdateClientSettings,
-} from "../../hooks/useSettings";
+import { useClientSettings, useUpdateClientSettings } from "../../hooks/useSettings";
+import { type AppSidebarVariant, useAppSidebarVariantSelection } from "../appSidebarVariant";
 import { Input } from "../ui/input";
+import { Radio, RadioGroup } from "../ui/radio-group";
 import { Switch } from "../ui/switch";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 
@@ -55,7 +53,7 @@ function AutoSettleDaysInput({
 }
 
 export function BetaSettingsPanel() {
-  const sidebarV2Enabled = useSidebarV2Enabled();
+  const [sidebarVariant, setSidebarVariant] = useAppSidebarVariantSelection();
   const sidebarAutoSettleAfterDays = useClientSettings(
     (settings) => settings.sidebarAutoSettleAfterDays,
   );
@@ -65,24 +63,47 @@ export function BetaSettingsPanel() {
     <SettingsPageContainer>
       <SettingsSection title="Beta features">
         <SettingsRow
-          title="Sidebar v2"
-          description="One flat thread list in creation order. Active work renders as rich cards; settled threads collapse to compact rows. Settling requires an up-to-date server — on older servers threads simply stay active. Switch back any time."
-          control={
-            <Switch
-              checked={sidebarV2Enabled}
-              // Touching the switch pins the choice, so a nightly build that
-              // defaults v2 on does not flip it back after the user opts out.
-              onCheckedChange={(checked) =>
-                updateSettings({
-                  sidebarV2Enabled: Boolean(checked),
-                  sidebarV2ConfiguredByUser: true,
-                })
-              }
-              aria-label="Enable the sidebar v2 beta"
-            />
-          }
-        />
-        {sidebarV2Enabled ? (
+          title="Sidebar version"
+          description="Choose one navigation model. Version 1, Version 2, and Rooms never render at the same time."
+        >
+          <RadioGroup
+            aria-label="Sidebar version"
+            className="grid gap-2 py-3 sm:grid-cols-3"
+            onValueChange={(value) => {
+              const variant = value as AppSidebarVariant;
+              setSidebarVariant(variant);
+              // Preserve the established v1/v2 setting as a compatible
+              // fallback if the local three-way selection is ever cleared.
+              updateSettings({
+                sidebarV2Enabled: variant === "v2",
+                sidebarV2ConfiguredByUser: true,
+              });
+            }}
+            value={sidebarVariant}
+          >
+            {(
+              [
+                ["v1", "Version 1", "Original project and thread tree."],
+                ["v2", "Version 2", "Flat, lifecycle-oriented thread list."],
+                ["v3", "Version 3", "Rooms workspaces, channels, and project context."],
+              ] as const
+            ).map(([value, title, description]) => (
+              <label
+                className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border bg-background px-3 py-3 has-[[data-checked]]:border-primary has-[[data-checked]]:ring-1 has-[[data-checked]]:ring-primary/30"
+                key={value}
+              >
+                <Radio className="mt-0.5" value={value} />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-foreground">{title}</span>
+                  <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+                    {description}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </RadioGroup>
+        </SettingsRow>
+        {sidebarVariant === "v2" ? (
           <>
             <SettingsRow
               title="Auto-settle inactive threads"
