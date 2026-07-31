@@ -1,6 +1,10 @@
 import type { ComponentType } from "react";
 
+import { RoomsVisionAtlas } from "../atlas";
+import { RoomsChannelFeed } from "../channel";
+import { RoomsDashboard } from "../dashboard";
 import type { RoomsRoom, RoomsWorkspace, RoomsWorkspaceReadFixture } from "../model/workspace";
+import { RoomsProjectSurface } from "../project";
 import type { RoomsWorkspaceSurface } from "./navigation";
 
 export interface RoomsWorkspaceSlotProps {
@@ -19,5 +23,9 @@ export interface RoomsWorkspaceSlots {
   readonly atlas?: RoomsWorkspaceSlot;
 }
 
-// APP-01 owns integration of consumer exports after APP-2B/2C/2D return.
-export const roomsWorkspaceSlots: RoomsWorkspaceSlots = {};
+export const roomsWorkspaceSlots = {
+  dashboard: RoomsDashboard,
+  channel: RoomsChannelFeed,
+  project: RoomsProjectSurface,
+  atlas: RoomsVisionAtlas,
+} satisfies RoomsWorkspaceSlots;

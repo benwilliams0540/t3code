@@ -16,24 +16,40 @@ import type { RoomsWorkspaceSurface } from "./navigation";
 import { roomsWorkspaceSlots } from "./slots";
 
 function SurfacePlaceholder({ surface }: { readonly surface: RoomsWorkspaceSurface }) {
-  const copy =
-    surface.kind === "dashboard"
-      ? {
+  const copy = (() => {
+    switch (surface.kind) {
+      case "dashboard":
+        return {
           title: "Dashboard",
           description: "The fixture-backed dashboard projection mounts in this slot.",
           icon: LayoutDashboardIcon,
-        }
-      : surface.kind === "channel"
-        ? {
-            title: "# " + surface.channelSlug,
-            description: "Ordered messages and structured activity mount in this slot.",
-            icon: HashIcon,
-          }
-        : {
-            title: surface.projectView ? "System atlas" : "Project",
-            description: "Documents, evidence, and audit projections mount in this slot.",
-            icon: surface.projectView ? NetworkIcon : FileTextIcon,
-          };
+        };
+      case "channel":
+        return {
+          title: "# " + surface.channelSlug,
+          description: "Ordered messages and structured activity mount in this slot.",
+          icon: HashIcon,
+        };
+      case "project":
+        return {
+          title: surface.projectView ? "System atlas" : "Project",
+          description: "Documents, evidence, and audit projections mount in this slot.",
+          icon: surface.projectView ? NetworkIcon : FileTextIcon,
+        };
+      case "threads":
+        return {
+          title: "Your Threads",
+          description: "Detailed T3 agent work mounts in this slot.",
+          icon: BotIcon,
+        };
+      case "present":
+        return {
+          title: "Present",
+          description: "Humans, agents, and machines mount in this slot.",
+          icon: CircleUserRoundIcon,
+        };
+    }
+  })();
   const Icon = copy.icon;
 
   return (

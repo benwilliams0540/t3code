@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { roomsWorkspaceFixture } from "../fixtures";
 import type { RoomsWorkspace } from "../model/workspace";

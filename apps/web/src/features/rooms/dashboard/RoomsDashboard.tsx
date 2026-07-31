@@ -404,12 +404,21 @@ export function RoomsDashboard({ fixture, room, state, workspace }: RoomsDashboa
 
   const desktop = buildRoomsDashboardProjection(fixture, room, workspace, "desktop");
   const narrow = buildRoomsDashboardProjection(fixture, room, workspace, "narrow");
-  const error = desktop.status === "error" ? desktop : narrow.status === "error" ? narrow : null;
-  if (error) {
+  if (desktop.status === "error") {
     return (
       <DashboardState
         code="invalid_workspace_projection"
-        message={error.message}
+        message={desktop.message}
+        name="fixture"
+        status="error"
+      />
+    );
+  }
+  if (narrow.status === "error") {
+    return (
+      <DashboardState
+        code="invalid_workspace_projection"
+        message={narrow.message}
         name="fixture"
         status="error"
       />

@@ -29,7 +29,7 @@ function WorkspaceNavItem({
   onClick,
 }: {
   readonly active: boolean;
-  readonly badge?: number;
+  readonly badge?: number | undefined;
   readonly icon: LucideIcon;
   readonly label: string;
   readonly onClick: () => void;

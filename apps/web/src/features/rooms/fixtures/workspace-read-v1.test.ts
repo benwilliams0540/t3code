@@ -1,13 +1,13 @@
 import * as NodeCrypto from "node:crypto";
-import * as NodeFS from "node:fs";
-import * as NodeURL from "node:url";
 import { describe, expect, it } from "vite-plus/test";
 
 import { ROOMS_WORKSPACE_READ_SOURCE } from "../model/source";
 import { roomsWorkspaceFixture } from ".";
+import rawWorkspaceReadV1 from "./workspace-read-v1.json?raw";
+import rawWorkspaceReadV1Schema from "./workspace-read-v1.schema.json?raw";
 
-function sha256(path: string): string {
-  return NodeCrypto.createHash("sha256").update(NodeFS.readFileSync(path)).digest("hex");
+function sha256(value: string): string {
+  return NodeCrypto.createHash("sha256").update(value).digest("hex");
 }
 
 describe("workspace-read v1 fixture boundary", () => {
@@ -19,12 +19,8 @@ describe("workspace-read v1 fixture boundary", () => {
       id: ROOMS_WORKSPACE_READ_SOURCE.contractId,
       version: ROOMS_WORKSPACE_READ_SOURCE.contractVersion,
     });
-    expect(
-      sha256(NodeURL.fileURLToPath(new URL("./workspace-read-v1.schema.json", import.meta.url))),
-    ).toBe(ROOMS_WORKSPACE_READ_SOURCE.schemaSha256);
-    expect(
-      sha256(NodeURL.fileURLToPath(new URL("./workspace-read-v1.json", import.meta.url))),
-    ).toBe(ROOMS_WORKSPACE_READ_SOURCE.fixtureSha256);
+    expect(sha256(rawWorkspaceReadV1Schema)).toBe(ROOMS_WORKSPACE_READ_SOURCE.schemaSha256);
+    expect(sha256(rawWorkspaceReadV1)).toBe(ROOMS_WORKSPACE_READ_SOURCE.fixtureSha256);
   });
 
   it("exposes every producer boundary needed by Wave 2 consumers", () => {

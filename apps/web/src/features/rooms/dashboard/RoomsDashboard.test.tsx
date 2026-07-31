@@ -21,11 +21,12 @@ function stateNamed(name: RoomsStateExample["name"]): RoomsStateExample {
 }
 
 function renderDashboard(state?: RoomsStateExample): string {
+  const stateProps = state === undefined ? {} : { state };
   return renderToStaticMarkup(
     <RoomsDashboard
       fixture={roomsWorkspaceFixture}
       room={selectedRoom()}
-      state={state}
+      {...stateProps}
       surface={{ kind: "dashboard" }}
       workspace={roomsWorkspaceFixture.workspace}
     />,
