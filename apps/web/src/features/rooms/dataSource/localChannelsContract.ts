@@ -110,6 +110,47 @@ export const RoomsLocalErrorResponse = Schema.Struct({
 });
 export type RoomsLocalErrorResponse = typeof RoomsLocalErrorResponse.Type;
 
+const RoomsLocalChangeContract = Schema.Struct({
+  id: Schema.Literal("rooms.local-changes"),
+  version: Schema.Literal(1),
+  schema_uri: Schema.Literal("contracts/rooms/local-changes/v1/schema.json"),
+});
+
+const RoomsLocalChangeResponseBase = {
+  contract: RoomsLocalChangeContract,
+  room_id: Schema.String,
+  after_seq: Schema.Int,
+  head_seq: Schema.Int,
+};
+
+export const RoomsLocalChangeAdvanced = Schema.Struct({
+  ...RoomsLocalChangeResponseBase,
+  changed: Schema.Literal(true),
+  reason: Schema.Literal("advanced"),
+});
+export type RoomsLocalChangeAdvanced = typeof RoomsLocalChangeAdvanced.Type;
+
+export const RoomsLocalChangeTimeout = Schema.Struct({
+  ...RoomsLocalChangeResponseBase,
+  changed: Schema.Literal(false),
+  reason: Schema.Literal("timeout"),
+});
+export type RoomsLocalChangeTimeout = typeof RoomsLocalChangeTimeout.Type;
+
+export const RoomsLocalChangeResponse = Schema.Union([
+  RoomsLocalChangeAdvanced,
+  RoomsLocalChangeTimeout,
+]);
+export type RoomsLocalChangeResponse = typeof RoomsLocalChangeResponse.Type;
+
+export const RoomsLocalChangeCursorAhead = Schema.Struct({
+  error: Schema.Literal("change_cursor_ahead"),
+  message: Schema.String,
+  after_seq: Schema.Int,
+  head_seq: Schema.Int,
+});
+export type RoomsLocalChangeCursorAhead = typeof RoomsLocalChangeCursorAhead.Type;
+
 export interface RoomsLocalCreateChannelInput {
   readonly requestId: string;
   readonly name: string;
@@ -125,4 +166,9 @@ export interface RoomsLocalFeedPageInput {
   readonly afterSeq?: number | undefined;
   readonly limit?: number | undefined;
   readonly snapshotHeadSeq?: number | undefined;
+}
+
+export interface RoomsLocalChangeWaitInput {
+  readonly afterSeq: number;
+  readonly timeoutMs?: number | undefined;
 }

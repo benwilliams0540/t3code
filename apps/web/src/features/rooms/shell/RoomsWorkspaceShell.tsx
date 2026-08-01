@@ -241,7 +241,8 @@ export function RoomsWorkspaceShell({
 }) {
   const navigate = useNavigate();
   const [sidebarVariant] = useAppSidebarVariantSelection();
-  const { retryLocalWorkspace, selectRoom, selectedRoom, setMode, state } = useRoomsDataSource();
+  const { localLiveUpdatesStatus, retryLocalWorkspace, selectRoom, selectedRoom, setMode, state } =
+    useRoomsDataSource();
   const room = findSourceRoomBySlug(state, roomSlug);
   const currentRoute = roomsRoutePath(roomSlug, surface);
   const [, setLastRoomsRoute] = useLocalStorage(
@@ -293,6 +294,31 @@ export function RoomsWorkspaceShell({
     sidebarVariant,
     state.status,
   ]);
+  useEffect(() => {
+    if (
+      state.status !== "ready" ||
+      state.mode !== "local" ||
+      !room ||
+      surface.kind !== "channel" ||
+      state.workspace.channels.some((channel) => channel.slug === surface.channelSlug)
+    ) {
+      return;
+    }
+    const firstChannel = state.workspace.channels[0];
+    if (firstChannel) {
+      void navigate({
+        to: "/rooms/$roomSlug/channels/$channelSlug",
+        params: { roomSlug: room.slug, channelSlug: firstChannel.slug },
+        replace: true,
+      });
+    } else {
+      void navigate({
+        to: "/rooms/$roomSlug/dashboard",
+        params: { roomSlug: room.slug },
+        replace: true,
+      });
+    }
+  }, [navigate, room, state, surface]);
 
   if (!isRoomsWorkspaceEnabled(sidebarVariant)) {
     return <SidebarInset className="h-dvh min-h-0 bg-background" />;
@@ -354,6 +380,7 @@ export function RoomsWorkspaceShell({
             style={{ width: `${sidebarWidth}px` }}
           >
             <RoomsWorkspaceNavigation
+              localLiveUpdatesReconnecting={localLiveUpdatesStatus === "reconnecting"}
               localWorkspace={localWorkspace}
               navigate={navigateWithinRoom as RoomsWorkspaceNavigate}
               room={room}
@@ -389,6 +416,7 @@ export function RoomsWorkspaceShell({
             </summary>
             <div className="max-h-[42vh] w-60 max-w-full overflow-y-auto">
               <RoomsWorkspaceNavigation
+                localLiveUpdatesReconnecting={localLiveUpdatesStatus === "reconnecting"}
                 localWorkspace={localWorkspace}
                 navigate={navigateWithinRoom as RoomsWorkspaceNavigate}
                 room={room}

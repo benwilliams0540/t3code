@@ -1,0 +1,6 @@
+{
+  "error": "change_cursor_ahead",
+  "message": "after_seq is ahead of the current room head",
+  "after_seq": 44,
+  "head_seq": 43
+}

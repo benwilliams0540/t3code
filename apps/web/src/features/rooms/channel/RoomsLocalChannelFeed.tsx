@@ -49,6 +49,13 @@ export function mergeRoomsLocalFeedPages(pages: readonly RoomsLocalFeed[]): Room
   return { ...last, items };
 }
 
+export function isCurrentRoomsLocalFeedRequest(
+  requestGeneration: number,
+  currentGeneration: number,
+): boolean {
+  return requestGeneration === currentGeneration;
+}
+
 export function RoomsLocalFeedItemCard({
   item,
   workspace,
@@ -195,10 +202,12 @@ export function RoomsLocalChannelFeed({
   readonly channel: RoomsLocalChannel;
   readonly workspace: RoomsLocalWorkspace;
 }) {
-  const { loadLocalFeed } = useRoomsDataSource();
+  const { loadLocalFeed, localFeedInvalidationGeneration, localFeedRefreshGeneration } =
+    useRoomsDataSource();
   const [feed, setFeed] = useState<RoomsLocalFeed | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [feedInvalidated, setFeedInvalidated] = useState(false);
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
   const loadGeneration = useRef(0);
 
@@ -223,17 +232,18 @@ export function RoomsLocalChannelFeed({
             );
           }
         }
-        if (generation !== loadGeneration.current) return;
+        if (!isCurrentRoomsLocalFeedRequest(generation, loadGeneration.current)) return;
         setFeed(mergeRoomsLocalFeedPages(pages));
+        setFeedInvalidated(false);
       } catch (cause) {
-        if (generation !== loadGeneration.current) return;
+        if (!isCurrentRoomsLocalFeedRequest(generation, loadGeneration.current)) return;
         setError(
           isRoomsLocalClientError(cause)
             ? { code: cause.code, message: cause.message }
             : { code: "unexpected_feed_error", message: "Could not load this channel feed." },
         );
       } finally {
-        if (generation === loadGeneration.current) setLoading(false);
+        if (isCurrentRoomsLocalFeedRequest(generation, loadGeneration.current)) setLoading(false);
       }
     },
     [channel.id, loadLocalFeed, workspace.room.id],
@@ -246,8 +256,21 @@ export function RoomsLocalChannelFeed({
     };
   }, [reload]);
 
+  useEffect(() => {
+    if (localFeedInvalidationGeneration === 0) return;
+    loadGeneration.current += 1;
+    setLoadingMore(false);
+    setFeedInvalidated(true);
+  }, [localFeedInvalidationGeneration]);
+
+  useEffect(() => {
+    if (localFeedRefreshGeneration === 0) return;
+    void reload();
+  }, [localFeedRefreshGeneration, reload]);
+
   const loadMore = async () => {
-    if (!feed?.page_info.has_more || loadingMore) return;
+    if (!feed?.page_info.has_more || feedInvalidated || loadingMore) return;
+    const generation = loadGeneration.current;
     setLoadingMore(true);
     setError(null);
     try {
@@ -256,15 +279,19 @@ export function RoomsLocalChannelFeed({
         limit: feed.page_info.limit,
         snapshotHeadSeq: feed.page_info.snapshot_head_seq,
       });
+      if (!isCurrentRoomsLocalFeedRequest(generation, loadGeneration.current)) return;
       setFeed(mergeRoomsLocalFeedPages([feed, next]));
     } catch (cause) {
+      if (!isCurrentRoomsLocalFeedRequest(generation, loadGeneration.current)) return;
       setError(
         isRoomsLocalClientError(cause)
           ? { code: cause.code, message: cause.message }
           : { code: "unexpected_feed_error", message: "Could not load the next feed page." },
       );
     } finally {
-      setLoadingMore(false);
+      if (isCurrentRoomsLocalFeedRequest(generation, loadGeneration.current)) {
+        setLoadingMore(false);
+      }
     }
   };
 
@@ -325,7 +352,7 @@ export function RoomsLocalChannelFeed({
             </ol>
           )}
 
-          {feed?.page_info.has_more ? (
+          {feed?.page_info.has_more && !feedInvalidated ? (
             <div className="mt-5 flex justify-center">
               <Button disabled={loadingMore} onClick={() => void loadMore()} variant="outline">
                 {loadingMore ? "Loading…" : "Load more"}

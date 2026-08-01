@@ -79,6 +79,7 @@ function WorkspaceNavItem({
 }
 
 export function RoomsWorkspaceNavigation({
+  localLiveUpdatesReconnecting,
   navigate,
   localWorkspace,
   room,
@@ -86,6 +87,7 @@ export function RoomsWorkspaceNavigation({
   surface,
   workspace,
 }: {
+  readonly localLiveUpdatesReconnecting: boolean;
   readonly navigate: RoomsWorkspaceNavigate;
   readonly localWorkspace: RoomsLocalWorkspace | null;
   readonly room: RoomsSourceRoom;
@@ -106,6 +108,14 @@ export function RoomsWorkspaceNavigation({
             ? "Local T3 only"
             : `${room.locality === "local_only" ? "Local-only room" : "Shared room"} · ${room.membershipRole}`}
         </p>
+        {sourceMode === "local" && localLiveUpdatesReconnecting ? (
+          <p
+            className="mt-1 text-[11px] text-amber-700 dark:text-amber-300"
+            data-rooms-local-live-state="reconnecting"
+          >
+            Live updates reconnecting
+          </p>
+        ) : null}
       </div>
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-2 py-3">
         <WorkspaceNavItem

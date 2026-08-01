@@ -5,6 +5,9 @@ import { ensureLocalApi } from "~/localApi";
 
 import {
   RoomsLocalChannel,
+  RoomsLocalChangeCursorAhead,
+  RoomsLocalChangeResponse,
+  type RoomsLocalChangeWaitInput,
   type RoomsLocalCreateChannelInput,
   type RoomsLocalCreateMessageInput,
   RoomsLocalErrorResponse,
@@ -26,12 +29,16 @@ export class RoomsLocalClientError extends Error {
   readonly kind: RoomsLocalClientErrorKind;
   readonly status: number | null;
   readonly code: string;
+  readonly afterSeq: number | null;
+  readonly headSeq: number | null;
 
   constructor(input: {
     readonly kind: RoomsLocalClientErrorKind;
     readonly message: string;
     readonly status?: number | null | undefined;
     readonly code: string;
+    readonly afterSeq?: number | null | undefined;
+    readonly headSeq?: number | null | undefined;
     readonly cause?: unknown;
   }) {
     super(input.message, input.cause === undefined ? undefined : { cause: input.cause });
@@ -39,6 +46,8 @@ export class RoomsLocalClientError extends Error {
     this.kind = input.kind;
     this.status = input.status ?? null;
     this.code = input.code;
+    this.afterSeq = input.afterSeq ?? null;
+    this.headSeq = input.headSeq ?? null;
   }
 }
 
@@ -107,12 +116,18 @@ export interface RoomsLocalChannelsClient {
     channelId: string,
     input: RoomsLocalCreateMessageInput,
   ) => Promise<RoomsLocalCommandResult<RoomsLocalHumanMessage>>;
+  readonly waitForChanges: (
+    roomId: string,
+    input: RoomsLocalChangeWaitInput,
+  ) => Promise<RoomsLocalChangeResponse>;
 }
 
 const decodeWorkspace = Schema.decodeUnknownSync(RoomsLocalWorkspace);
 const decodeChannel = Schema.decodeUnknownSync(RoomsLocalChannel);
 const decodeFeed = Schema.decodeUnknownSync(RoomsLocalFeed);
 const decodeHumanMessage = Schema.decodeUnknownSync(RoomsLocalHumanMessage);
+const decodeChangeResponse = Schema.decodeUnknownSync(RoomsLocalChangeResponse);
+const decodeChangeCursorAhead = Schema.decodeUnknownSync(RoomsLocalChangeCursorAhead);
 const decodeError = Schema.decodeUnknownSync(RoomsLocalErrorResponse);
 
 function parseJson(response: RoomsLocalHttpResponse): unknown {
@@ -130,6 +145,21 @@ function parseJson(response: RoomsLocalHttpResponse): unknown {
 }
 
 function throwServerError(response: RoomsLocalHttpResponse, body: unknown): never {
+  if (response.status === 409) {
+    try {
+      const error = decodeChangeCursorAhead(body);
+      throw new RoomsLocalClientError({
+        kind: "server",
+        status: response.status,
+        code: error.error,
+        message: error.message,
+        afterSeq: error.after_seq,
+        headSeq: error.head_seq,
+      });
+    } catch (cause) {
+      if (cause instanceof RoomsLocalClientError) throw cause;
+    }
+  }
   try {
     const error = decodeError(body);
     throw new RoomsLocalClientError({
@@ -150,7 +180,11 @@ function throwServerError(response: RoomsLocalHttpResponse, body: unknown): neve
   }
 }
 
-function decodeSuccess<T>(response: RoomsLocalHttpResponse, decode: (input: unknown) => T): T {
+function decodeSuccess<T>(
+  response: RoomsLocalHttpResponse,
+  decode: (input: unknown) => T,
+  contractId = "rooms.local-channels",
+): T {
   const body = parseJson(response);
   if (response.status < 200 || response.status >= 300) throwServerError(response, body);
   try {
@@ -160,7 +194,7 @@ function decodeSuccess<T>(response: RoomsLocalHttpResponse, decode: (input: unkn
       kind: "invalid_response",
       status: response.status,
       code: "contract_decode_failed",
-      message: "The Rooms Local API response does not match rooms.local-channels v1.",
+      message: `The Rooms Local API response does not match ${contractId} v1.`,
       cause,
     });
   }
@@ -257,6 +291,35 @@ export function createRoomsLocalChannelsClient(
         value: decodeSuccess(response, decodeHumanMessage),
         replayed: replayed(response),
       };
+    },
+    waitForChanges: async (roomId, input) => {
+      const query = new URLSearchParams({
+        after_seq: String(input.afterSeq),
+        timeout_ms: String(input.timeoutMs ?? 25_000),
+      });
+      const response = decodeSuccess(
+        await request(`/rooms/${encodeURIComponent(roomId)}/changes?${query.toString()}`, "GET"),
+        decodeChangeResponse,
+        "rooms.local-changes",
+      );
+      const validSequence =
+        Number.isSafeInteger(response.after_seq) &&
+        response.after_seq >= 0 &&
+        Number.isSafeInteger(response.head_seq) &&
+        response.head_seq >= 0;
+      const matchesRequest = response.room_id === roomId && response.after_seq === input.afterSeq;
+      const validOutcome = response.changed
+        ? response.head_seq > response.after_seq
+        : response.head_seq === response.after_seq;
+      if (!validSequence || !matchesRequest || !validOutcome) {
+        throw new RoomsLocalClientError({
+          kind: "invalid_response",
+          status: 200,
+          code: "change_contract_invariant_failed",
+          message: "The Rooms Local change response contradicts its request or cursor outcome.",
+        });
+      }
+      return response;
     },
   };
 }

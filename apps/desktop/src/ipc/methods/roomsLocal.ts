@@ -73,6 +73,8 @@ const performRoomsLocalRequest = Effect.fn("desktop.ipc.roomsLocal.performReques
           }),
   });
   const httpClient = yield* HttpClient.HttpClient;
+  // The server bounds local change waits to 30 seconds. This bridge deliberately adds no
+  // shorter client timeout, so the existing one-shot IPC request can outlive a normal wait.
   let httpRequest =
     request.method === "GET" ? HttpClientRequest.get(target) : HttpClientRequest.post(target);
   if (request.body !== undefined) {

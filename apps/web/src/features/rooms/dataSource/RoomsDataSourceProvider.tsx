@@ -25,6 +25,11 @@ import {
   RoomsLocalClientError,
   type RoomsLocalCommandResult,
 } from "./localChannelsClient";
+import {
+  RoomsLocalChangeLoop,
+  type RoomsLocalChangeInvalidation,
+  type RoomsLocalLiveUpdatesStatus,
+} from "./localChangesLoop";
 import type {
   RoomsLocalChannel,
   RoomsLocalCreateChannelInput,
@@ -62,6 +67,9 @@ interface RoomsDataSourceContextValue {
   readonly selectedBySource: RoomsSelectedRoomBySource;
   readonly localConfig: RoomsLocalWorkspaceConfig | null;
   readonly localApiBaseUrl: string;
+  readonly localFeedInvalidationGeneration: number;
+  readonly localFeedRefreshGeneration: number;
+  readonly localLiveUpdatesStatus: RoomsLocalLiveUpdatesStatus;
   readonly retryLocalWorkspace: () => Promise<RoomsLocalWorkspace | null>;
   readonly createLocalChannel: (
     input: RoomsLocalCreateChannelInput,
@@ -124,12 +132,23 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
   );
   const localApiBaseUrl = useClientSettings((settings) => settings.roomsLocalApiBaseUrl);
   const client = useMemo(() => createRoomsLocalChannelsClient(localApiBaseUrl), [localApiBaseUrl]);
+  const clientRef = useRef(client);
   const [localState, setLocalState] = useState<RoomsLocalSourceState>(
     connectingLocalRoomsDataSourceState,
   );
+  const [localFeedSync, setLocalFeedSync] = useState({
+    invalidationGeneration: 0,
+    refreshGeneration: 0,
+  });
+  const [localLiveUpdatesStatus, setLocalLiveUpdatesStatus] =
+    useState<RoomsLocalLiveUpdatesStatus>("connected");
   const localConfigRef = useRef(localConfig);
   const localStateRef = useRef(localState);
   const loadGenerationRef = useRef(0);
+  const feedInvalidationGenerationRef = useRef(0);
+  useEffect(() => {
+    clientRef.current = client;
+  }, [client]);
   useEffect(() => {
     localConfigRef.current = localConfig;
   }, [localConfig]);
@@ -157,7 +176,10 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
   );
 
   const loadWorkspace = useCallback(
-    async (showConnecting: boolean): Promise<RoomsLocalWorkspace | null> => {
+    async (
+      showConnecting: boolean,
+      preserveReadyState = false,
+    ): Promise<RoomsLocalWorkspace | null> => {
       const generation = ++loadGenerationRef.current;
       if (showConnecting) {
         const connecting = connectingLocalRoomsDataSourceState();
@@ -171,6 +193,7 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
         return workspace;
       } catch (error) {
         if (generation !== loadGenerationRef.current) return null;
+        if (preserveReadyState && localStateRef.current.status === "ready") return null;
         const failed = failedLocalRoomsDataSourceState(error);
         localStateRef.current = failed;
         setLocalState(failed);
@@ -192,6 +215,55 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
     };
   }, [localApiBaseUrl, mode]);
 
+  const refreshAfterLocalChange = useCallback(
+    async (_invalidation: RoomsLocalChangeInvalidation): Promise<void> => {
+      const invalidationGeneration = ++feedInvalidationGenerationRef.current;
+      setLocalFeedSync((current) => ({
+        invalidationGeneration,
+        refreshGeneration: current.refreshGeneration,
+      }));
+      const workspace = await loadWorkspace(false, true);
+      if (!workspace) {
+        throw new RoomsLocalClientError({
+          kind: "transport",
+          code: "local_change_reconciliation_failed",
+          message: "Live Rooms state changed, but its workspace could not be reconciled yet.",
+        });
+      }
+      setLocalFeedSync((current) =>
+        current.invalidationGeneration === invalidationGeneration
+          ? { ...current, refreshGeneration: invalidationGeneration }
+          : current,
+      );
+    },
+    [loadWorkspace],
+  );
+  const refreshAfterLocalChangeRef = useRef(refreshAfterLocalChange);
+  useEffect(() => {
+    refreshAfterLocalChangeRef.current = refreshAfterLocalChange;
+  }, [refreshAfterLocalChange]);
+  const localChangeLoopRef = useRef<RoomsLocalChangeLoop | null>(null);
+  if (localChangeLoopRef.current === null) {
+    localChangeLoopRef.current = new RoomsLocalChangeLoop({
+      client: {
+        waitForChanges: (roomId, input) => clientRef.current.waitForChanges(roomId, input),
+      },
+      onInvalidate: (invalidation) => refreshAfterLocalChangeRef.current(invalidation),
+      onStatusChange: setLocalLiveUpdatesStatus,
+    });
+  }
+  const activeLocalRoomId =
+    mode === "local" && localState.status === "ready" ? localState.workspace.room.id : null;
+  useEffect(() => {
+    const loop = localChangeLoopRef.current!;
+    if (!activeLocalRoomId) {
+      loop.stop();
+      return;
+    }
+    loop.start(activeLocalRoomId);
+    return () => loop.stop();
+  }, [activeLocalRoomId, localApiBaseUrl]);
+
   const legacySampleRoomId = useMemo(readLegacySampleRoomId, []);
   const state = mode === "sample" ? roomsSampleDataSource : localState;
   const selectedRoom = useMemo(
@@ -206,7 +278,7 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       const current = localStateRef.current;
       if (current.status !== "ready") throw sourceNotReadyError();
       const result = await client.createChannel(current.workspace.room.id, input);
-      const workspace = await loadWorkspace(false);
+      const workspace = await loadWorkspace(false, true);
       if (!workspace) {
         throw new RoomsLocalClientError({
           kind: "transport",
@@ -254,6 +326,9 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       selectedBySource,
       localConfig,
       localApiBaseUrl,
+      localFeedInvalidationGeneration: localFeedSync.invalidationGeneration,
+      localFeedRefreshGeneration: localFeedSync.refreshGeneration,
+      localLiveUpdatesStatus,
       retryLocalWorkspace,
       createLocalChannel,
       loadLocalFeed,
@@ -267,6 +342,9 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       loadLocalFeed,
       localApiBaseUrl,
       localConfig,
+      localFeedSync.invalidationGeneration,
+      localFeedSync.refreshGeneration,
+      localLiveUpdatesStatus,
       mode,
       retryLocalWorkspace,
       selectRoom,

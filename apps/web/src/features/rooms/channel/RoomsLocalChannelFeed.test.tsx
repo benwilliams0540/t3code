@@ -9,7 +9,11 @@ import {
   RoomsLocalFeedItem,
   RoomsLocalWorkspace,
 } from "../dataSource/localChannelsContract";
-import { mergeRoomsLocalFeedPages, RoomsLocalFeedItemCard } from "./RoomsLocalChannelFeed";
+import {
+  isCurrentRoomsLocalFeedRequest,
+  mergeRoomsLocalFeedPages,
+  RoomsLocalFeedItemCard,
+} from "./RoomsLocalChannelFeed";
 
 const decodeFeed = Schema.decodeUnknownSync(RoomsLocalFeed);
 const workspace = Schema.decodeUnknownSync(RoomsLocalWorkspace)(zeroWorkspaceDocument);
@@ -71,6 +75,17 @@ describe("Rooms Local channel feed", () => {
     expect(() => mergeRoomsLocalFeedPages([firstPage, mismatched])).toThrow(
       "changed identity within a pinned snapshot",
     );
+  });
+
+  it("deduplicates command and notification refresh results by durable feed-item identity", () => {
+    const merged = mergeRoomsLocalFeedPages([firstPage, firstPage]);
+    expect(merged?.items).toHaveLength(1);
+    expect(merged?.items[0]?.id).toBe(firstPage.items[0]?.id);
+  });
+
+  it("discards a pinned pagination response after a live invalidation generation", () => {
+    expect(isCurrentRoomsLocalFeedRequest(7, 7)).toBe(true);
+    expect(isCurrentRoomsLocalFeedRequest(7, 8)).toBe(false);
   });
 
   it("renders exact Markdown with explicit principal attribution and unknown schemas visibly", () => {
