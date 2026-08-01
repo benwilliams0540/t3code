@@ -30,9 +30,9 @@ export function RoomsStoriesList(props: RoomsWorkspaceSlotProps) {
         <div className="grid gap-3 xl:grid-cols-2">
           {workspace.stories.map((story) => {
             const owner = fixture.principals.find((principal) => principal.id === story.owner_id);
-            const stage = workspace.workflow.stages.find(
-              (candidate) => candidate.id === story.stage_id,
-            );
+            const stage = workspace.workflows
+              .flatMap((workflow) => workflow.stages)
+              .find((candidate) => candidate.id === story.stage_id);
             return (
               <article className="rounded-xl border border-border bg-card p-4" key={story.id}>
                 <div className="flex flex-wrap gap-1.5">
@@ -62,8 +62,8 @@ export function RoomsStoriesList(props: RoomsWorkspaceSlotProps) {
                   <div>
                     <dt className="inline font-semibold text-foreground">Evidence: </dt>
                     <dd className="inline">
-                      {story.evidence.attached_ids.length} attached · requires{" "}
-                      {story.evidence.required_kinds.join(", ") || "none"}
+                      {story.evidence_ids.length} attached · gate requires{" "}
+                      {stage?.gate?.evidence.kinds.join(", ") || "none"}
                     </dd>
                   </div>
                 </dl>

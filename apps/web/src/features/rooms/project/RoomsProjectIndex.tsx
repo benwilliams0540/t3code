@@ -75,7 +75,7 @@ export function RoomsProjectIndex(props: RoomsWorkspaceSlotProps) {
                     <div className="mt-3 flex items-start gap-2 text-xs text-muted-foreground">
                       <GitCommitHorizontalIcon aria-hidden className="mt-0.5 size-3.5 shrink-0" />
                       <code className="break-all">
-                        {currentRevision?.source_hash ?? document.source.sha}
+                        {currentRevision?.source_revision ?? document.source.pinned_revision}
                       </code>
                     </div>
                   </article>

@@ -57,7 +57,7 @@ function RevisionCard({ item }: { readonly item: RoomsRevisionProjection }) {
         </p>
         <p className="flex items-start gap-2">
           <GitCommitHorizontalIcon aria-hidden className="mt-0.5 size-3.5 shrink-0" />
-          <code className="break-all">{revision.source_hash}</code>
+          <code className="break-all">{revision.source_revision}</code>
         </p>
       </div>
     </article>
@@ -95,8 +95,8 @@ export function RoomsVisionDocument(props: RoomsWorkspaceSlotProps) {
           <div>
             <p className="font-semibold">Stale projection — regeneration required</p>
             <p className="mt-1 text-sm">
-              The rendered document is pinned to {document.source.sha}, while the source head is{" "}
-              {document.freshness.source_head}. Compared{" "}
+              The rendered document is pinned to {document.source.pinned_revision}, while the
+              independently observed source head is {document.source.observed_head}. Compared{" "}
               {formatDateTime(document.freshness.compared_at)} UTC.
             </p>
           </div>
@@ -110,7 +110,9 @@ export function RoomsVisionDocument(props: RoomsWorkspaceSlotProps) {
               Project document
             </p>
             <h1 className="mt-1 text-2xl font-semibold text-foreground">{document.title}</h1>
-            <p className="mt-2 text-sm text-muted-foreground">{props.workspace.vision.summary}</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {props.workspace.dashboard.vision.summary}
+            </p>
           </div>
           <dl className="grid gap-2 text-xs text-muted-foreground">
             <div>
@@ -120,13 +122,13 @@ export function RoomsVisionDocument(props: RoomsWorkspaceSlotProps) {
             <div>
               <dt className="font-semibold text-foreground">Pinned SHA</dt>
               <dd>
-                <code className="break-all">{document.source.sha}</code>
+                <code className="break-all">{document.source.pinned_revision}</code>
               </dd>
             </div>
             <div>
               <dt className="font-semibold text-foreground">Source head</dt>
               <dd>
-                <code className="break-all">{document.source.source_head}</code>
+                <code className="break-all">{document.source.observed_head}</code>
               </dd>
             </div>
           </dl>
@@ -137,7 +139,7 @@ export function RoomsVisionDocument(props: RoomsWorkspaceSlotProps) {
         <article className="min-w-0 rounded-2xl border border-border bg-card p-6 shadow-sm">
           <div
             className="prose prose-sm max-w-none text-foreground dark:prose-invert"
-            data-rooms-markdown-source={currentRevision.source_hash}
+            data-rooms-markdown-source={currentRevision.source_revision}
           >
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {currentRevision.body_markdown}

@@ -5,48 +5,36 @@ import { roomsWorkspaceFixture } from "../fixtures";
 import { RoomsAuditDecisions } from "./RoomsAuditDecisions";
 import { projectRoomsAudit } from "./projection";
 
-const room = roomsWorkspaceFixture.rooms.find(
-  (candidate) => candidate.id === roomsWorkspaceFixture.workspace.selected_room_id,
-)!;
-
-describe("Rooms audit and decisions", () => {
-  it("orders source events globally and preserves actor identity on decisions", () => {
-    const projection = projectRoomsAudit(roomsWorkspaceFixture, roomsWorkspaceFixture.workspace);
-
-    expect(projection.events.map(({ item }) => item.source_event.seq)).toEqual([
-      111, 112, 113, 114, 115, 116, 117,
-    ]);
-    expect(projection.decisions).toHaveLength(1);
-    expect(projection.decisions[0]).toMatchObject({
-      decision: "needs_changes",
-      scope: "once",
-      taskId: "task:019fb900-3000-7000-8000-000000000003",
-      actor: {
-        id: "h:019fb900-0001-7000-8000-000000000002",
-        display_name: "Maya",
-        type: "human",
-      },
-      item: { source_event: { seq: 117, type: "approval.decided" } },
-    });
-    expect(projection.gateFacts.map(({ stage }) => stage.name)).toEqual([
-      "Gate / Human QA",
-      "Done",
-    ]);
+describe("Rooms v2 audit and decisions", () => {
+  it("projects first-class decisions and resolves every audit source event locally", () => {
+    for (const workspace of roomsWorkspaceFixture.workspaces) {
+      const projection = projectRoomsAudit(roomsWorkspaceFixture, workspace);
+      expect(projection.decisions.map(({ decision }) => decision.id)).toEqual(
+        workspace.decisions.map((decision) => decision.id),
+      );
+      expect(projection.events.map(({ sourceEvent }) => sourceEvent.event_id)).toEqual(
+        workspace.audit.map((audit) => audit.source_event_id),
+      );
+      expect(
+        projection.events.every(
+          ({ audit, sourceEvent }) => audit.source_event_id === sourceEvent.event_id,
+        ),
+      ).toBe(true);
+    }
   });
 
-  it("renders ordered audit records separately from gate-definition facts", () => {
-    const html = renderToStaticMarkup(
+  it("renders decisions, typed subjects, and source-event provenance", () => {
+    const markup = renderToStaticMarkup(
       <RoomsAuditDecisions
         fixture={roomsWorkspaceFixture}
-        room={room}
+        room={roomsWorkspaceFixture.rooms[0]!}
         surface={{ kind: "project", projectSection: "audit-decisions" }}
-        workspace={roomsWorkspaceFixture.workspace}
+        workspace={roomsWorkspaceFixture.workspaces[0]!}
       />,
     );
-
-    expect(html.indexOf("seq 111")).toBeLessThan(html.indexOf("seq 117"));
-    expect(html).toContain("needs_changes");
-    expect(html).toContain("Maya");
-    expect(html).toContain("These are workflow-definition facts, not synthetic audit events.");
+    expect(markup).toContain("Keep detailed traces in T3");
+    expect(markup).toContain("decision:");
+    expect(markup).toContain("decision.recorded");
+    expect(markup).toContain("Gate definitions");
   });
 });

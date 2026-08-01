@@ -23,7 +23,7 @@ export function projectRoomsVisionDocument(
   workspace: RoomsWorkspace,
 ): RoomsDocumentProjection | null {
   const document = workspace.documents.find(
-    (candidate) => candidate.id === workspace.vision.document_id,
+    (candidate) => candidate.id === workspace.dashboard.vision.document_id,
   );
   if (!document) return null;
 
@@ -42,7 +42,7 @@ export function projectRoomsVisionDocument(
     })),
     isStale:
       document.freshness.state === "stale" ||
-      document.source.sha !== document.freshness.source_head ||
+      document.source.pinned_revision !== document.source.observed_head ||
       document.atlas.state === "stale",
   };
 }

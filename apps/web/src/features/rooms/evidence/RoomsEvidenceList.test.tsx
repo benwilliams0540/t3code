@@ -5,46 +5,38 @@ import { roomsWorkspaceFixture } from "../fixtures";
 import { RoomsEvidenceList } from "./RoomsEvidenceList";
 import { projectRoomsEvidence } from "./projection";
 
-const room = roomsWorkspaceFixture.rooms.find(
-  (candidate) => candidate.id === roomsWorkspaceFixture.workspace.selected_room_id,
-)!;
-
-describe("Rooms evidence", () => {
-  it("distinguishes supplied CAS metadata from reference-only evidence", () => {
-    const projection = projectRoomsEvidence(roomsWorkspaceFixture, roomsWorkspaceFixture.workspace);
-
-    expect(projection.items).toHaveLength(4);
-    expect(projection.items.filter((item) => item.fidelity === "full_metadata")).toHaveLength(1);
-    expect(projection.items.filter((item) => item.fidelity === "reference_only")).toHaveLength(3);
-    expect(
-      projection.items.find((item) => item.id === "evidence:019fb900-6000-7000-8000-000000000003")
-        ?.detail,
-    ).toMatchObject({
-      kind: "screenshot",
-      hash: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-      bytes: 48231,
-      mediaType: "image/png",
-      sourceEvent: { seq: 116, type: "evidence.attached" },
+describe("Rooms v2 evidence", () => {
+  it("projects only first-class evidence with exact producer, story, run, and CAS facts", () => {
+    const first = projectRoomsEvidence(roomsWorkspaceFixture, roomsWorkspaceFixture.workspaces[0]!);
+    const second = projectRoomsEvidence(
+      roomsWorkspaceFixture,
+      roomsWorkspaceFixture.workspaces[1]!,
+    );
+    expect(first.items.map(({ evidence }) => evidence.id)).toEqual(
+      roomsWorkspaceFixture.workspaces[0]!.evidence.map((record) => record.id),
+    );
+    expect(first.items[0]).toMatchObject({
+      evidence: { kind: "artifact", run_id: "run:019fb920-4100-7000-8000-000000000001" },
+      producer: { agent_kind: "execution" },
     });
-    expect(projection.missingRequirements.map(({ story }) => story.title)).toEqual([
-      "Add a project decision timeline",
+    expect(second.items.map(({ story }) => story.room_id)).toEqual([
+      roomsWorkspaceFixture.rooms[1]!.id,
+      roomsWorkspaceFixture.rooms[1]!.id,
+      roomsWorkspaceFixture.rooms[1]!.id,
     ]);
   });
 
-  it("labels absent metadata instead of inventing it", () => {
-    const html = renderToStaticMarkup(
+  it("renders direct gate requirements separately from evidence records", () => {
+    const markup = renderToStaticMarkup(
       <RoomsEvidenceList
         fixture={roomsWorkspaceFixture}
-        room={room}
+        room={roomsWorkspaceFixture.rooms[0]!}
         surface={{ kind: "project", projectSection: "evidence" }}
-        workspace={roomsWorkspaceFixture.workspace}
+        workspace={roomsWorkspaceFixture.workspaces[0]!}
       />,
     );
-
-    expect(html).toContain("metadata supplied");
-    expect(html).toContain("metadata absent");
-    expect(html).toContain("Source event metadata");
-    expect(html).toContain("Reference only");
-    expect(html).toContain("Required, not attached");
+    expect(markup).toContain("First-class v2 evidence");
+    expect(markup).toContain("Workflow gate facts");
+    expect(markup).toContain("self review forbidden");
   });
 });

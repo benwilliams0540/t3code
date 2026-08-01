@@ -7,7 +7,7 @@ import type {
 } from "../model/workspace";
 import { projectRoomsActivityItem, type RoomsProjectedActivity } from "../activity/projection";
 
-export type RoomsChannelFixtureStateName = "unauthorized" | "stale_cursor" | "empty";
+export type RoomsChannelFixtureStateName = RoomsStateExample["kind"];
 
 export type RoomsChannelProjection =
   | {
@@ -28,9 +28,13 @@ export type RoomsChannelProjection =
     };
 
 const fixtureStateBySlug = {
+  "state-authorized-workspace": "authorized_workspace",
+  "state-unauthenticated": "unauthenticated",
   "state-unauthorized": "unauthorized",
   "state-stale-cursor": "stale_cursor",
   "state-empty": "empty",
+  "state-reachable-but-stale": "reachable_but_stale",
+  "state-unsupported-contract-version": "unsupported_contract_version",
 } as const satisfies Record<string, RoomsChannelFixtureStateName>;
 
 function channelSlug(channel: RoomsChannel): string {
@@ -44,7 +48,7 @@ export function projectRoomsChannel(
 ): RoomsChannelProjection {
   const fixtureStateName = fixtureStateBySlug[slug as keyof typeof fixtureStateBySlug];
   if (fixtureStateName) {
-    const state = fixture.states.find((candidate) => candidate.name === fixtureStateName);
+    const state = fixture.states.find((candidate) => candidate.kind === fixtureStateName);
     if (state) return { kind: "fixture_state", slug, state };
   }
 

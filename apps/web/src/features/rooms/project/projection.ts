@@ -30,7 +30,9 @@ export function projectRoomsProjectIndex(
   workspace: RoomsWorkspace,
 ) {
   return {
-    navigation: workspace.project_navigation,
+    navigation: workspace.navigation.filter((entry) =>
+      ["vision", "stories", "evidence", "audit_decisions"].includes(entry.key),
+    ),
     documents: workspace.documents.map((document) => ({
       document,
       currentRevision:

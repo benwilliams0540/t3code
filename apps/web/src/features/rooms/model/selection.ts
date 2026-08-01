@@ -33,7 +33,7 @@ export function workspaceForDeclaredRoom(
   fixture: RoomsWorkspaceReadFixture,
   roomId: RoomsEntityId,
 ): RoomsWorkspace | null {
-  return fixture.workspace.selected_room_id === roomId ? fixture.workspace : null;
+  return fixture.workspaces.find((workspace) => workspace.room_id === roomId) ?? null;
 }
 
 export function roomForShortcut(

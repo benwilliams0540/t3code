@@ -85,8 +85,12 @@ function ThreadSurface({ workspace }: { readonly workspace: RoomsWorkspace }) {
               </span>
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
-              {thread.provider} · {thread.environment.name} · as of{" "}
+              {thread.provider} · {thread.environment_id} · as of{" "}
               {new Date(thread.as_of).toLocaleString()}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Delegate {thread.delegated_agent_id} · adapter {thread.mirror.adapter_principal_id} ·
+              machine {thread.machine_id}
             </p>
             {thread.machine.reachable && thread.mirror.freshness === "stale" ? (
               <p className="mt-2 text-xs font-medium text-amber-600 dark:text-amber-400">
@@ -157,8 +161,8 @@ export function RoomsWorkspaceSurfaceView({
           <PanelTopIcon aria-hidden className="mx-auto size-6 text-muted-foreground" />
           <h1 className="mt-4 text-lg font-semibold text-foreground">{room.name}</h1>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            This room is declared by the workspace contract, but its detailed workspace projection
-            is not included in the v1 fixture.
+            This declared room is missing its required decoded v2 workspace. The contract boundary
+            rejects this state before normal rendering.
           </p>
         </div>
       </section>

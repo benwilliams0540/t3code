@@ -1,20 +1,29 @@
 import rawWorkspaceReadV1 from "./workspace-read-v1.json";
+import rawWorkspaceReadV1Schema from "./workspace-read-v1.schema.json";
+import rawWorkspaceReadV2 from "./workspace-read-v2.json";
+import rawWorkspaceReadV2Schema from "./workspace-read-v2.schema.json";
 
-import { ROOMS_WORKSPACE_READ_SOURCE } from "../model/source";
-import type { RoomsWorkspaceReadFixture } from "../model/workspace";
+import {
+  decodeRoomsWorkspaceRead,
+  decodeRoomsWorkspaceReadV1,
+  decodeRoomsWorkspaceReadV2,
+} from "../model/workspace-v2";
 
-export const roomsWorkspaceFixture = rawWorkspaceReadV1 as unknown as RoomsWorkspaceReadFixture;
+export const roomsWorkspaceFixtureV1 = decodeRoomsWorkspaceReadV1(
+  rawWorkspaceReadV1,
+  rawWorkspaceReadV1Schema,
+);
 
-export function assertRoomsWorkspaceFixtureBoundary(fixture: RoomsWorkspaceReadFixture): void {
-  if (
-    fixture.contract.id !== ROOMS_WORKSPACE_READ_SOURCE.contractId ||
-    fixture.contract.version !== ROOMS_WORKSPACE_READ_SOURCE.contractVersion
-  ) {
-    throw new Error("Rooms workspace fixture contract pin does not match the app boundary.");
-  }
-  if (!fixture.rooms.some((room) => room.id === fixture.workspace.selected_room_id)) {
-    throw new Error("Rooms workspace fixture selects a room that is not declared.");
-  }
+export const roomsWorkspaceFixture = decodeRoomsWorkspaceReadV2(
+  rawWorkspaceReadV2,
+  rawWorkspaceReadV2Schema,
+);
+
+export function decodeRoomsWorkspaceFixture(document: unknown) {
+  return decodeRoomsWorkspaceRead(document, {
+    v1: rawWorkspaceReadV1Schema,
+    v2: rawWorkspaceReadV2Schema,
+  });
 }
 
-assertRoomsWorkspaceFixtureBoundary(roomsWorkspaceFixture);
+export { rawWorkspaceReadV1Schema, rawWorkspaceReadV2Schema };

@@ -11,7 +11,8 @@ export function useRoomsWorkspaceSelection(): {
   readonly selectedRoom: RoomsRoom;
   readonly selectRoom: (room: RoomsRoom) => void;
 } {
-  const fallbackRoomId = roomsWorkspaceFixture.workspace.selected_room_id;
+  const fallbackRoomId = roomsWorkspaceFixture.workspaces[0]?.room_id;
+  if (!fallbackRoomId) throw new Error("The decoded Rooms fixture does not contain a workspace.");
   const [persistedRoomId, setPersistedRoomId] = useLocalStorage(
     ROOMS_SELECTED_ROOM_STORAGE_KEY,
     fallbackRoomId,

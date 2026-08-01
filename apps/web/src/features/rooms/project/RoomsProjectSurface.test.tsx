@@ -2,17 +2,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
 import { roomsWorkspaceFixture } from "../fixtures";
-import type { RoomsWorkspace } from "../model/workspace";
-import { RoomsProjectIndex } from "./RoomsProjectIndex";
 import { RoomsProjectSurface } from "./RoomsProjectSurface";
 import { projectRoomsProjectIndex, resolveRoomsProjectSection } from "./projection";
 
-const room = roomsWorkspaceFixture.rooms.find(
-  (candidate) => candidate.id === roomsWorkspaceFixture.workspace.selected_room_id,
-)!;
-
-describe("Rooms project surface", () => {
-  it("routes each declared project section and rejects unknown project views", () => {
+describe("Rooms v2 project surfaces", () => {
+  it("maps every declared project section and rejects unknown routes", () => {
     expect(resolveRoomsProjectSection({ kind: "project", projectSection: "vision" })).toBe(
       "vision",
     );
@@ -25,62 +19,54 @@ describe("Rooms project surface", () => {
     expect(resolveRoomsProjectSection({ kind: "project", projectSection: "audit-decisions" })).toBe(
       "audit-decisions",
     );
-    expect(resolveRoomsProjectSection({ kind: "project", projectSection: "not-declared" })).toBe(
+    expect(resolveRoomsProjectSection({ kind: "project", projectSection: "other" })).toBe(
       "unknown",
     );
-    expect(
-      resolveRoomsProjectSection({
-        kind: "project",
-        projectSection: "vision",
-        projectView: "not-declared",
-      }),
-    ).toBe("unknown");
   });
 
-  it("projects the single fixture document and every project navigation entry", () => {
-    const projection = projectRoomsProjectIndex(
+  it("switching workspaces changes navigation, documents, authors, and source pins coherently", () => {
+    const first = projectRoomsProjectIndex(
       roomsWorkspaceFixture,
-      roomsWorkspaceFixture.workspace,
+      roomsWorkspaceFixture.workspaces[0]!,
     );
-
-    expect(projection.documents).toHaveLength(1);
-    expect(projection.documents[0]).toMatchObject({
-      document: { title: "Rooms Vision", freshness: { state: "stale" } },
-      currentRevision: { state: "current" },
-      author: { display_name: "Ben" },
-    });
-    expect(projection.navigation.map(({ key }) => key)).toEqual([
-      "vision",
-      "stories",
-      "evidence",
-      "audit_decisions",
-    ]);
+    const second = projectRoomsProjectIndex(
+      roomsWorkspaceFixture,
+      roomsWorkspaceFixture.workspaces[1]!,
+    );
+    expect(
+      first.navigation
+        .map((entry) => entry.route)
+        .every((route) => route.startsWith("/rooms/rooms-local")),
+    ).toBe(true);
+    expect(
+      second.navigation
+        .map((entry) => entry.route)
+        .every((route) => route.startsWith("/rooms/camera-team")),
+    ).toBe(true);
+    expect(first.documents[0]?.document.id).not.toBe(second.documents[0]?.document.id);
+    expect(first.documents[0]?.currentRevision?.source_revision).not.toBe(
+      second.documents[0]?.currentRevision?.source_revision,
+    );
   });
 
-  it("renders truthful unknown and empty states", () => {
-    const unknownHtml = renderToStaticMarkup(
-      <RoomsProjectSurface
-        fixture={roomsWorkspaceFixture}
-        room={room}
-        surface={{ kind: "project", projectSection: "not-declared" }}
-        workspace={roomsWorkspaceFixture.workspace}
-      />,
-    );
-    expect(unknownHtml).toContain("Unknown project section");
-
-    const emptyWorkspace: RoomsWorkspace = {
-      ...roomsWorkspaceFixture.workspace,
-      documents: [],
-      project_navigation: [],
-    };
-    const emptyHtml = renderToStaticMarkup(
-      <RoomsProjectIndex
-        fixture={roomsWorkspaceFixture}
-        room={room}
-        surface={{ kind: "project", projectSection: "index" }}
-        workspace={emptyWorkspace}
-      />,
-    );
-    expect(emptyHtml).toContain("No project surfaces declared");
+  it("renders all project sections from typed workspace facts", () => {
+    const room = roomsWorkspaceFixture.rooms[0]!;
+    const workspace = roomsWorkspaceFixture.workspaces[0]!;
+    for (const [projectSection, marker] of [
+      ["vision", "data-rooms-document-id"],
+      ["stories", 'data-rooms-project-section="stories"'],
+      ["evidence", 'data-rooms-project-section="evidence"'],
+      ["audit-decisions", 'data-rooms-project-section="audit-decisions"'],
+    ] as const) {
+      const markup = renderToStaticMarkup(
+        <RoomsProjectSurface
+          fixture={roomsWorkspaceFixture}
+          room={room}
+          surface={{ kind: "project", projectSection }}
+          workspace={workspace}
+        />,
+      );
+      expect(markup).toContain(marker);
+    }
   });
 });

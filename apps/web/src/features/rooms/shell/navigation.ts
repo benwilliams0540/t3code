@@ -28,6 +28,10 @@ export interface RoomsBreadcrumb {
   readonly target?: RoomsNavigationTarget;
 }
 
+export function isRoomsWorkspaceEnabled(sidebarVariant: "v1" | "v2" | "v3"): boolean {
+  return sidebarVariant === "v3";
+}
+
 export function channelSlugFromName(channelName: string): string {
   return channelName.replace(/^#\s*/, "");
 }

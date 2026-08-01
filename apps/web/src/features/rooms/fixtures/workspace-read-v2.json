@@ -1,0 +1,1340 @@
+{
+  "contract": {
+    "id": "rooms.workspace-read",
+    "version": 2,
+    "schema_uri": "https://rooms.local/contracts/workspace-read/v2/schema.json",
+    "fixture_id": "fixture:019fb920-0000-7000-8000-000000000001",
+    "captured_at": "2026-07-31T20:30:00.000Z"
+  },
+  "semantics": {
+    "room_selection": "one_complete_workspace_per_declared_room",
+    "pagination": "global_seq_ascending_exclusive_cursor_pinned_snapshot",
+    "unread": "member_and_stream_monotonic_server_cursor",
+    "authorization": "authentication_then_membership_then_role",
+    "attribution": "rooms_writer_distinct_from_upstream_source_actor",
+    "freshness": "reachability_independent_from_mirror_and_source_freshness"
+  },
+  "principals": [
+    { "id": "h:019fb920-0001-7000-8000-000000000001", "type": "human", "display_name": "Ben" },
+    { "id": "h:019fb920-0001-7000-8000-000000000002", "type": "human", "display_name": "Maya" },
+    { "id": "h:019fb920-0001-7000-8000-000000000003", "type": "human", "display_name": "Unaffiliated reviewer" },
+    { "id": "m:019fb920-0002-7000-8000-000000000001", "type": "machine", "display_name": "Ben's MacBook" },
+    { "id": "m:019fb920-0002-7000-8000-000000000002", "type": "machine", "display_name": "Build Mac" },
+    { "id": "a:019fb920-0003-7000-8000-000000000001", "type": "agent", "display_name": "Codex on MacBook", "machine_id": "m:019fb920-0002-7000-8000-000000000001", "agent_kind": "execution" },
+    { "id": "a:019fb920-0003-7000-8000-000000000002", "type": "agent", "display_name": "Claude on Build Mac", "machine_id": "m:019fb920-0002-7000-8000-000000000002", "agent_kind": "execution" },
+    { "id": "a:019fb920-0003-7000-8000-000000000003", "type": "agent", "display_name": "MacBook T3 mirror", "machine_id": "m:019fb920-0002-7000-8000-000000000001", "agent_kind": "adapter" },
+    { "id": "a:019fb920-0003-7000-8000-000000000004", "type": "agent", "display_name": "Build Mac T3 mirror", "machine_id": "m:019fb920-0002-7000-8000-000000000002", "agent_kind": "adapter" }
+  ],
+  "rooms": [
+    {
+      "id": "room:019fb920-1000-7000-8000-000000000001",
+      "slug": "rooms-local",
+      "name": "Rooms",
+      "locality": "local_only",
+      "declared_by": "h:019fb920-0001-7000-8000-000000000001",
+      "membership": { "status": "member", "role": "admin" },
+      "unread": {
+        "read_through_seq": 300,
+        "latest_visible_seq": 310,
+        "count": 10,
+        "counted_event_seqs": [301, 302, 303, 304, 305, 306, 307, 308, 309, 310]
+      }
+    },
+    {
+      "id": "room:019fb920-1000-7000-8000-000000000002",
+      "slug": "camera-team",
+      "name": "Camera Team",
+      "locality": "shared",
+      "declared_by": "h:019fb920-0001-7000-8000-000000000002",
+      "membership": { "status": "member", "role": "observer" },
+      "unread": {
+        "read_through_seq": 400,
+        "latest_visible_seq": 405,
+        "count": 5,
+        "counted_event_seqs": [401, 402, 403, 404, 405]
+      }
+    }
+  ],
+  "workspaces": [
+    {
+      "id": "workspace:019fb920-1200-7000-8000-000000000001",
+      "room_id": "room:019fb920-1000-7000-8000-000000000001",
+      "authorization": {
+        "status": "authorized",
+        "principal_id": "h:019fb920-0001-7000-8000-000000000001",
+        "membership": "member",
+        "role": "admin"
+      },
+      "dashboard": {
+        "vision": {
+          "document_id": "document:019fb920-5000-7000-8000-000000000001",
+          "headline": "A project and collaboration plane around T3",
+          "summary": "Keep intent, agent runs, stories, evidence, decisions, and presence connected."
+        },
+        "needs_attention": [
+          {
+            "id": "attention:019fb920-7300-7000-8000-000000000001",
+            "kind": "human_gate_pending",
+            "priority": 0,
+            "story_id": "task:019fb920-3000-7000-8000-000000000003",
+            "stage_id": "stage:019fb920-2100-7000-8000-000000000003",
+            "reason": "Human QA needs a fresh test run and reviewer."
+          },
+          {
+            "id": "attention:019fb920-7300-7000-8000-000000000002",
+            "kind": "blocked_run",
+            "priority": 1,
+            "thread_id": "thread:019fb920-4000-7000-8000-000000000002",
+            "reason": "The channel-card review run is blocked."
+          },
+          {
+            "id": "attention:019fb920-7300-7000-8000-000000000003",
+            "kind": "stale_mirror",
+            "priority": 2,
+            "source_id": "source:019fb920-9000-7000-8000-000000000001",
+            "reason": "The source is reachable but its mirror is stale."
+          }
+        ],
+        "recent_activity": [
+          {
+            "id": "activity:019fb920-7400-7000-8000-000000000001",
+            "rank": 0,
+            "feed_item_id": "feed-item:019fb920-7000-7000-8000-000000000008",
+            "reason": "latest_human_activity"
+          },
+          {
+            "id": "activity:019fb920-7400-7000-8000-000000000002",
+            "rank": 1,
+            "feed_item_id": "feed-item:019fb920-7000-7000-8000-000000000005",
+            "reason": "latest_work_activity"
+          }
+        ]
+      },
+      "workflows": [
+        {
+          "id": "workflow:019fb920-2000-7000-8000-000000000001",
+          "story_type": "feature",
+          "version": 1,
+          "stages": [
+            { "id": "stage:019fb920-2100-7000-8000-000000000001", "key": "backlog", "name": "Backlog", "position": 0, "gate": null },
+            { "id": "stage:019fb920-2100-7000-8000-000000000002", "key": "in_progress", "name": "In progress", "position": 1, "gate": null },
+            {
+              "id": "stage:019fb920-2100-7000-8000-000000000003",
+              "key": "human_qa",
+              "name": "Gate / Human QA",
+              "position": 2,
+              "gate": {
+                "evidence": { "mode": "any", "kinds": ["screenshot", "artifact"] },
+                "reviewer": { "required": true, "allowed_principal_types": ["human"], "minimum_reviewers": 1, "forbid_self_review": false }
+              }
+            },
+            {
+              "id": "stage:019fb920-2100-7000-8000-000000000004",
+              "key": "done",
+              "name": "Done",
+              "position": 3,
+              "gate": {
+                "evidence": { "mode": "any", "kinds": ["screenshot", "artifact"] },
+                "reviewer": { "required": true, "allowed_principal_types": ["human"], "minimum_reviewers": 1, "forbid_self_review": false }
+              }
+            }
+          ]
+        },
+        {
+          "id": "workflow:019fb920-2000-7000-8000-000000000002",
+          "story_type": "security",
+          "version": 1,
+          "stages": [
+            { "id": "stage:019fb920-2100-7000-8000-000000000001", "key": "backlog", "name": "Backlog", "position": 0, "gate": null },
+            { "id": "stage:019fb920-2100-7000-8000-000000000002", "key": "in_progress", "name": "In progress", "position": 1, "gate": null },
+            {
+              "id": "stage:019fb920-2100-7000-8000-000000000003",
+              "key": "human_qa",
+              "name": "Gate / Human QA",
+              "position": 2,
+              "gate": {
+                "evidence": { "mode": "all", "kinds": ["test-run"] },
+                "reviewer": { "required": true, "allowed_principal_types": ["human", "agent"], "minimum_reviewers": 1, "forbid_self_review": true }
+              }
+            },
+            {
+              "id": "stage:019fb920-2100-7000-8000-000000000004",
+              "key": "done",
+              "name": "Done",
+              "position": 3,
+              "gate": {
+                "evidence": { "mode": "all", "kinds": ["test-run"] },
+                "reviewer": { "required": true, "allowed_principal_types": ["human", "agent"], "minimum_reviewers": 1, "forbid_self_review": true }
+              }
+            }
+          ]
+        }
+      ],
+      "stories": [
+        {
+          "id": "task:019fb920-3000-7000-8000-000000000001",
+          "room_id": "room:019fb920-1000-7000-8000-000000000001",
+          "title": "Add a project decision timeline",
+          "story_type": "feature",
+          "workflow_id": "workflow:019fb920-2000-7000-8000-000000000001",
+          "workflow_version": 1,
+          "stage_id": "stage:019fb920-2100-7000-8000-000000000001",
+          "owner_id": "h:019fb920-0001-7000-8000-000000000002",
+          "delegate": null,
+          "labels": ["audit", "product"],
+          "evidence_ids": [],
+          "gate_state": "not_applicable"
+        },
+        {
+          "id": "task:019fb920-3000-7000-8000-000000000002",
+          "room_id": "room:019fb920-1000-7000-8000-000000000001",
+          "title": "Freeze the workspace read fixture",
+          "story_type": "feature",
+          "workflow_id": "workflow:019fb920-2000-7000-8000-000000000001",
+          "workflow_version": 1,
+          "stage_id": "stage:019fb920-2100-7000-8000-000000000002",
+          "owner_id": "h:019fb920-0001-7000-8000-000000000001",
+          "delegate": {
+            "agent_id": "a:019fb920-0003-7000-8000-000000000001",
+            "thread_id": "thread:019fb920-4000-7000-8000-000000000001",
+            "run_id": "run:019fb920-4100-7000-8000-000000000001",
+            "run_status": "running"
+          },
+          "labels": ["contract", "server"],
+          "evidence_ids": ["evidence:019fb920-6000-7000-8000-000000000001"],
+          "gate_state": "waiting_for_evidence"
+        },
+        {
+          "id": "task:019fb920-3000-7000-8000-000000000003",
+          "room_id": "room:019fb920-1000-7000-8000-000000000001",
+          "title": "Verify the channel activity cards",
+          "story_type": "security",
+          "workflow_id": "workflow:019fb920-2000-7000-8000-000000000002",
+          "workflow_version": 1,
+          "stage_id": "stage:019fb920-2100-7000-8000-000000000003",
+          "owner_id": "h:019fb920-0001-7000-8000-000000000002",
+          "delegate": {
+            "agent_id": "a:019fb920-0003-7000-8000-000000000002",
+            "thread_id": "thread:019fb920-4000-7000-8000-000000000002",
+            "run_id": "run:019fb920-4100-7000-8000-000000000002",
+            "run_status": "blocked"
+          },
+          "labels": ["channels", "human-qa"],
+          "evidence_ids": ["evidence:019fb920-6000-7000-8000-000000000002"],
+          "gate_state": "waiting_for_review"
+        },
+        {
+          "id": "task:019fb920-3000-7000-8000-000000000004",
+          "room_id": "room:019fb920-1000-7000-8000-000000000001",
+          "title": "Map T3 lifecycle events",
+          "story_type": "feature",
+          "workflow_id": "workflow:019fb920-2000-7000-8000-000000000001",
+          "workflow_version": 1,
+          "stage_id": "stage:019fb920-2100-7000-8000-000000000004",
+          "owner_id": "h:019fb920-0001-7000-8000-000000000001",
+          "delegate": {
+            "agent_id": "a:019fb920-0003-7000-8000-000000000001",
+            "thread_id": "thread:019fb920-4000-7000-8000-000000000001",
+            "run_id": "run:019fb920-4100-7000-8000-000000000001",
+            "run_status": "completed"
+          },
+          "labels": ["adapter", "done"],
+          "evidence_ids": ["evidence:019fb920-6000-7000-8000-000000000005"],
+          "gate_state": "passed"
+        }
+      ],
+      "channels": [
+        {
+          "id": "channel:019fb920-1100-7000-8000-000000000001",
+          "room_id": "room:019fb920-1000-7000-8000-000000000001",
+          "name": "# infra",
+          "purpose": "Infrastructure, adapters, machines, and delivery state",
+          "unread": { "read_through_seq": 300, "latest_visible_seq": 310, "count": 5, "counted_event_seqs": [301, 302, 304, 305, 309] }
+        },
+        {
+          "id": "channel:019fb920-1100-7000-8000-000000000002",
+          "room_id": "room:019fb920-1000-7000-8000-000000000001",
+          "name": "# product",
+          "purpose": "Product intent, stories, evidence, gates, and decisions",
+          "unread": { "read_through_seq": 300, "latest_visible_seq": 310, "count": 5, "counted_event_seqs": [303, 306, 307, 308, 310] }
+        }
+      ],
+      "feeds": [
+        {
+          "room_id": "room:019fb920-1000-7000-8000-000000000001",
+          "channel_id": "channel:019fb920-1100-7000-8000-000000000001",
+          "page_info": { "after_seq": 300, "limit": 50, "snapshot_head_seq": 310, "next_cursor": 309, "has_more": false },
+          "items": [
+            {
+              "id": "feed-item:019fb920-7000-7000-8000-000000000001",
+              "room_id": "room:019fb920-1000-7000-8000-000000000001",
+              "channel_id": "channel:019fb920-1100-7000-8000-000000000001",
+              "kind": "human_message",
+              "occurred_at": "2026-07-31T19:41:00.000Z",
+              "summary": "The adapter is reachable again; verify mirror freshness separately.",
+              "source_event": { "seq": 301, "event_id": "019fb920-7100-7000-8000-000000000001", "type": "message.created", "schema": 1 },
+              "attribution": {
+                "mode": "explicit_principal",
+                "writer_principal_id": "h:019fb920-0001-7000-8000-000000000002",
+                "actor_principal_id": "h:019fb920-0001-7000-8000-000000000002"
+              },
+              "payload": { "body_markdown": "The adapter is reachable again; verify mirror freshness separately." }
+            },
+            {
+              "id": "feed-item:019fb920-7000-7000-8000-000000000002",
+              "room_id": "room:019fb920-1000-7000-8000-000000000001",
+              "channel_id": "channel:019fb920-1100-7000-8000-000000000001",
+              "kind": "reaction",
+              "occurred_at": "2026-07-31T19:42:00.000Z",
+              "summary": "Ben reacted with a check mark.",
+              "source_event": { "seq": 302, "event_id": "019fb920-7100-7000-8000-000000000002", "type": "reaction.added", "schema": 1 },
+              "attribution": {
+                "mode": "explicit_principal",
+                "writer_principal_id": "h:019fb920-0001-7000-8000-000000000001",
+                "actor_principal_id": "h:019fb920-0001-7000-8000-000000000001"
+              },
+              "payload": {
+                "emoji": "✅",
+                "target_feed_item_id": "feed-item:019fb920-7000-7000-8000-000000000001",
+                "operation": "added"
+              }
+            },
+            {
+              "id": "feed-item:019fb920-7000-7000-8000-000000000004",
+              "room_id": "room:019fb920-1000-7000-8000-000000000001",
+              "channel_id": "channel:019fb920-1100-7000-8000-000000000001",
+              "kind": "run_lifecycle",
+              "occurred_at": "2026-07-31T19:48:00.000Z",
+              "summary": "The workspace fixture run is validating the contract.",
+              "source_event": { "seq": 304, "event_id": "019fb920-7100-7000-8000-000000000004", "type": "thread.status-set", "schema": 1 },
+              "attribution": {
+                "mode": "mirrored_source",
+                "writer_principal_id": "a:019fb920-0003-7000-8000-000000000003",
+                "upstream": {
+                  "status": "coarse",
+                  "source_id": "source:019fb920-9000-7000-8000-000000000001",
+                  "environment_id": "env:t3rooms-local",
+                  "event_id": "upstream-run-481",
+                  "sequence": 481,
+                  "actor_kind": "assistant"
+                }
+              },
+              "payload": {
+                "thread_id": "thread:019fb920-4000-7000-8000-000000000001",
+                "run_id": "run:019fb920-4100-7000-8000-000000000001",
+                "status": "running"
+              }
+            },
+            {
+              "id": "feed-item:019fb920-7000-7000-8000-000000000005",
+              "room_id": "room:019fb920-1000-7000-8000-000000000001",
+              "channel_id": "channel:019fb920-1100-7000-8000-000000000001",
+              "kind": "evidence_attached",
+              "occurred_at": "2026-07-31T19:51:00.000Z",
+              "summary": "A test run was attached to the security review.",
+              "source_event": { "seq": 305, "event_id": "019fb920-7100-7000-8000-000000000005", "type": "evidence.attached", "schema": 1 },
+              "attribution": {
+                "mode": "explicit_principal",
+                "writer_principal_id": "a:019fb920-0003-7000-8000-000000000002",
+                "actor_principal_id": "a:019fb920-0003-7000-8000-000000000002"
+              },
+              "payload": {
+                "story_id": "task:019fb920-3000-7000-8000-000000000003",
+                "evidence_id": "evidence:019fb920-6000-7000-8000-000000000002"
+              }
+            },
+            {
+              "id": "feed-item:019fb920-7000-7000-8000-000000000009",
+              "room_id": "room:019fb920-1000-7000-8000-000000000001",
+              "channel_id": "channel:019fb920-1100-7000-8000-000000000001",
+              "kind": "unknown_schema",
+              "occurred_at": "2026-07-31T19:58:00.000Z",
+              "summary": "A newer source event is visible but not interpreted.",
+              "source_event": { "seq": 309, "event_id": "019fb920-7100-7000-8000-000000000009", "type": "provider.experimental", "schema": 3 },
+              "attribution": {
+                "mode": "mirrored_source",
+                "writer_principal_id": "a:019fb920-0003-7000-8000-000000000003",
+                "upstream": {
+                  "status": "unavailable",
+                  "source_id": "source:019fb920-9000-7000-8000-000000000001",
+                  "environment_id": "env:t3rooms-local",
+                  "event_id": "upstream-unknown-490",
+                  "sequence": 490,
+                  "reason": "The source schema does not expose authenticated actor identity."
+                }
+              },
+              "payload": { "event_type": "provider.experimental", "event_schema": 3, "display": "unknown_event" }
+            }
+          ]
+        },
+        {
+          "room_id": "room:019fb920-1000-7000-8000-000000000001",
+          "channel_id": "channel:019fb920-1100-7000-8000-000000000002",
+          "page_info": { "after_seq": 300, "limit": 50, "snapshot_head_seq": 310, "next_cursor": 310, "has_more": false },
+          "items": [
+            {
+              "id": "feed-item:019fb920-7000-7000-8000-000000000003",
+              "room_id": "room:019fb920-1000-7000-8000-000000000001",
+              "channel_id": "channel:019fb920-1100-7000-8000-000000000002",
+              "kind": "story_lifecycle",
+              "occurred_at": "2026-07-31T19:44:00.000Z",
+              "summary": "Freeze the workspace read fixture moved to In progress.",
+              "source_event": { "seq": 303, "event_id": "019fb920-7100-7000-8000-000000000003", "type": "task.stage-changed", "schema": 1 },
+              "attribution": {
+                "mode": "explicit_principal",
+                "writer_principal_id": "a:019fb920-0003-7000-8000-000000000001",
+                "actor_principal_id": "a:019fb920-0003-7000-8000-000000000001"
+              },
+              "payload": {
+                "story_id": "task:019fb920-3000-7000-8000-000000000002",
+                "from_stage_id": "stage:019fb920-2100-7000-8000-000000000001",
+                "to_stage_id": "stage:019fb920-2100-7000-8000-000000000002"
+              }
+            },
+            {
+              "id": "feed-item:019fb920-7000-7000-8000-000000000006",
+              "room_id": "room:019fb920-1000-7000-8000-000000000001",
+              "channel_id": "channel:019fb920-1100-7000-8000-000000000002",
+              "kind": "approval_requested",
+              "occurred_at": "2026-07-31T19:53:00.000Z",
+              "summary": "The security story requested human review.",
+              "source_event": { "seq": 306, "event_id": "019fb920-7100-7000-8000-000000000006", "type": "approval.requested", "schema": 1 },
+              "attribution": {
+                "mode": "explicit_principal",
+                "writer_principal_id": "a:019fb920-0003-7000-8000-000000000002",
+                "actor_principal_id": "a:019fb920-0003-7000-8000-000000000002"
+              },
+              "payload": {
+                "approval_id": "approval:019fb920-7200-7000-8000-000000000001",
+                "story_id": "task:019fb920-3000-7000-8000-000000000003",
+                "state": "requested",
+                "scope": "once"
+              }
+            },
+            {
+              "id": "feed-item:019fb920-7000-7000-8000-000000000007",
+              "room_id": "room:019fb920-1000-7000-8000-000000000001",
+              "channel_id": "channel:019fb920-1100-7000-8000-000000000002",
+              "kind": "human_gate",
+              "occurred_at": "2026-07-31T19:54:00.000Z",
+              "summary": "Human QA is waiting for a reviewer.",
+              "source_event": { "seq": 307, "event_id": "019fb920-7100-7000-8000-000000000007", "type": "task.stage-changed", "schema": 1 },
+              "attribution": {
+                "mode": "explicit_principal",
+                "writer_principal_id": "h:019fb920-0001-7000-8000-000000000002",
+                "actor_principal_id": "h:019fb920-0001-7000-8000-000000000002"
+              },
+              "payload": {
+                "story_id": "task:019fb920-3000-7000-8000-000000000003",
+                "stage_id": "stage:019fb920-2100-7000-8000-000000000003",
+                "state": "waiting_for_review",
+                "required_evidence_ids": ["evidence:019fb920-6000-7000-8000-000000000002"],
+                "reviewer_ids": []
+              }
+            },
+            {
+              "id": "feed-item:019fb920-7000-7000-8000-000000000008",
+              "room_id": "room:019fb920-1000-7000-8000-000000000001",
+              "channel_id": "channel:019fb920-1100-7000-8000-000000000002",
+              "kind": "approval_decided",
+              "occurred_at": "2026-07-31T19:55:00.000Z",
+              "summary": "Maya requested a fresh test run before approval.",
+              "source_event": { "seq": 308, "event_id": "019fb920-7100-7000-8000-000000000008", "type": "approval.decided", "schema": 1 },
+              "attribution": {
+                "mode": "explicit_principal",
+                "writer_principal_id": "h:019fb920-0001-7000-8000-000000000002",
+                "actor_principal_id": "h:019fb920-0001-7000-8000-000000000002"
+              },
+              "payload": {
+                "approval_id": "approval:019fb920-7200-7000-8000-000000000001",
+                "story_id": "task:019fb920-3000-7000-8000-000000000003",
+                "state": "needs_changes",
+                "scope": "once"
+              }
+            },
+            {
+              "id": "feed-item:019fb920-7000-7000-8000-000000000010",
+              "room_id": "room:019fb920-1000-7000-8000-000000000001",
+              "channel_id": "channel:019fb920-1100-7000-8000-000000000002",
+              "kind": "unavailable",
+              "occurred_at": "2026-07-31T20:01:00.000Z",
+              "summary": "A source detail is temporarily unavailable.",
+              "source_event": { "seq": 310, "event_id": "019fb920-7100-7000-8000-000000000010", "type": "mirror.source-unavailable", "schema": 1 },
+              "attribution": {
+                "mode": "mirrored_source",
+                "writer_principal_id": "a:019fb920-0003-7000-8000-000000000003",
+                "upstream": {
+                  "status": "unavailable",
+                  "source_id": "source:019fb920-9000-7000-8000-000000000001",
+                  "environment_id": "env:t3rooms-local",
+                  "event_id": "upstream-unavailable-491",
+                  "sequence": 491,
+                  "reason": "The source detail was not present in the mirrored payload."
+                }
+              },
+              "payload": { "resource_kind": "source_event", "reason": "Source detail unavailable.", "retryable": true }
+            }
+          ]
+        }
+      ],
+      "threads": [
+        {
+          "id": "thread:019fb920-4000-7000-8000-000000000001",
+          "room_id": "room:019fb920-1000-7000-8000-000000000001",
+          "title": "Workspace fixture correction",
+          "delegated_agent_id": "a:019fb920-0003-7000-8000-000000000001",
+          "machine_id": "m:019fb920-0002-7000-8000-000000000001",
+          "source_id": "source:019fb920-9000-7000-8000-000000000001",
+          "provider": "openai-codex",
+          "environment_id": "env:t3rooms-local",
+          "status": "running",
+          "as_of": "2026-07-31T20:00:00.000Z",
+          "mirror": {
+            "adapter_principal_id": "a:019fb920-0003-7000-8000-000000000003",
+            "upstream_actor": {
+              "status": "coarse",
+              "source_id": "source:019fb920-9000-7000-8000-000000000001",
+              "environment_id": "env:t3rooms-local",
+              "event_id": "upstream-run-491",
+              "sequence": 491,
+              "actor_kind": "assistant"
+            },
+            "upstream_sequence": 491,
+            "last_synced_at": "2026-07-31T20:00:00.000Z",
+            "freshness": "fresh"
+          },
+          "machine": { "reachable": true, "checked_at": "2026-07-31T20:00:03.000Z" }
+        },
+        {
+          "id": "thread:019fb920-4000-7000-8000-000000000002",
+          "room_id": "room:019fb920-1000-7000-8000-000000000001",
+          "title": "Channel-card visual review",
+          "delegated_agent_id": "a:019fb920-0003-7000-8000-000000000002",
+          "machine_id": "m:019fb920-0002-7000-8000-000000000002",
+          "source_id": "source:019fb920-9000-7000-8000-000000000001",
+          "provider": "anthropic-claude",
+          "environment_id": "env:t3rooms-local",
+          "status": "blocked",
+          "as_of": "2026-07-31T19:20:00.000Z",
+          "mirror": {
+            "adapter_principal_id": "a:019fb920-0003-7000-8000-000000000003",
+            "upstream_actor": {
+              "status": "unavailable",
+              "source_id": "source:019fb920-9000-7000-8000-000000000001",
+              "environment_id": "env:t3rooms-local",
+              "event_id": "upstream-run-460",
+              "sequence": 460,
+              "reason": "T3 supplied no authenticated principal for this event."
+            },
+            "upstream_sequence": 460,
+            "last_synced_at": "2026-07-31T19:20:00.000Z",
+            "freshness": "stale"
+          },
+          "machine": { "reachable": true, "checked_at": "2026-07-31T20:00:03.000Z" }
+        }
+      ],
+      "documents": [
+        {
+          "id": "document:019fb920-5000-7000-8000-000000000001",
+          "room_id": "room:019fb920-1000-7000-8000-000000000001",
+          "title": "Rooms Vision",
+          "current_revision_id": "revision:019fb920-5100-7000-8000-000000000001",
+          "source": {
+            "remote_url": "https://github.com/benwilliams0540/rooms",
+            "pinned_revision": "033f337b7f5ee6e61de2c0277e716486698211a2",
+            "observed_head": "02e787d2ce45c5e1a9bd9fb6554b6f7fe3547a62"
+          },
+          "freshness": {
+            "state": "stale",
+            "compared_at": "2026-07-31T20:00:00.000Z",
+            "observed_head": "02e787d2ce45c5e1a9bd9fb6554b6f7fe3547a62"
+          },
+          "revisions": [
+            {
+              "id": "revision:019fb920-5100-7000-8000-000000000001",
+              "author_id": "h:019fb920-0001-7000-8000-000000000001",
+              "state": "current",
+              "created_at": "2026-07-31T18:00:00.000Z",
+              "source_revision": "033f337b7f5ee6e61de2c0277e716486698211a2",
+              "body_markdown": "# Rooms Vision\n\nKeep project truth connected around T3."
+            },
+            {
+              "id": "revision:019fb920-5100-7000-8000-000000000002",
+              "author_id": "a:019fb920-0003-7000-8000-000000000001",
+              "state": "queued",
+              "created_at": "2026-07-31T19:56:00.000Z",
+              "source_revision": "02e787d2ce45c5e1a9bd9fb6554b6f7fe3547a62",
+              "body_markdown": "# Rooms Vision\n\nKeep human intent and agent execution connected."
+            }
+          ],
+          "atlas": {
+            "id": "atlas:019fb920-5200-7000-8000-000000000001",
+            "revision_id": "revision:019fb920-5100-7000-8000-000000000001",
+            "state": "stale",
+            "route": "/rooms/rooms-local/project/vision/atlas"
+          },
+          "linked_story_ids": ["task:019fb920-3000-7000-8000-000000000001"],
+          "linked_decision_ids": ["decision:019fb920-6200-7000-8000-000000000001"]
+        }
+      ],
+      "evidence": [
+        {
+          "id": "evidence:019fb920-6000-7000-8000-000000000001",
+          "room_id": "room:019fb920-1000-7000-8000-000000000001",
+          "story_id": "task:019fb920-3000-7000-8000-000000000002",
+          "run_id": "run:019fb920-4100-7000-8000-000000000001",
+          "producer_id": "a:019fb920-0003-7000-8000-000000000001",
+          "kind": "artifact",
+          "cas": { "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bytes": 4096, "media_type": "application/json" },
+          "note": "Validated workspace fixture artifact.",
+          "occurred_at": "2026-07-31T19:50:00.000Z"
+        },
+        {
+          "id": "evidence:019fb920-6000-7000-8000-000000000002",
+          "room_id": "room:019fb920-1000-7000-8000-000000000001",
+          "story_id": "task:019fb920-3000-7000-8000-000000000003",
+          "run_id": "run:019fb920-4100-7000-8000-000000000002",
+          "producer_id": "a:019fb920-0003-7000-8000-000000000002",
+          "kind": "test-run",
+          "cas": { "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "bytes": 8192, "media_type": "text/plain" },
+          "note": "Focused activity-card regression.",
+          "occurred_at": "2026-07-31T19:51:00.000Z"
+        },
+        {
+          "id": "evidence:019fb920-6000-7000-8000-000000000005",
+          "room_id": "room:019fb920-1000-7000-8000-000000000001",
+          "story_id": "task:019fb920-3000-7000-8000-000000000004",
+          "run_id": "run:019fb920-4100-7000-8000-000000000001",
+          "producer_id": "a:019fb920-0003-7000-8000-000000000001",
+          "kind": "screenshot",
+          "cas": { "hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "bytes": 32000, "media_type": "image/png" },
+          "note": "Accepted T3 lifecycle mapping.",
+          "occurred_at": "2026-07-31T19:52:00.000Z"
+        }
+      ],
+      "decisions": [
+        {
+          "id": "decision:019fb920-6200-7000-8000-000000000001",
+          "room_id": "room:019fb920-1000-7000-8000-000000000001",
+          "story_id": "task:019fb920-3000-7000-8000-000000000001",
+          "author_id": "h:019fb920-0001-7000-8000-000000000001",
+          "status": "accepted",
+          "title": "Keep detailed traces in T3",
+          "rationale_markdown": "Rooms stores compact lifecycle facts and evidence links.",
+          "occurred_at": "2026-07-31T19:40:00.000Z"
+        }
+      ],
+      "audit": [
+        {
+          "id": "audit:019fb920-6300-7000-8000-000000000001",
+          "room_id": "room:019fb920-1000-7000-8000-000000000001",
+          "actor_id": "h:019fb920-0001-7000-8000-000000000001",
+          "action": "decision_recorded",
+          "subject": { "kind": "decision", "id": "decision:019fb920-6200-7000-8000-000000000001" },
+          "source_event_id": "019fb920-7100-7000-8000-000000000017",
+          "summary": "The trace-retention decision was accepted.",
+          "occurred_at": "2026-07-31T19:40:00.000Z"
+        },
+        {
+          "id": "audit:019fb920-6300-7000-8000-000000000002",
+          "room_id": "room:019fb920-1000-7000-8000-000000000001",
+          "actor_id": "a:019fb920-0003-7000-8000-000000000002",
+          "action": "evidence_recorded",
+          "subject": { "kind": "evidence", "id": "evidence:019fb920-6000-7000-8000-000000000002" },
+          "source_event_id": "019fb920-7100-7000-8000-000000000005",
+          "summary": "The security test run was recorded.",
+          "occurred_at": "2026-07-31T19:51:00.000Z"
+        }
+      ],
+      "navigation": [
+        { "key": "dashboard", "label": "Dashboard", "route": "/rooms/rooms-local" },
+        { "key": "channels", "label": "Channels", "route": "/rooms/rooms-local/channels" },
+        { "key": "threads", "label": "Your Threads", "route": "/rooms/rooms-local/threads" },
+        { "key": "vision", "label": "Vision", "route": "/rooms/rooms-local/project/vision" },
+        { "key": "stories", "label": "Stories", "route": "/rooms/rooms-local/project/stories" },
+        { "key": "evidence", "label": "Evidence", "route": "/rooms/rooms-local/project/evidence" },
+        { "key": "audit_decisions", "label": "Audit & Decisions", "route": "/rooms/rooms-local/project/audit-decisions" },
+        { "key": "present", "label": "Present", "route": "/rooms/rooms-local/present" }
+      ],
+      "presence": {
+        "human_ids": ["h:019fb920-0001-7000-8000-000000000001", "h:019fb920-0001-7000-8000-000000000002"],
+        "agent_ids": ["a:019fb920-0003-7000-8000-000000000001", "a:019fb920-0003-7000-8000-000000000002", "a:019fb920-0003-7000-8000-000000000003"],
+        "machine_ids": ["m:019fb920-0002-7000-8000-000000000001", "m:019fb920-0002-7000-8000-000000000002"]
+      },
+      "sources": [
+        {
+          "id": "source:019fb920-9000-7000-8000-000000000001",
+          "room_id": "room:019fb920-1000-7000-8000-000000000001",
+          "kind": "t3_environment",
+          "name": "t3rooms local",
+          "revision": {
+            "pinned_revision": "4a703a4aaa9447ab62a6aabe7dd99e0159601f75",
+            "observed_head": "4a703a4aaa9447ab62a6aabe7dd99e0159601f75",
+            "observed_at": "2026-07-31T20:00:03.000Z"
+          },
+          "reachability": { "state": "reachable", "checked_at": "2026-07-31T20:00:03.000Z" },
+          "mirror": { "freshness": "stale", "as_of": "2026-07-31T19:20:00.000Z", "upstream_sequence": 460 }
+        },
+        {
+          "id": "source:019fb920-9000-7000-8000-000000000002",
+          "room_id": "room:019fb920-1000-7000-8000-000000000001",
+          "kind": "git_repository",
+          "name": "Rooms planning repository",
+          "revision": {
+            "pinned_revision": "033f337b7f5ee6e61de2c0277e716486698211a2",
+            "observed_head": "02e787d2ce45c5e1a9bd9fb6554b6f7fe3547a62",
+            "observed_at": "2026-07-31T20:00:00.000Z"
+          },
+          "reachability": { "state": "reachable", "checked_at": "2026-07-31T20:00:00.000Z" },
+          "mirror": { "freshness": "fresh", "as_of": "2026-07-31T20:00:00.000Z", "upstream_sequence": 0 }
+        }
+      ],
+      "source_events": [
+        { "seq": 300, "event_id": "019fb920-7100-7000-8000-000000000017", "type": "decision.recorded", "schema": 1 },
+        { "seq": 301, "event_id": "019fb920-7100-7000-8000-000000000001", "type": "message.created", "schema": 1 },
+        { "seq": 302, "event_id": "019fb920-7100-7000-8000-000000000002", "type": "reaction.added", "schema": 1 },
+        { "seq": 303, "event_id": "019fb920-7100-7000-8000-000000000003", "type": "task.stage-changed", "schema": 1 },
+        { "seq": 304, "event_id": "019fb920-7100-7000-8000-000000000004", "type": "thread.status-set", "schema": 1 },
+        { "seq": 305, "event_id": "019fb920-7100-7000-8000-000000000005", "type": "evidence.attached", "schema": 1 },
+        { "seq": 306, "event_id": "019fb920-7100-7000-8000-000000000006", "type": "approval.requested", "schema": 1 },
+        { "seq": 307, "event_id": "019fb920-7100-7000-8000-000000000007", "type": "task.stage-changed", "schema": 1 },
+        { "seq": 308, "event_id": "019fb920-7100-7000-8000-000000000008", "type": "approval.decided", "schema": 1 },
+        { "seq": 309, "event_id": "019fb920-7100-7000-8000-000000000009", "type": "provider.experimental", "schema": 3 },
+        { "seq": 310, "event_id": "019fb920-7100-7000-8000-000000000010", "type": "mirror.source-unavailable", "schema": 1 }
+      ],
+      "projections": [
+        {
+          "kind": "desktop_board",
+          "stage_order": [
+            "stage:019fb920-2100-7000-8000-000000000001",
+            "stage:019fb920-2100-7000-8000-000000000002",
+            "stage:019fb920-2100-7000-8000-000000000003",
+            "stage:019fb920-2100-7000-8000-000000000004"
+          ],
+          "groups": [
+            { "stage_id": "stage:019fb920-2100-7000-8000-000000000001", "story_ids": ["task:019fb920-3000-7000-8000-000000000001"] },
+            { "stage_id": "stage:019fb920-2100-7000-8000-000000000002", "story_ids": ["task:019fb920-3000-7000-8000-000000000002"] },
+            { "stage_id": "stage:019fb920-2100-7000-8000-000000000003", "story_ids": ["task:019fb920-3000-7000-8000-000000000003"] },
+            { "stage_id": "stage:019fb920-2100-7000-8000-000000000004", "story_ids": ["task:019fb920-3000-7000-8000-000000000004"] }
+          ]
+        },
+        {
+          "kind": "mobile_vertical_stages",
+          "stage_order": [
+            "stage:019fb920-2100-7000-8000-000000000001",
+            "stage:019fb920-2100-7000-8000-000000000002",
+            "stage:019fb920-2100-7000-8000-000000000003",
+            "stage:019fb920-2100-7000-8000-000000000004"
+          ],
+          "groups": [
+            { "stage_id": "stage:019fb920-2100-7000-8000-000000000001", "story_ids": ["task:019fb920-3000-7000-8000-000000000001"] },
+            { "stage_id": "stage:019fb920-2100-7000-8000-000000000002", "story_ids": ["task:019fb920-3000-7000-8000-000000000002"] },
+            { "stage_id": "stage:019fb920-2100-7000-8000-000000000003", "story_ids": ["task:019fb920-3000-7000-8000-000000000003"] },
+            { "stage_id": "stage:019fb920-2100-7000-8000-000000000004", "story_ids": ["task:019fb920-3000-7000-8000-000000000004"] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "workspace:019fb920-1200-7000-8000-000000000002",
+      "room_id": "room:019fb920-1000-7000-8000-000000000002",
+      "authorization": {
+        "status": "authorized",
+        "principal_id": "h:019fb920-0001-7000-8000-000000000001",
+        "membership": "member",
+        "role": "observer"
+      },
+      "dashboard": {
+        "vision": {
+          "document_id": "document:019fb920-5000-7000-8000-000000000002",
+          "headline": "Ship a dependable capture pipeline",
+          "summary": "Coordinate camera validation, evidence, and review across the capture team."
+        },
+        "needs_attention": [
+          {
+            "id": "attention:019fb920-7300-7000-8000-000000000004",
+            "kind": "blocked_run",
+            "priority": 0,
+            "thread_id": "thread:019fb920-4000-7000-8000-000000000003",
+            "reason": "The device matrix run needs a physical-camera decision."
+          }
+        ],
+        "recent_activity": [
+          {
+            "id": "activity:019fb920-7400-7000-8000-000000000003",
+            "rank": 0,
+            "feed_item_id": "feed-item:019fb920-7000-7000-8000-000000000014",
+            "reason": "latest_human_activity"
+          },
+          {
+            "id": "activity:019fb920-7400-7000-8000-000000000004",
+            "rank": 1,
+            "feed_item_id": "feed-item:019fb920-7000-7000-8000-000000000013",
+            "reason": "latest_work_activity"
+          }
+        ]
+      },
+      "workflows": [
+        {
+          "id": "workflow:019fb920-2000-7000-8000-000000000003",
+          "story_type": "feature",
+          "version": 1,
+          "stages": [
+            { "id": "stage:019fb920-2100-7000-8000-000000000005", "key": "backlog", "name": "Backlog", "position": 0, "gate": null },
+            { "id": "stage:019fb920-2100-7000-8000-000000000006", "key": "in_progress", "name": "In progress", "position": 1, "gate": null },
+            {
+              "id": "stage:019fb920-2100-7000-8000-000000000007",
+              "key": "human_qa",
+              "name": "Gate / Human QA",
+              "position": 2,
+              "gate": {
+                "evidence": { "mode": "any", "kinds": ["screenshot", "artifact"] },
+                "reviewer": { "required": true, "allowed_principal_types": ["human"], "minimum_reviewers": 1, "forbid_self_review": false }
+              }
+            },
+            {
+              "id": "stage:019fb920-2100-7000-8000-000000000008",
+              "key": "done",
+              "name": "Done",
+              "position": 3,
+              "gate": {
+                "evidence": { "mode": "any", "kinds": ["screenshot", "artifact"] },
+                "reviewer": { "required": true, "allowed_principal_types": ["human"], "minimum_reviewers": 1, "forbid_self_review": false }
+              }
+            }
+          ]
+        },
+        {
+          "id": "workflow:019fb920-2000-7000-8000-000000000004",
+          "story_type": "security",
+          "version": 1,
+          "stages": [
+            { "id": "stage:019fb920-2100-7000-8000-000000000005", "key": "backlog", "name": "Backlog", "position": 0, "gate": null },
+            { "id": "stage:019fb920-2100-7000-8000-000000000006", "key": "in_progress", "name": "In progress", "position": 1, "gate": null },
+            {
+              "id": "stage:019fb920-2100-7000-8000-000000000007",
+              "key": "human_qa",
+              "name": "Gate / Human QA",
+              "position": 2,
+              "gate": {
+                "evidence": { "mode": "all", "kinds": ["test-run"] },
+                "reviewer": { "required": true, "allowed_principal_types": ["human", "agent"], "minimum_reviewers": 1, "forbid_self_review": true }
+              }
+            },
+            {
+              "id": "stage:019fb920-2100-7000-8000-000000000008",
+              "key": "done",
+              "name": "Done",
+              "position": 3,
+              "gate": {
+                "evidence": { "mode": "all", "kinds": ["test-run"] },
+                "reviewer": { "required": true, "allowed_principal_types": ["human", "agent"], "minimum_reviewers": 1, "forbid_self_review": true }
+              }
+            }
+          ]
+        }
+      ],
+      "stories": [
+        {
+          "id": "task:019fb920-3000-7000-8000-000000000005",
+          "room_id": "room:019fb920-1000-7000-8000-000000000002",
+          "title": "Document the camera acceptance matrix",
+          "story_type": "feature",
+          "workflow_id": "workflow:019fb920-2000-7000-8000-000000000003",
+          "workflow_version": 1,
+          "stage_id": "stage:019fb920-2100-7000-8000-000000000005",
+          "owner_id": "h:019fb920-0001-7000-8000-000000000002",
+          "delegate": null,
+          "labels": ["camera", "docs"],
+          "evidence_ids": [],
+          "gate_state": "not_applicable"
+        },
+        {
+          "id": "task:019fb920-3000-7000-8000-000000000006",
+          "room_id": "room:019fb920-1000-7000-8000-000000000002",
+          "title": "Exercise the device capture matrix",
+          "story_type": "security",
+          "workflow_id": "workflow:019fb920-2000-7000-8000-000000000004",
+          "workflow_version": 1,
+          "stage_id": "stage:019fb920-2100-7000-8000-000000000006",
+          "owner_id": "h:019fb920-0001-7000-8000-000000000001",
+          "delegate": {
+            "agent_id": "a:019fb920-0003-7000-8000-000000000002",
+            "thread_id": "thread:019fb920-4000-7000-8000-000000000003",
+            "run_id": "run:019fb920-4100-7000-8000-000000000003",
+            "run_status": "blocked"
+          },
+          "labels": ["device", "test"],
+          "evidence_ids": ["evidence:019fb920-6000-7000-8000-000000000003"],
+          "gate_state": "waiting_for_evidence"
+        },
+        {
+          "id": "task:019fb920-3000-7000-8000-000000000007",
+          "room_id": "room:019fb920-1000-7000-8000-000000000002",
+          "title": "Review capture-state screenshots",
+          "story_type": "feature",
+          "workflow_id": "workflow:019fb920-2000-7000-8000-000000000003",
+          "workflow_version": 1,
+          "stage_id": "stage:019fb920-2100-7000-8000-000000000007",
+          "owner_id": "h:019fb920-0001-7000-8000-000000000002",
+          "delegate": null,
+          "labels": ["review"],
+          "evidence_ids": ["evidence:019fb920-6000-7000-8000-000000000004"],
+          "gate_state": "waiting_for_review"
+        },
+        {
+          "id": "task:019fb920-3000-7000-8000-000000000008",
+          "room_id": "room:019fb920-1000-7000-8000-000000000002",
+          "title": "Pin the accepted capture guide",
+          "story_type": "feature",
+          "workflow_id": "workflow:019fb920-2000-7000-8000-000000000003",
+          "workflow_version": 1,
+          "stage_id": "stage:019fb920-2100-7000-8000-000000000008",
+          "owner_id": "h:019fb920-0001-7000-8000-000000000002",
+          "delegate": null,
+          "labels": ["done"],
+          "evidence_ids": ["evidence:019fb920-6000-7000-8000-000000000006"],
+          "gate_state": "passed"
+        }
+      ],
+      "channels": [
+        {
+          "id": "channel:019fb920-1100-7000-8000-000000000003",
+          "room_id": "room:019fb920-1000-7000-8000-000000000002",
+          "name": "# capture",
+          "purpose": "Capture planning and physical review",
+          "unread": { "read_through_seq": 400, "latest_visible_seq": 405, "count": 3, "counted_event_seqs": [401, 403, 405] }
+        },
+        {
+          "id": "channel:019fb920-1100-7000-8000-000000000004",
+          "room_id": "room:019fb920-1000-7000-8000-000000000002",
+          "name": "# delivery",
+          "purpose": "Build, evidence, and delivery decisions",
+          "unread": { "read_through_seq": 400, "latest_visible_seq": 404, "count": 2, "counted_event_seqs": [402, 404] }
+        }
+      ],
+      "feeds": [
+        {
+          "room_id": "room:019fb920-1000-7000-8000-000000000002",
+          "channel_id": "channel:019fb920-1100-7000-8000-000000000003",
+          "page_info": { "after_seq": 400, "limit": 50, "snapshot_head_seq": 405, "next_cursor": 405, "has_more": false },
+          "items": [
+            {
+              "id": "feed-item:019fb920-7000-7000-8000-000000000011",
+              "room_id": "room:019fb920-1000-7000-8000-000000000002",
+              "channel_id": "channel:019fb920-1100-7000-8000-000000000003",
+              "kind": "human_message",
+              "occurred_at": "2026-07-31T20:10:00.000Z",
+              "summary": "Keep physical capture as an explicit manual gate.",
+              "source_event": { "seq": 401, "event_id": "019fb920-7100-7000-8000-000000000011", "type": "message.created", "schema": 1 },
+              "attribution": {
+                "mode": "explicit_principal",
+                "writer_principal_id": "h:019fb920-0001-7000-8000-000000000002",
+                "actor_principal_id": "h:019fb920-0001-7000-8000-000000000002"
+              },
+              "payload": { "body_markdown": "Keep physical capture as an explicit manual gate." }
+            },
+            {
+              "id": "feed-item:019fb920-7000-7000-8000-000000000013",
+              "room_id": "room:019fb920-1000-7000-8000-000000000002",
+              "channel_id": "channel:019fb920-1100-7000-8000-000000000003",
+              "kind": "run_lifecycle",
+              "occurred_at": "2026-07-31T20:14:00.000Z",
+              "summary": "The device matrix run is blocked on physical validation.",
+              "source_event": { "seq": 403, "event_id": "019fb920-7100-7000-8000-000000000013", "type": "thread.status-set", "schema": 1 },
+              "attribution": {
+                "mode": "mirrored_source",
+                "writer_principal_id": "a:019fb920-0003-7000-8000-000000000004",
+                "upstream": {
+                  "status": "coarse",
+                  "source_id": "source:019fb920-9000-7000-8000-000000000003",
+                  "environment_id": "env:camera-build",
+                  "event_id": "camera-upstream-77",
+                  "sequence": 77,
+                  "actor_kind": "assistant"
+                }
+              },
+              "payload": {
+                "thread_id": "thread:019fb920-4000-7000-8000-000000000003",
+                "run_id": "run:019fb920-4100-7000-8000-000000000003",
+                "status": "blocked"
+              }
+            },
+            {
+              "id": "feed-item:019fb920-7000-7000-8000-000000000015",
+              "room_id": "room:019fb920-1000-7000-8000-000000000002",
+              "channel_id": "channel:019fb920-1100-7000-8000-000000000003",
+              "kind": "human_gate",
+              "occurred_at": "2026-07-31T20:18:00.000Z",
+              "summary": "Capture review is waiting for Maya.",
+              "source_event": { "seq": 405, "event_id": "019fb920-7100-7000-8000-000000000015", "type": "task.stage-changed", "schema": 1 },
+              "attribution": {
+                "mode": "explicit_principal",
+                "writer_principal_id": "h:019fb920-0001-7000-8000-000000000002",
+                "actor_principal_id": "h:019fb920-0001-7000-8000-000000000002"
+              },
+              "payload": {
+                "story_id": "task:019fb920-3000-7000-8000-000000000007",
+                "stage_id": "stage:019fb920-2100-7000-8000-000000000007",
+                "state": "waiting_for_review",
+                "required_evidence_ids": ["evidence:019fb920-6000-7000-8000-000000000004"],
+                "reviewer_ids": []
+              }
+            }
+          ]
+        },
+        {
+          "room_id": "room:019fb920-1000-7000-8000-000000000002",
+          "channel_id": "channel:019fb920-1100-7000-8000-000000000004",
+          "page_info": { "after_seq": 400, "limit": 50, "snapshot_head_seq": 405, "next_cursor": 404, "has_more": false },
+          "items": [
+            {
+              "id": "feed-item:019fb920-7000-7000-8000-000000000012",
+              "room_id": "room:019fb920-1000-7000-8000-000000000002",
+              "channel_id": "channel:019fb920-1100-7000-8000-000000000004",
+              "kind": "story_lifecycle",
+              "occurred_at": "2026-07-31T20:12:00.000Z",
+              "summary": "The device matrix moved to In progress.",
+              "source_event": { "seq": 402, "event_id": "019fb920-7100-7000-8000-000000000012", "type": "task.stage-changed", "schema": 1 },
+              "attribution": {
+                "mode": "explicit_principal",
+                "writer_principal_id": "a:019fb920-0003-7000-8000-000000000002",
+                "actor_principal_id": "a:019fb920-0003-7000-8000-000000000002"
+              },
+              "payload": {
+                "story_id": "task:019fb920-3000-7000-8000-000000000006",
+                "from_stage_id": "stage:019fb920-2100-7000-8000-000000000005",
+                "to_stage_id": "stage:019fb920-2100-7000-8000-000000000006"
+              }
+            },
+            {
+              "id": "feed-item:019fb920-7000-7000-8000-000000000014",
+              "room_id": "room:019fb920-1000-7000-8000-000000000002",
+              "channel_id": "channel:019fb920-1100-7000-8000-000000000004",
+              "kind": "approval_decided",
+              "occurred_at": "2026-07-31T20:16:00.000Z",
+              "summary": "Maya approved the capture guide.",
+              "source_event": { "seq": 404, "event_id": "019fb920-7100-7000-8000-000000000014", "type": "approval.decided", "schema": 1 },
+              "attribution": {
+                "mode": "explicit_principal",
+                "writer_principal_id": "h:019fb920-0001-7000-8000-000000000002",
+                "actor_principal_id": "h:019fb920-0001-7000-8000-000000000002"
+              },
+              "payload": {
+                "approval_id": "approval:019fb920-7200-7000-8000-000000000002",
+                "story_id": "task:019fb920-3000-7000-8000-000000000008",
+                "state": "approved",
+                "scope": "once"
+              }
+            }
+          ]
+        }
+      ],
+      "threads": [
+        {
+          "id": "thread:019fb920-4000-7000-8000-000000000003",
+          "room_id": "room:019fb920-1000-7000-8000-000000000002",
+          "title": "Camera device matrix",
+          "delegated_agent_id": "a:019fb920-0003-7000-8000-000000000002",
+          "machine_id": "m:019fb920-0002-7000-8000-000000000002",
+          "source_id": "source:019fb920-9000-7000-8000-000000000003",
+          "provider": "anthropic-claude",
+          "environment_id": "env:camera-build",
+          "status": "blocked",
+          "as_of": "2026-07-31T20:14:00.000Z",
+          "mirror": {
+            "adapter_principal_id": "a:019fb920-0003-7000-8000-000000000004",
+            "upstream_actor": {
+              "status": "coarse",
+              "source_id": "source:019fb920-9000-7000-8000-000000000003",
+              "environment_id": "env:camera-build",
+              "event_id": "camera-upstream-77",
+              "sequence": 77,
+              "actor_kind": "assistant"
+            },
+            "upstream_sequence": 77,
+            "last_synced_at": "2026-07-31T20:14:00.000Z",
+            "freshness": "fresh"
+          },
+          "machine": { "reachable": false, "checked_at": "2026-07-31T20:20:00.000Z" }
+        }
+      ],
+      "documents": [
+        {
+          "id": "document:019fb920-5000-7000-8000-000000000002",
+          "room_id": "room:019fb920-1000-7000-8000-000000000002",
+          "title": "Camera Acceptance Guide",
+          "current_revision_id": "revision:019fb920-5100-7000-8000-000000000003",
+          "source": {
+            "remote_url": "https://github.com/benwilliams0540/camera-guide",
+            "pinned_revision": "1111111111111111111111111111111111111111",
+            "observed_head": "1111111111111111111111111111111111111111"
+          },
+          "freshness": { "state": "current", "compared_at": "2026-07-31T20:20:00.000Z", "observed_head": "1111111111111111111111111111111111111111" },
+          "revisions": [
+            {
+              "id": "revision:019fb920-5100-7000-8000-000000000003",
+              "author_id": "h:019fb920-0001-7000-8000-000000000002",
+              "state": "current",
+              "created_at": "2026-07-31T20:00:00.000Z",
+              "source_revision": "1111111111111111111111111111111111111111",
+              "body_markdown": "# Camera Acceptance\n\nCapture states require explicit physical review."
+            }
+          ],
+          "atlas": {
+            "id": "atlas:019fb920-5200-7000-8000-000000000002",
+            "revision_id": "revision:019fb920-5100-7000-8000-000000000003",
+            "state": "current",
+            "route": "/rooms/camera-team/project/vision/atlas"
+          },
+          "linked_story_ids": ["task:019fb920-3000-7000-8000-000000000005"],
+          "linked_decision_ids": ["decision:019fb920-6200-7000-8000-000000000002"]
+        }
+      ],
+      "evidence": [
+        {
+          "id": "evidence:019fb920-6000-7000-8000-000000000003",
+          "room_id": "room:019fb920-1000-7000-8000-000000000002",
+          "story_id": "task:019fb920-3000-7000-8000-000000000006",
+          "run_id": "run:019fb920-4100-7000-8000-000000000003",
+          "producer_id": "a:019fb920-0003-7000-8000-000000000002",
+          "kind": "test-run",
+          "cas": { "hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "bytes": 12000, "media_type": "text/plain" },
+          "note": "Simulator capture matrix; physical validation remains open.",
+          "occurred_at": "2026-07-31T20:13:00.000Z"
+        },
+        {
+          "id": "evidence:019fb920-6000-7000-8000-000000000004",
+          "room_id": "room:019fb920-1000-7000-8000-000000000002",
+          "story_id": "task:019fb920-3000-7000-8000-000000000007",
+          "run_id": null,
+          "producer_id": "h:019fb920-0001-7000-8000-000000000002",
+          "kind": "screenshot",
+          "cas": { "hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "bytes": 56000, "media_type": "image/png" },
+          "note": "Capture-state review sheet.",
+          "occurred_at": "2026-07-31T20:15:00.000Z"
+        },
+        {
+          "id": "evidence:019fb920-6000-7000-8000-000000000006",
+          "room_id": "room:019fb920-1000-7000-8000-000000000002",
+          "story_id": "task:019fb920-3000-7000-8000-000000000008",
+          "run_id": null,
+          "producer_id": "h:019fb920-0001-7000-8000-000000000002",
+          "kind": "artifact",
+          "cas": { "hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "bytes": 2400, "media_type": "application/pdf" },
+          "note": "Accepted capture guide.",
+          "occurred_at": "2026-07-31T20:17:00.000Z"
+        }
+      ],
+      "decisions": [
+        {
+          "id": "decision:019fb920-6200-7000-8000-000000000002",
+          "room_id": "room:019fb920-1000-7000-8000-000000000002",
+          "story_id": "task:019fb920-3000-7000-8000-000000000005",
+          "author_id": "h:019fb920-0001-7000-8000-000000000002",
+          "status": "accepted",
+          "title": "Physical capture remains a human gate",
+          "rationale_markdown": "Simulator and build evidence cannot replace camera ergonomics review.",
+          "occurred_at": "2026-07-31T20:17:00.000Z"
+        }
+      ],
+      "audit": [
+        {
+          "id": "audit:019fb920-6300-7000-8000-000000000003",
+          "room_id": "room:019fb920-1000-7000-8000-000000000002",
+          "actor_id": "h:019fb920-0001-7000-8000-000000000002",
+          "action": "decision_recorded",
+          "subject": { "kind": "decision", "id": "decision:019fb920-6200-7000-8000-000000000002" },
+          "source_event_id": "019fb920-7100-7000-8000-000000000016",
+          "summary": "The physical-camera review gate was retained.",
+          "occurred_at": "2026-07-31T20:17:00.000Z"
+        }
+      ],
+      "navigation": [
+        { "key": "dashboard", "label": "Dashboard", "route": "/rooms/camera-team" },
+        { "key": "channels", "label": "Channels", "route": "/rooms/camera-team/channels" },
+        { "key": "threads", "label": "Your Threads", "route": "/rooms/camera-team/threads" },
+        { "key": "vision", "label": "Vision", "route": "/rooms/camera-team/project/vision" },
+        { "key": "stories", "label": "Stories", "route": "/rooms/camera-team/project/stories" },
+        { "key": "evidence", "label": "Evidence", "route": "/rooms/camera-team/project/evidence" },
+        { "key": "audit_decisions", "label": "Audit & Decisions", "route": "/rooms/camera-team/project/audit-decisions" },
+        { "key": "present", "label": "Present", "route": "/rooms/camera-team/present" }
+      ],
+      "presence": {
+        "human_ids": ["h:019fb920-0001-7000-8000-000000000001", "h:019fb920-0001-7000-8000-000000000002"],
+        "agent_ids": ["a:019fb920-0003-7000-8000-000000000002", "a:019fb920-0003-7000-8000-000000000004"],
+        "machine_ids": ["m:019fb920-0002-7000-8000-000000000002"]
+      },
+      "sources": [
+        {
+          "id": "source:019fb920-9000-7000-8000-000000000003",
+          "room_id": "room:019fb920-1000-7000-8000-000000000002",
+          "kind": "t3_environment",
+          "name": "Camera build workspace",
+          "revision": {
+            "pinned_revision": "4a703a4aaa9447ab62a6aabe7dd99e0159601f75",
+            "observed_head": "4a703a4aaa9447ab62a6aabe7dd99e0159601f75",
+            "observed_at": "2026-07-31T20:20:00.000Z"
+          },
+          "reachability": { "state": "unreachable", "checked_at": "2026-07-31T20:20:00.000Z" },
+          "mirror": { "freshness": "fresh", "as_of": "2026-07-31T20:14:00.000Z", "upstream_sequence": 77 }
+        },
+        {
+          "id": "source:019fb920-9000-7000-8000-000000000004",
+          "room_id": "room:019fb920-1000-7000-8000-000000000002",
+          "kind": "git_repository",
+          "name": "Camera guide",
+          "revision": {
+            "pinned_revision": "1111111111111111111111111111111111111111",
+            "observed_head": "1111111111111111111111111111111111111111",
+            "observed_at": "2026-07-31T20:20:00.000Z"
+          },
+          "reachability": { "state": "reachable", "checked_at": "2026-07-31T20:20:00.000Z" },
+          "mirror": { "freshness": "fresh", "as_of": "2026-07-31T20:20:00.000Z", "upstream_sequence": 0 }
+        }
+      ],
+      "source_events": [
+        { "seq": 401, "event_id": "019fb920-7100-7000-8000-000000000011", "type": "message.created", "schema": 1 },
+        { "seq": 402, "event_id": "019fb920-7100-7000-8000-000000000012", "type": "task.stage-changed", "schema": 1 },
+        { "seq": 403, "event_id": "019fb920-7100-7000-8000-000000000013", "type": "thread.status-set", "schema": 1 },
+        { "seq": 404, "event_id": "019fb920-7100-7000-8000-000000000014", "type": "approval.decided", "schema": 1 },
+        { "seq": 405, "event_id": "019fb920-7100-7000-8000-000000000015", "type": "task.stage-changed", "schema": 1 },
+        { "seq": 406, "event_id": "019fb920-7100-7000-8000-000000000016", "type": "decision.recorded", "schema": 1 }
+      ],
+      "projections": [
+        {
+          "kind": "desktop_board",
+          "stage_order": [
+            "stage:019fb920-2100-7000-8000-000000000005",
+            "stage:019fb920-2100-7000-8000-000000000006",
+            "stage:019fb920-2100-7000-8000-000000000007",
+            "stage:019fb920-2100-7000-8000-000000000008"
+          ],
+          "groups": [
+            { "stage_id": "stage:019fb920-2100-7000-8000-000000000005", "story_ids": ["task:019fb920-3000-7000-8000-000000000005"] },
+            { "stage_id": "stage:019fb920-2100-7000-8000-000000000006", "story_ids": ["task:019fb920-3000-7000-8000-000000000006"] },
+            { "stage_id": "stage:019fb920-2100-7000-8000-000000000007", "story_ids": ["task:019fb920-3000-7000-8000-000000000007"] },
+            { "stage_id": "stage:019fb920-2100-7000-8000-000000000008", "story_ids": ["task:019fb920-3000-7000-8000-000000000008"] }
+          ]
+        },
+        {
+          "kind": "mobile_vertical_stages",
+          "stage_order": [
+            "stage:019fb920-2100-7000-8000-000000000005",
+            "stage:019fb920-2100-7000-8000-000000000006",
+            "stage:019fb920-2100-7000-8000-000000000007",
+            "stage:019fb920-2100-7000-8000-000000000008"
+          ],
+          "groups": [
+            { "stage_id": "stage:019fb920-2100-7000-8000-000000000005", "story_ids": ["task:019fb920-3000-7000-8000-000000000005"] },
+            { "stage_id": "stage:019fb920-2100-7000-8000-000000000006", "story_ids": ["task:019fb920-3000-7000-8000-000000000006"] },
+            { "stage_id": "stage:019fb920-2100-7000-8000-000000000007", "story_ids": ["task:019fb920-3000-7000-8000-000000000007"] },
+            { "stage_id": "stage:019fb920-2100-7000-8000-000000000008", "story_ids": ["task:019fb920-3000-7000-8000-000000000008"] }
+          ]
+        }
+      ]
+    }
+  ],
+  "states": [
+    {
+      "kind": "authorized_workspace",
+      "request": {
+        "room_id": "room:019fb920-1000-7000-8000-000000000001",
+        "principal_id": "h:019fb920-0001-7000-8000-000000000001",
+        "contract_version": 2
+      },
+      "result": {
+        "status": "ok",
+        "workspace_id": "workspace:019fb920-1200-7000-8000-000000000001",
+        "room_id": "room:019fb920-1000-7000-8000-000000000001"
+      }
+    },
+    {
+      "kind": "unauthenticated",
+      "request": {
+        "room_id": "room:019fb920-1000-7000-8000-000000000001",
+        "contract_version": 2
+      },
+      "result": {
+        "status": "error",
+        "http_status": 401,
+        "code": "authorization_context_missing",
+        "message": "Verified principal context is required."
+      }
+    },
+    {
+      "kind": "unauthorized",
+      "request": {
+        "room_id": "room:019fb920-1000-7000-8000-000000000002",
+        "principal_id": "h:019fb920-0001-7000-8000-000000000003",
+        "contract_version": 2
+      },
+      "result": {
+        "status": "error",
+        "http_status": 403,
+        "code": "room_membership_required",
+        "message": "Reachability does not create room membership."
+      }
+    },
+    {
+      "kind": "empty",
+      "request": {
+        "room_id": "room:019fb920-1000-7000-8000-000000000002",
+        "channel_id": "channel:019fb920-1100-7000-8000-000000000004",
+        "after_seq": 404,
+        "limit": 50
+      },
+      "result": {
+        "status": "ok",
+        "page_info": { "after_seq": 404, "limit": 50, "snapshot_head_seq": 405, "next_cursor": 404, "has_more": false },
+        "items": []
+      }
+    },
+    {
+      "kind": "stale_cursor",
+      "request": {
+        "room_id": "room:019fb920-1000-7000-8000-000000000001",
+        "channel_id": "channel:019fb920-1100-7000-8000-000000000001",
+        "after_seq": 42,
+        "limit": 50
+      },
+      "result": {
+        "status": "error",
+        "http_status": 409,
+        "code": "stale_cursor",
+        "retained_from_seq": 300,
+        "restart_after_seq": 299,
+        "message": "The cursor predates retained history; restart from the supplied cursor."
+      }
+    },
+    {
+      "kind": "reachable_but_stale",
+      "request": { "thread_id": "thread:019fb920-4000-7000-8000-000000000002" },
+      "result": {
+        "status": "ok",
+        "thread_id": "thread:019fb920-4000-7000-8000-000000000002",
+        "machine_reachable": true,
+        "machine_checked_at": "2026-07-31T20:00:03.000Z",
+        "mirror_freshness": "stale",
+        "mirror_as_of": "2026-07-31T19:20:00.000Z",
+        "upstream_sequence": 460
+      }
+    },
+    {
+      "kind": "unsupported_contract_version",
+      "request": {
+        "room_id": "room:019fb920-1000-7000-8000-000000000001",
+        "principal_id": "h:019fb920-0001-7000-8000-000000000001",
+        "contract_version": 99
+      },
+      "result": {
+        "status": "error",
+        "http_status": 406,
+        "code": "unsupported_contract_version",
+        "requested_version": 99,
+        "supported_versions": [1, 2],
+        "message": "Request contract version 1 or 2."
+      }
+    }
+  ]
+}

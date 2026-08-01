@@ -65,8 +65,8 @@ export function RoomsVisionAtlas(props: RoomsWorkspaceSlotProps) {
           <div>
             <p className="font-semibold">Stale Atlas projection</p>
             <p className="mt-1 text-sm">
-              This diagram is bound to revision {boundRevision.id} ({boundRevision.source_hash}),
-              not the queued source head. Regenerate before relying on it.
+              This diagram is bound to revision {boundRevision.id} ({boundRevision.source_revision}
+              ), not the queued source head. Regenerate before relying on it.
             </p>
           </div>
         </div>
@@ -101,7 +101,7 @@ export function RoomsVisionAtlas(props: RoomsWorkspaceSlotProps) {
               </div>
               <p className="mt-3 text-sm text-foreground">{document.title}</p>
               <code className="mt-1 block break-all text-xs text-muted-foreground">
-                {boundRevision.source_hash}
+                {boundRevision.source_revision}
               </code>
               <p className="mt-2 text-xs text-muted-foreground">
                 Atlas binding: {document.atlas.revision_id}
@@ -135,7 +135,7 @@ export function RoomsVisionAtlas(props: RoomsWorkspaceSlotProps) {
                     <p className="mt-1 text-sm font-medium text-foreground">{stage.name}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {stage.gate
-                        ? `${stage.gate.required_evidence_kinds.length} evidence kind(s)`
+                        ? `${stage.gate.evidence.kinds.length} evidence kind(s)`
                         : "No gate"}
                     </p>
                   </li>

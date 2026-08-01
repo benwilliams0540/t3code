@@ -42,12 +42,6 @@ const gateStateLabels = {
   passed: "Gate passed",
 } as const;
 
-const attentionReasonLabels = {
-  delegate_blocked: "Delegate blocked",
-  evidence_required: "Evidence required",
-  review_required: "Human review required",
-} as const;
-
 function shortHash(value: string): string {
   return value.length > 12 ? `${value.slice(0, 8)}…${value.slice(-4)}` : value;
 }
@@ -137,7 +131,7 @@ function VisionCard({ projection }: { readonly projection: RoomsDashboardProject
           <div className="mt-3 flex flex-wrap gap-2">
             <Chip>{revision.state} revision</Chip>
             <Chip>{dateTimeFormatter.format(new Date(revision.created_at))}</Chip>
-            <Chip>source {shortHash(revision.source_hash)}</Chip>
+            <Chip>source {shortHash(revision.source_revision)}</Chip>
             <Chip tone={document.atlas.state === "current" ? "good" : "attention"}>
               atlas {document.atlas.state}
             </Chip>
@@ -168,10 +162,14 @@ function GateMetadata({ stage }: { readonly stage: RoomsStage }) {
   return (
     <div className="mt-3 border-t border-border/70 pt-3 text-[11px] leading-relaxed text-muted-foreground">
       <p>
-        Review: {stage.gate.allowed_principal_types.join(", ")} · self review{" "}
-        {stage.gate.self_review}
+        Review: {stage.gate.reviewer.allowed_principal_types.join(", ")} · minimum{" "}
+        {stage.gate.reviewer.minimum_reviewers} · self review{" "}
+        {stage.gate.reviewer.forbid_self_review ? "forbidden" : "allowed"}
       </p>
-      <p>Gate requires: {stage.gate.required_evidence_kinds.map(humanize).join(", ")}</p>
+      <p>
+        Gate requires {stage.gate.evidence.mode}:{" "}
+        {stage.gate.evidence.kinds.map(humanize).join(", ")}
+      </p>
     </div>
   );
 }
@@ -225,11 +223,11 @@ function StoryCard({
         )}
       </div>
       <div className="mt-3 flex flex-wrap gap-1.5">
-        {story.evidence.required_kinds.map((kind) => (
+        {stage.gate?.evidence.kinds.map((kind) => (
           <Chip key={kind}>requires {humanize(kind)}</Chip>
         ))}
-        <Chip tone={story.evidence.attached_ids.length > 0 ? "good" : "attention"}>
-          {story.evidence.attached_ids.length} attached
+        <Chip tone={story.evidence_ids.length > 0 ? "good" : "attention"}>
+          {story.evidence_ids.length} attached
         </Chip>
         {delegate ? <Chip tone="run">run {story.delegate?.run_status}</Chip> : null}
       </div>
@@ -270,18 +268,13 @@ function StageGroup({ group }: { readonly group: RoomsDashboardStageGroup }) {
 function AttentionItem({ item }: { readonly item: RoomsDashboardAttentionItem }) {
   return (
     <article className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-3.5">
-      <h3 className="text-sm font-semibold text-foreground">{item.story.story.title}</h3>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {item.reasons.map((reason) => (
-          <Chip key={reason} tone="attention">
-            {attentionReasonLabels[reason]}
-          </Chip>
-        ))}
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold text-foreground">{item.title}</h3>
+          <p className="mt-1 text-xs text-muted-foreground">{item.context}</p>
+        </div>
+        <Chip tone="attention">priority {item.fact.priority}</Chip>
       </div>
-      <p className="mt-2 text-xs text-muted-foreground">
-        Owner: {item.story.owner.display_name}
-        {item.story.delegate ? ` · ${item.story.delegate.agent.display_name}` : ""}
-      </p>
     </article>
   );
 }
@@ -298,9 +291,7 @@ function NeedsAttention({ projection }: { readonly projection: RoomsDashboardPro
       </div>
       <div className="grid gap-2.5">
         {projection.needsAttention.length > 0 ? (
-          projection.needsAttention.map((item) => (
-            <AttentionItem item={item} key={item.story.story.id} />
-          ))
+          projection.needsAttention.map((item) => <AttentionItem item={item} key={item.fact.id} />)
         ) : (
           <p className="text-sm text-muted-foreground">No fixture stories need attention.</p>
         )}
@@ -310,14 +301,16 @@ function NeedsAttention({ projection }: { readonly projection: RoomsDashboardPro
 }
 
 function ActivityItem({ activity }: { readonly activity: RoomsDashboardActivityItem }) {
+  const projected = activity.activity;
   return (
     <li className="flex gap-3 border-b border-border/70 py-3 last:border-b-0">
       <HistoryIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
-        <p className="text-sm leading-snug text-foreground">{activity.item.summary}</p>
+        <p className="text-sm leading-snug text-foreground">{projected.item.summary}</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          {activity.actor.display_name} · seq {activity.item.source_event.seq} ·{" "}
-          {dateTimeFormatter.format(new Date(activity.item.occurred_at))}
+          rank {activity.fact.rank} · {humanize(activity.fact.reason)} · writer{" "}
+          {projected.attribution.writer.display_name} · seq {projected.item.source_event.seq} ·{" "}
+          {dateTimeFormatter.format(new Date(projected.item.occurred_at))}
         </p>
       </div>
     </li>
@@ -334,7 +327,7 @@ function RecentActivity({ projection }: { readonly projection: RoomsDashboardPro
       {projection.recentActivity.length > 0 ? (
         <ol>
           {projection.recentActivity.map((activity) => (
-            <ActivityItem activity={activity} key={activity.item.id} />
+            <ActivityItem activity={activity} key={activity.fact.id} />
           ))}
         </ol>
       ) : (
@@ -346,7 +339,10 @@ function RecentActivity({ projection }: { readonly projection: RoomsDashboardPro
 
 function DashboardHeader({ projection }: { readonly projection: RoomsDashboardProjection }) {
   return (
-    <header className="flex flex-wrap items-end gap-3">
+    <header
+      className="flex flex-wrap items-end gap-3"
+      data-rooms-dashboard-header={projection.sourceProjection.kind}
+    >
       <div>
         <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
           {projection.room.name} workspace
@@ -358,7 +354,7 @@ function DashboardHeader({ projection }: { readonly projection: RoomsDashboardPr
       </div>
       <div className="ml-auto flex flex-wrap gap-2">
         <Chip>{humanize(projection.room.locality)}</Chip>
-        <Chip tone="good">{projection.room.membership.role ?? "not a member"}</Chip>
+        <Chip tone="good">{projection.room.membership.role}</Chip>
       </div>
     </header>
   );
@@ -428,7 +424,12 @@ export function RoomsDashboard({ fixture, room, state, workspace }: RoomsDashboa
 
   return (
     <section className="mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-8" data-rooms-dashboard="">
-      <DashboardHeader projection={desktop} />
+      <div className="min-[900px]:hidden">
+        <DashboardHeader projection={narrow} />
+      </div>
+      <div className="hidden min-[900px]:block">
+        <DashboardHeader projection={desktop} />
+      </div>
       <div className="mt-6">
         <NarrowDashboard projection={narrow} />
         <DesktopDashboard projection={desktop} />

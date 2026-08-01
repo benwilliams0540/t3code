@@ -51,7 +51,10 @@ export function projectRoomsAtlas(
     document: vision.document,
     boundRevision,
     channels: workspace.channels,
-    stages: [...workspace.workflow.stages].sort((left, right) => left.position - right.position),
+    stages:
+      workspace.workflows
+        .find((workflow) => workflow.story_type === "feature")
+        ?.stages.toSorted((left, right) => left.position - right.position) ?? [],
     presence: {
       humans: principalsForIds(fixture, workspace.presence.human_ids),
       agents: principalsForIds(fixture, workspace.presence.agent_ids),

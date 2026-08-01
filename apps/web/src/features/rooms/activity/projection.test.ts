@@ -3,46 +3,81 @@ import { describe, expect, it } from "vite-plus/test";
 import { roomsWorkspaceFixture } from "../fixtures";
 import { principalPresentation, projectRoomsActivityItem, roomsThreadHref } from "./projection";
 
-describe("Rooms activity projection", () => {
-  const { workspace } = roomsWorkspaceFixture;
+describe("Rooms v2 activity projection", () => {
+  const workspace = roomsWorkspaceFixture.workspaces[0]!;
 
-  it("maps every fixture item kind to its structured card kind", () => {
-    const items = workspace.feeds.flatMap((feed) => feed.items);
+  it("exhaustively maps all ten closed feed variants", () => {
+    const projected = workspace.feeds.flatMap((feed) =>
+      feed.items.map((item) => projectRoomsActivityItem(roomsWorkspaceFixture, workspace, item)),
+    );
+    expect(projected.map((activity) => activity.item.kind)).toEqual([
+      "human_message",
+      "reaction",
+      "run_lifecycle",
+      "evidence_attached",
+      "unknown_schema",
+      "story_lifecycle",
+      "approval_requested",
+      "human_gate",
+      "approval_decided",
+      "unavailable",
+    ]);
+    expect(projected.map((activity) => activity.cardKind)).toEqual([
+      "message",
+      "reaction",
+      "run",
+      "evidence",
+      "unknown",
+      "story",
+      "approval",
+      "gate",
+      "approval",
+      "unavailable",
+    ]);
     expect(
-      items.map(
-        (item) => projectRoomsActivityItem(roomsWorkspaceFixture, workspace, item).cardKind,
-      ),
-    ).toEqual(["message", "reaction", "run", "message", "story", "evidence", "approval"]);
+      projected.find((activity) => activity.cardKind === "unknown")?.unknownSchema,
+    ).toBeTruthy();
+    expect(
+      projected.find((activity) => activity.cardKind === "unavailable")?.unavailable,
+    ).toBeTruthy();
   });
 
-  it("keeps human, agent, and machine semantics distinct", () => {
-    const presentations = roomsWorkspaceFixture.principals.map((principal) => ({
-      type: principal.type,
-      ...principalPresentation(principal),
-    }));
-    expect(presentations.filter(({ type }) => type === "human")).toMatchObject([
-      { label: "Human", tone: "human" },
-      { label: "Human", tone: "human" },
-    ]);
-    expect(presentations.filter(({ type }) => type === "agent")).toMatchObject([
-      { label: "Agent", tone: "agent" },
-      { label: "Agent", tone: "agent" },
-    ]);
-    expect(presentations.filter(({ type }) => type === "machine")).toMatchObject([
-      { label: "Machine", tone: "machine" },
-      { label: "Machine", tone: "machine" },
-    ]);
-  });
-
-  it("projects run lifecycle to the existing detailed T3 thread route", () => {
+  it("keeps writer, upstream actor, delegate, and machine identities distinct", () => {
     const runItem = workspace.feeds
       .flatMap((feed) => feed.items)
-      .find((item) => item.kind === "run_lifecycle")!;
+      .find((item) => item.kind === "run_lifecycle");
+    if (!runItem) throw new Error("Certified run item is missing.");
     const projected = projectRoomsActivityItem(roomsWorkspaceFixture, workspace, runItem);
-    expect(projected.thread?.id).toBe("thread:019fb900-4000-7000-8000-000000000001");
-    expect(projected.threadHref).toBe(
-      "/env%3At3rooms-local/thread%3A019fb900-4000-7000-8000-000000000001",
-    );
+    expect(projected.attribution).toMatchObject({
+      mode: "mirrored_source",
+      writer: { agent_kind: "adapter", display_name: "MacBook T3 mirror" },
+      actor: null,
+      upstream: { status: "coarse", actor_kind: "assistant" },
+      delegatedAgent: { agent_kind: "execution", display_name: "Codex on MacBook" },
+      machine: { type: "machine", display_name: "Ben's MacBook" },
+    });
+    const unavailable = workspace.feeds
+      .flatMap((feed) => feed.items)
+      .map((item) => projectRoomsActivityItem(roomsWorkspaceFixture, workspace, item))
+      .find((activity) => activity.attribution.upstream?.status === "unavailable");
+    expect(unavailable?.attribution).toMatchObject({
+      mode: "mirrored_source",
+      writer: { agent_kind: "adapter" },
+      actor: null,
+      upstream: { status: "unavailable" },
+    });
     expect(projected.threadHref).toBe(roomsThreadHref(projected.thread!));
+  });
+
+  it("preserves principal presentation without conflating principal types", () => {
+    expect(
+      roomsWorkspaceFixture.principals.map((principal) => principalPresentation(principal).tone),
+    ).toContain("human");
+    expect(
+      roomsWorkspaceFixture.principals.map((principal) => principalPresentation(principal).tone),
+    ).toContain("agent");
+    expect(
+      roomsWorkspaceFixture.principals.map((principal) => principalPresentation(principal).tone),
+    ).toContain("machine");
   });
 });

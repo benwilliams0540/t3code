@@ -2,6 +2,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { ArrowLeftIcon, ArrowRightIcon, ChevronRightIcon } from "lucide-react";
 import { useCallback, useEffect } from "react";
 
+import { useAppSidebarVariantSelection } from "~/components/appSidebarVariant";
 import { Button } from "~/components/ui/button";
 import { SidebarInset } from "~/components/ui/sidebar";
 
@@ -10,6 +11,7 @@ import { findDeclaredRoomBySlug, workspaceForDeclaredRoom } from "../model/selec
 import type { RoomsRoom } from "../model/workspace";
 import {
   buildRoomsBreadcrumbs,
+  isRoomsWorkspaceEnabled,
   type RoomsNavigationTarget,
   type RoomsWorkspaceSurface,
 } from "./navigation";
@@ -128,7 +130,7 @@ function RoomsBreadcrumbBar({
         })}
       </div>
       <span className="ml-auto hidden rounded-full border border-border bg-muted/35 px-2 py-0.5 text-[10px] text-muted-foreground sm:inline-flex">
-        Fixture · workspace-read v1
+        Fixture · workspace-read v2
       </span>
     </header>
   );
@@ -141,12 +143,22 @@ export function RoomsWorkspaceShell({
   readonly roomSlug: string;
   readonly surface: RoomsWorkspaceSurface;
 }) {
+  const navigate = useNavigate();
+  const [sidebarVariant] = useAppSidebarVariantSelection();
   const room = findDeclaredRoomBySlug(roomsWorkspaceFixture.rooms, roomSlug);
   const { selectRoom } = useRoomsWorkspaceSelection();
   const navigateWithinRoom = useNavigateWithinRoom(room);
   useEffect(() => {
+    if (!isRoomsWorkspaceEnabled(sidebarVariant)) {
+      void navigate({ to: "/", replace: true });
+      return;
+    }
     if (room) selectRoom(room);
-  }, [room, selectRoom]);
+  }, [navigate, room, selectRoom, sidebarVariant]);
+
+  if (!isRoomsWorkspaceEnabled(sidebarVariant)) {
+    return <SidebarInset className="h-dvh min-h-0 bg-background" />;
+  }
 
   if (!room) {
     return (
@@ -155,7 +167,7 @@ export function RoomsWorkspaceShell({
           <div className="max-w-md text-center">
             <h1 className="text-lg font-semibold">Room not found</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              The requested room is not declared by workspace-read v1.
+              The requested room is not declared by workspace-read v2.
             </p>
           </div>
         </section>
@@ -201,14 +213,19 @@ export function RoomsWorkspaceShell({
 
 export function RoomsWorkspaceLanding() {
   const navigate = useNavigate();
+  const [sidebarVariant] = useAppSidebarVariantSelection();
   const { selectedRoom } = useRoomsWorkspaceSelection();
   useEffect(() => {
+    if (!isRoomsWorkspaceEnabled(sidebarVariant)) {
+      void navigate({ to: "/", replace: true });
+      return;
+    }
     void navigate({
       to: "/rooms/$roomSlug/dashboard",
       params: { roomSlug: selectedRoom.slug },
       replace: true,
     });
-  }, [navigate, selectedRoom.slug]);
+  }, [navigate, selectedRoom.slug, sidebarVariant]);
 
   return <SidebarInset className="h-dvh min-h-0 bg-background" />;
 }

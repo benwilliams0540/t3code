@@ -1,25 +1,30 @@
 import type {
-  RoomsFeedItem,
+  RoomsAudit,
+  RoomsDecision,
   RoomsPrincipal,
+  RoomsSourceEvent,
   RoomsStage,
+  RoomsStory,
+  RoomsWorkflow,
   RoomsWorkspace,
   RoomsWorkspaceReadFixture,
 } from "../model/workspace";
 
 export interface RoomsAuditEvent {
-  readonly item: RoomsFeedItem;
-  readonly actor: RoomsPrincipal | null;
+  readonly audit: RoomsAudit;
+  readonly actor: RoomsPrincipal;
+  readonly sourceEvent: RoomsSourceEvent;
 }
 
-export interface RoomsDecisionEvent extends RoomsAuditEvent {
-  readonly decision: string | null;
-  readonly scope: string | null;
-  readonly taskId: string | null;
+export interface RoomsDecisionEvent {
+  readonly decision: RoomsDecision;
+  readonly author: RoomsPrincipal;
+  readonly story: RoomsStory | null;
 }
 
 export interface RoomsGateFact {
+  readonly workflow: RoomsWorkflow;
   readonly stage: RoomsStage;
-  readonly kind: "workflow_definition";
 }
 
 export interface RoomsAuditProjection {
@@ -28,37 +33,34 @@ export interface RoomsAuditProjection {
   readonly gateFacts: readonly RoomsGateFact[];
 }
 
-function stringField(data: Readonly<Record<string, unknown>>, key: string): string | null {
-  return typeof data[key] === "string" ? data[key] : null;
+function required<T>(value: T | undefined, description: string): T {
+  if (value === undefined) throw new Error(`Decoded workspace is missing ${description}.`);
+  return value;
 }
 
 export function projectRoomsAudit(
   fixture: RoomsWorkspaceReadFixture,
   workspace: RoomsWorkspace,
 ): RoomsAuditProjection {
-  const events = workspace.feeds
-    .flatMap((feed) => feed.items)
-    .map((item) => ({
-      item,
-      actor: fixture.principals.find((principal) => principal.id === item.actor_id) ?? null,
-    }))
-    .sort((left, right) => left.item.source_event.seq - right.item.source_event.seq);
-
+  const principals = new Map(fixture.principals.map((principal) => [principal.id, principal]));
+  const stories = new Map(workspace.stories.map((story) => [story.id, story]));
+  const sourceEvents = new Map(workspace.source_events.map((event) => [event.event_id, event]));
   return {
-    events,
-    decisions: events.flatMap((event) => {
-      if (event.item.kind !== "approval_decided") return [];
-      return [
-        {
-          ...event,
-          decision: stringField(event.item.data, "decision"),
-          scope: stringField(event.item.data, "scope"),
-          taskId: stringField(event.item.data, "task_id"),
-        },
-      ];
-    }),
-    gateFacts: workspace.workflow.stages.flatMap((stage) =>
-      stage.gate ? [{ stage, kind: "workflow_definition" as const }] : [],
+    events: workspace.audit.map((audit) => ({
+      audit,
+      actor: required(principals.get(audit.actor_id), `audit actor ${audit.actor_id}`),
+      sourceEvent: required(
+        sourceEvents.get(audit.source_event_id),
+        `source event ${audit.source_event_id}`,
+      ),
+    })),
+    decisions: workspace.decisions.map((decision) => ({
+      decision,
+      author: required(principals.get(decision.author_id), `decision author ${decision.author_id}`),
+      story: decision.story_id ? (stories.get(decision.story_id) ?? null) : null,
+    })),
+    gateFacts: workspace.workflows.flatMap((workflow) =>
+      workflow.stages.flatMap((stage) => (stage.gate ? [{ workflow, stage }] : [])),
     ),
   };
 }

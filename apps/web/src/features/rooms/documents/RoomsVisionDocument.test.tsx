@@ -5,57 +5,46 @@ import { roomsWorkspaceFixture } from "../fixtures";
 import { RoomsVisionDocument } from "./RoomsVisionDocument";
 import { projectRoomsVisionDocument } from "./projection";
 
-const room = roomsWorkspaceFixture.rooms.find(
-  (candidate) => candidate.id === roomsWorkspaceFixture.workspace.selected_room_id,
-)!;
-
-describe("Rooms vision document", () => {
-  it("projects the exact current and queued revisions with source freshness", () => {
-    const projection = projectRoomsVisionDocument(
+describe("Rooms v2 vision document", () => {
+  it("keeps rendered pin, observed head, and freshness independent for both rooms", () => {
+    const first = projectRoomsVisionDocument(
       roomsWorkspaceFixture,
-      roomsWorkspaceFixture.workspace,
+      roomsWorkspaceFixture.workspaces[0]!,
     );
-
-    expect(projection?.currentRevision).toMatchObject({
-      state: "current",
-      source_hash: "033f337b7f5ee6e61de2c0277e716486698211a2",
-      body_markdown: "# Rooms Vision\n\nKeep project truth connected around T3.",
+    const second = projectRoomsVisionDocument(
+      roomsWorkspaceFixture,
+      roomsWorkspaceFixture.workspaces[1]!,
+    );
+    expect(first).toMatchObject({
+      isStale: true,
+      document: {
+        source: {
+          pinned_revision: "033f337b7f5ee6e61de2c0277e716486698211a2",
+          observed_head: "02e787d2ce45c5e1a9bd9fb6554b6f7fe3547a62",
+        },
+        freshness: { state: "stale" },
+      },
+      currentRevision: { source_revision: "033f337b7f5ee6e61de2c0277e716486698211a2" },
     });
-    expect(
-      projection?.revisions.map(({ author, revision }) => [revision.state, author?.type]),
-    ).toEqual([
-      ["current", "human"],
-      ["queued", "agent"],
-    ]);
-    expect(projection?.document.source).toEqual({
-      remote_url: "https://github.com/benwilliams0540/rooms",
-      sha: "033f337b7f5ee6e61de2c0277e716486698211a2",
-      source_head: "02e787d2ce45c5e1a9bd9fb6554b6f7fe3547a62",
+    expect(second).toMatchObject({
+      isStale: false,
+      document: { freshness: { state: "current" } },
     });
-    expect(projection?.document.freshness).toEqual({
-      state: "stale",
-      compared_at: "2026-07-31T15:57:00.000Z",
-      source_head: "02e787d2ce45c5e1a9bd9fb6554b6f7fe3547a62",
-    });
-    expect(projection?.isStale).toBe(true);
   });
 
-  it("renders Markdown, revision metadata, source pins, and a prominent stale warning", () => {
-    const html = renderToStaticMarkup(
+  it("renders the pinned revision rather than silently advancing to observed head", () => {
+    const room = roomsWorkspaceFixture.rooms[0]!;
+    const workspace = roomsWorkspaceFixture.workspaces[0]!;
+    const markup = renderToStaticMarkup(
       <RoomsVisionDocument
         fixture={roomsWorkspaceFixture}
         room={room}
-        surface={{ kind: "project", projectSection: "vision" }}
-        workspace={roomsWorkspaceFixture.workspace}
+        surface={{ kind: "project", projectSection: "vision", projectView: "document" }}
+        workspace={workspace}
       />,
     );
-
-    expect(html).toContain("<h1>Rooms Vision</h1>");
-    expect(html).toContain("Keep project truth connected around T3.");
-    expect(html).toContain("Stale projection — regeneration required");
-    expect(html).toContain("Current revision");
-    expect(html).toContain("Queued revision");
-    expect(html).toContain("033f337b7f5ee6e61de2c0277e716486698211a2");
-    expect(html).toContain("02e787d2ce45c5e1a9bd9fb6554b6f7fe3547a62");
+    expect(markup).toContain("033f337b7f5ee6e61de2c0277e716486698211a2");
+    expect(markup).toContain("02e787d2ce45c5e1a9bd9fb6554b6f7fe3547a62");
+    expect(markup).toContain("data-rooms-markdown-source=");
   });
 });

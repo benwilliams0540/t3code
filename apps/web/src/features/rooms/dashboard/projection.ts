@@ -1,6 +1,7 @@
+import { projectRoomsActivityItem, type RoomsProjectedActivity } from "../activity/projection";
 import type {
+  RoomsAttention,
   RoomsDocument,
-  RoomsFeedItem,
   RoomsPrincipal,
   RoomsProjection,
   RoomsRoom,
@@ -17,10 +18,7 @@ export type RoomsDashboardLayout = "desktop" | "narrow";
 export interface RoomsDashboardStory {
   readonly story: RoomsStory;
   readonly owner: RoomsPrincipal;
-  readonly delegate: null | {
-    readonly agent: RoomsPrincipal;
-    readonly thread: RoomsThread;
-  };
+  readonly delegate: null | { readonly agent: RoomsPrincipal; readonly thread: RoomsThread };
 }
 
 export interface RoomsDashboardStageGroup {
@@ -29,13 +27,14 @@ export interface RoomsDashboardStageGroup {
 }
 
 export interface RoomsDashboardAttentionItem {
-  readonly story: RoomsDashboardStory;
-  readonly reasons: readonly ("delegate_blocked" | "evidence_required" | "review_required")[];
+  readonly fact: RoomsAttention;
+  readonly title: string;
+  readonly context: string;
 }
 
 export interface RoomsDashboardActivityItem {
-  readonly item: RoomsFeedItem;
-  readonly actor: RoomsPrincipal;
+  readonly fact: RoomsWorkspace["dashboard"]["recent_activity"][number];
+  readonly activity: RoomsProjectedActivity;
 }
 
 export interface RoomsDashboardProjection {
@@ -55,35 +54,55 @@ export interface RoomsDashboardProjection {
   readonly recentActivity: readonly RoomsDashboardActivityItem[];
 }
 
-export interface RoomsDashboardProjectionError {
-  readonly status: "error";
-  readonly message: string;
-}
-
 export type RoomsDashboardProjectionResult =
   | RoomsDashboardProjection
-  | RoomsDashboardProjectionError;
+  | { readonly status: "error"; readonly message: string };
 
 export interface RoomsDashboardFallback {
   readonly status: "empty" | "error";
-  readonly name: RoomsStateExample["name"];
+  readonly name: RoomsStateExample["kind"];
   readonly code: string | null;
   readonly message: string;
 }
 
 function referenced<T>(value: T | undefined, description: string): T {
-  if (value === undefined) throw new Error(`Workspace fixture is missing ${description}.`);
+  if (value === undefined) throw new Error(`Decoded workspace is missing ${description}.`);
   return value;
 }
 
-function attentionReasons(
-  dashboardStory: RoomsDashboardStory,
-): RoomsDashboardAttentionItem["reasons"] {
-  const reasons: RoomsDashboardAttentionItem["reasons"][number][] = [];
-  if (dashboardStory.story.delegate?.run_status === "blocked") reasons.push("delegate_blocked");
-  if (dashboardStory.story.gate_state === "waiting_for_evidence") reasons.push("evidence_required");
-  if (dashboardStory.story.gate_state === "waiting_for_review") reasons.push("review_required");
-  return reasons;
+function attentionPresentation(
+  fact: RoomsAttention,
+  workspace: RoomsWorkspace,
+): RoomsDashboardAttentionItem {
+  switch (fact.kind) {
+    case "human_gate_pending": {
+      const story = referenced(
+        workspace.stories.find((candidate) => candidate.id === fact.story_id),
+        `attention story ${fact.story_id}`,
+      );
+      const stage = referenced(
+        workspace.workflows
+          .flatMap((workflow) => workflow.stages)
+          .find((candidate) => candidate.id === fact.stage_id),
+        `attention stage ${fact.stage_id}`,
+      );
+      return { fact, title: story.title, context: `${stage.name} · ${fact.reason}` };
+    }
+    case "blocked_run": {
+      const thread = referenced(
+        workspace.threads.find((candidate) => candidate.id === fact.thread_id),
+        `attention thread ${fact.thread_id}`,
+      );
+      return { fact, title: thread.title, context: `Blocked run · ${fact.reason}` };
+    }
+    case "stale_mirror": {
+      const source = referenced(
+        workspace.sources.find((candidate) => candidate.id === fact.source_id),
+        `attention source ${fact.source_id}`,
+      );
+      return { fact, title: source.name, context: `Stale mirror · ${fact.reason}` };
+    }
+  }
 }
 
 export function buildRoomsDashboardProjection(
@@ -93,94 +112,86 @@ export function buildRoomsDashboardProjection(
   layout: RoomsDashboardLayout,
 ): RoomsDashboardProjectionResult {
   try {
-    if (workspace.selected_room_id !== room.id) {
-      throw new Error(`Room ${room.id} does not own the selected workspace projection.`);
-    }
+    if (workspace.room_id !== room.id)
+      throw new Error(`Room ${room.id} does not own ${workspace.id}.`);
     const projectionKind = layout === "desktop" ? "desktop_board" : "mobile_vertical_stages";
     const sourceProjection = referenced(
       workspace.projections.find((projection) => projection.kind === projectionKind),
       `${projectionKind} projection`,
     );
-    const stagesById = new Map(workspace.workflow.stages.map((stage) => [stage.id, stage]));
-    const storiesById = new Map(workspace.stories.map((story) => [story.id, story]));
-    const principalsById = new Map(
-      fixture.principals.map((principal) => [principal.id, principal]),
+    const stageMap = new Map(
+      workspace.workflows.flatMap((workflow) => workflow.stages).map((stage) => [stage.id, stage]),
     );
-    const threadsById = new Map(workspace.threads.map((thread) => [thread.id, thread]));
-    const visionDocument = referenced(
-      workspace.documents.find((document) => document.id === workspace.vision.document_id),
-      `vision document ${workspace.vision.document_id}`,
-    );
-    const currentVisionRevision = referenced(
-      visionDocument.revisions.find(
-        (revision) => revision.id === visionDocument.current_revision_id,
+    const storyMap = new Map(workspace.stories.map((story) => [story.id, story]));
+    const principalMap = new Map(fixture.principals.map((principal) => [principal.id, principal]));
+    const threadMap = new Map(workspace.threads.map((thread) => [thread.id, thread]));
+    const document = referenced(
+      workspace.documents.find(
+        (candidate) => candidate.id === workspace.dashboard.vision.document_id,
       ),
-      `current vision revision ${visionDocument.current_revision_id}`,
+      `vision document ${workspace.dashboard.vision.document_id}`,
     );
-    const visionRoute = referenced(
-      workspace.project_navigation.find((entry) => entry.key === "vision"),
+    const revision = referenced(
+      document.revisions.find((candidate) => candidate.id === document.current_revision_id),
+      `current vision revision ${document.current_revision_id}`,
+    );
+    const route = referenced(
+      workspace.navigation.find((entry) => entry.key === "vision"),
       "vision navigation route",
     ).route;
 
     const stages = sourceProjection.stage_order.map((stageId) => {
-      const stage = referenced(stagesById.get(stageId), `workflow stage ${stageId}`);
-      const sourceGroup = referenced(
-        sourceProjection.groups.find((group) => group.stage_id === stageId),
-        `projection group for ${stageId}`,
+      const stage = referenced(stageMap.get(stageId), `stage ${stageId}`);
+      const group = referenced(
+        sourceProjection.groups.find((candidate) => candidate.stage_id === stageId),
+        `projection group ${stageId}`,
       );
-      const stories = sourceGroup.story_ids.map((storyId) => {
-        const story = referenced(storiesById.get(storyId), `story ${storyId}`);
-        if (story.stage_id !== stage.id) {
-          throw new Error(`Story ${story.id} is projected into the wrong workflow stage.`);
-        }
-        const owner = referenced(principalsById.get(story.owner_id), `owner ${story.owner_id}`);
+      const stories = group.story_ids.map((storyId) => {
+        const story = referenced(storyMap.get(storyId), `story ${storyId}`);
+        const owner = referenced(principalMap.get(story.owner_id), `owner ${story.owner_id}`);
         const delegate = story.delegate
           ? {
               agent: referenced(
-                principalsById.get(story.delegate.agent_id),
+                principalMap.get(story.delegate.agent_id),
                 `delegate ${story.delegate.agent_id}`,
               ),
               thread: referenced(
-                threadsById.get(story.delegate.thread_id),
+                threadMap.get(story.delegate.thread_id),
                 `thread ${story.delegate.thread_id}`,
               ),
             }
           : null;
-        return { story, owner, delegate } satisfies RoomsDashboardStory;
+        return { story, owner, delegate };
       });
-      return { stage, stories } satisfies RoomsDashboardStageGroup;
+      return { stage, stories };
     });
 
-    const dashboardStories = stages.flatMap((stage) => stage.stories);
-    const needsAttention = dashboardStories.flatMap((story) => {
-      const reasons = attentionReasons(story);
-      return reasons.length > 0 ? [{ story, reasons }] : [];
-    });
-    const recentActivity = workspace.feeds
-      .filter((feed) => feed.room_id === workspace.selected_room_id)
-      .flatMap((feed) => feed.items)
-      .toSorted((left, right) => right.source_event.seq - left.source_event.seq)
-      .slice(0, 5)
-      .map((item) => ({
-        item,
-        actor: referenced(principalsById.get(item.actor_id), `activity actor ${item.actor_id}`),
-      }));
-
+    const feedItemMap = new Map(
+      workspace.feeds.flatMap((feed) => feed.items).map((item) => [item.id, item]),
+    );
     return {
       status: "ready",
       layout,
       sourceProjection,
       room,
       vision: {
-        headline: workspace.vision.headline,
-        summary: workspace.vision.summary,
-        document: visionDocument,
-        revision: currentVisionRevision,
-        route: visionRoute,
+        headline: workspace.dashboard.vision.headline,
+        summary: workspace.dashboard.vision.summary,
+        document,
+        revision,
+        route,
       },
       stages,
-      needsAttention,
-      recentActivity,
+      needsAttention: workspace.dashboard.needs_attention.map((fact) =>
+        attentionPresentation(fact, workspace),
+      ),
+      recentActivity: workspace.dashboard.recent_activity.map((fact) => {
+        const item = referenced(
+          feedItemMap.get(fact.feed_item_id),
+          `activity item ${fact.feed_item_id}`,
+        );
+        return { fact, activity: projectRoomsActivityItem(fixture, workspace, item) };
+      }),
     };
   } catch (error) {
     return {
@@ -194,26 +205,26 @@ export function dashboardFallbackFromState(
   state: RoomsStateExample | null | undefined,
 ): RoomsDashboardFallback | null {
   if (!state) return null;
-  const status = state.result.status;
-  const items = state.result.items;
-  if (status === "ok" && Array.isArray(items) && items.length === 0) {
-    return {
-      status: "empty",
-      name: state.name,
-      code: null,
-      message: "No workspace items were returned for this fixture state.",
-    };
+  switch (state.kind) {
+    case "empty":
+      return {
+        status: "empty",
+        name: state.kind,
+        code: null,
+        message: "No workspace items were returned for this fixture state.",
+      };
+    case "unauthenticated":
+    case "unauthorized":
+    case "stale_cursor":
+    case "unsupported_contract_version":
+      return {
+        status: "error",
+        name: state.kind,
+        code: state.result.code,
+        message: state.result.message,
+      };
+    case "authorized_workspace":
+    case "reachable_but_stale":
+      return null;
   }
-  if (status === "error") {
-    return {
-      status: "error",
-      name: state.name,
-      code: typeof state.result.code === "string" ? state.result.code : null,
-      message:
-        typeof state.result.message === "string"
-          ? state.result.message
-          : "The workspace fixture returned an error without a message.",
-    };
-  }
-  return null;
 }
