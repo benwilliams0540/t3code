@@ -24,10 +24,76 @@ export type NewThreadDraftRouteScope =
   | { readonly kind: "native" }
   | { readonly kind: "rooms"; readonly roomSlug: string };
 
+export type DraftThreadRouteDestination =
+  | {
+      readonly kind: "native";
+      readonly params: { readonly draftId: DraftId };
+      readonly to: "/draft/$draftId";
+    }
+  | {
+      readonly kind: "rooms";
+      readonly params: { readonly draftId: DraftId; readonly roomSlug: string };
+      readonly to: "/rooms/$roomSlug/draft/$draftId";
+    };
+
+export type ServerThreadRouteDestination =
+  | {
+      readonly kind: "native";
+      readonly params: { readonly environmentId: EnvironmentId; readonly threadId: ThreadId };
+      readonly to: "/$environmentId/$threadId";
+    }
+  | {
+      readonly kind: "rooms";
+      readonly params: {
+        readonly environmentId: EnvironmentId;
+        readonly roomSlug: string;
+        readonly threadId: ThreadId;
+      };
+      readonly to: "/rooms/$roomSlug/threads/$environmentId/$threadId";
+    };
+
 export function resolveNewThreadDraftRouteScope(
-  params: Partial<Record<"roomSlug", string | undefined>>,
+  params: Partial<
+    Record<"draftId" | "environmentId" | "roomSlug" | "threadId", string | undefined>
+  >,
+  explicitRoomsRoomSlug?: string,
 ): NewThreadDraftRouteScope {
-  return params.roomSlug ? { kind: "rooms", roomSlug: params.roomSlug } : { kind: "native" };
+  const roomSlug = explicitRoomsRoomSlug ?? params.roomSlug;
+  return roomSlug ? { kind: "rooms", roomSlug } : { kind: "native" };
+}
+
+export function buildDraftThreadRouteDestination(
+  scope: NewThreadDraftRouteScope,
+  draftId: DraftId,
+): DraftThreadRouteDestination {
+  return scope.kind === "rooms"
+    ? {
+        kind: "rooms",
+        to: "/rooms/$roomSlug/draft/$draftId",
+        params: { roomSlug: scope.roomSlug, draftId },
+      }
+    : { kind: "native", to: "/draft/$draftId", params: { draftId } };
+}
+
+export function buildServerThreadRouteDestination(
+  ref: ScopedThreadRef,
+  roomsRoomSlug?: string,
+): ServerThreadRouteDestination {
+  return roomsRoomSlug
+    ? {
+        kind: "rooms",
+        to: "/rooms/$roomSlug/threads/$environmentId/$threadId",
+        params: {
+          roomSlug: roomsRoomSlug,
+          environmentId: ref.environmentId,
+          threadId: ref.threadId,
+        },
+      }
+    : {
+        kind: "native",
+        to: "/$environmentId/$threadId",
+        params: buildThreadRouteParams(ref),
+      };
 }
 
 export function resolveThreadRouteRenderState(input: {

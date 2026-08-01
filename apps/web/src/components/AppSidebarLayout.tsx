@@ -39,6 +39,23 @@ import { RoomsWorkspaceRail } from "../features/rooms/shell/RoomsWorkspaceRail";
 
 const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "90px";
 const ROOMS_WORKSPACE_RAIL_WIDTH = "3.5rem";
+const ROOMS_MACOS_TITLEBAR_LEADING_INSET = `calc(${MACOS_TRAFFIC_LIGHTS_LEFT_INSET} - ${ROOMS_WORKSPACE_RAIL_WIDTH})`;
+
+export function resolveRoomsTitlebarPresentation(input: {
+  readonly isMacosDesktop: boolean;
+  readonly isWindowFullscreen: boolean;
+  readonly showRoomsSidebar: boolean;
+}): {
+  readonly leadingInset: string;
+  readonly reserveMacosWindowControls: boolean;
+} {
+  const reserveMacosWindowControls =
+    input.showRoomsSidebar && input.isMacosDesktop && !input.isWindowFullscreen;
+  return {
+    leadingInset: reserveMacosWindowControls ? ROOMS_MACOS_TITLEBAR_LEADING_INSET : "0px",
+    reserveMacosWindowControls,
+  };
+}
 
 function subscribeToViewportWidth(onChange: () => void): () => void {
   window.addEventListener("resize", onChange);
@@ -147,8 +164,14 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
     isMacosDesktop && !isWindowFullscreen
       ? MACOS_TRAFFIC_LIGHTS_LEFT_INSET
       : "calc(env(safe-area-inset-left) + var(--rooms-workspace-rail-width) + 0.75rem)";
+  const roomsTitlebarPresentation = resolveRoomsTitlebarPresentation({
+    isMacosDesktop,
+    isWindowFullscreen,
+    showRoomsSidebar,
+  });
   const sidebarProviderStyle = {
     "--rooms-workspace-rail-width": showRoomsSidebar ? ROOMS_WORKSPACE_RAIL_WIDTH : "0rem",
+    "--rooms-titlebar-leading-inset": roomsTitlebarPresentation.leadingInset,
     "--sidebar-width": sidebarWidth + "px",
     "--workspace-controls-left": workspaceControlsLeft,
   } as CSSProperties;
@@ -192,7 +215,11 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider className="h-dvh! min-h-0!" defaultOpen style={sidebarProviderStyle}>
-      {showRoomsSidebar ? <RoomsWorkspaceRail /> : null}
+      {showRoomsSidebar ? (
+        <RoomsWorkspaceRail
+          reserveMacosWindowControls={roomsTitlebarPresentation.reserveMacosWindowControls}
+        />
+      ) : null}
       {showRoomsSidebar ? null : (
         <Sidebar
           side="left"

@@ -18,7 +18,11 @@ function roomMonogram(room: RoomsRoom): string {
     .toUpperCase();
 }
 
-export function RoomsWorkspaceRail() {
+export function RoomsWorkspaceRail({
+  reserveMacosWindowControls,
+}: {
+  readonly reserveMacosWindowControls: boolean;
+}) {
   const navigate = useNavigate();
   const { selectedRoom, selectRoom } = useRoomsWorkspaceSelection();
   const openRoom = useCallback(
@@ -58,8 +62,13 @@ export function RoomsWorkspaceRail() {
       className="relative z-30 flex h-full w-[var(--rooms-workspace-rail-width)] shrink-0 flex-col items-center border-r border-sidebar-border bg-sidebar text-sidebar-foreground surface-grain"
       data-rooms-workspace-rail=""
     >
-      <div className="flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-center">
-        <BoxesIcon aria-hidden className="size-4 text-muted-foreground" />
+      <div
+        className="drag-region flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-center"
+        data-rooms-macos-window-controls-spacer={reserveMacosWindowControls ? "" : undefined}
+      >
+        {reserveMacosWindowControls ? null : (
+          <BoxesIcon aria-hidden className="size-4 text-muted-foreground" />
+        )}
         <span className="sr-only">Rooms</span>
       </div>
       <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto px-2 py-2">

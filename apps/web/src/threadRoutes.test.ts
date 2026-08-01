@@ -4,7 +4,9 @@ import { ThreadId } from "@t3tools/contracts";
 import { DraftId } from "./composerDraftStore";
 
 import {
+  buildDraftThreadRouteDestination,
   buildDraftThreadRouteParams,
+  buildServerThreadRouteDestination,
   buildThreadRouteParams,
   resolveActiveThreadRouteRef,
   resolveNewThreadDraftRouteScope,
@@ -68,11 +70,57 @@ describe("threadRoutes", () => {
     });
   });
 
-  it("keeps native new-thread routing unchanged and scopes Rooms drafts to the selected room", () => {
-    expect(resolveNewThreadDraftRouteScope({})).toEqual({ kind: "native" });
-    expect(resolveNewThreadDraftRouteScope({ roomSlug: "rooms-local" })).toEqual({
+  it.each([
+    ["Your Threads action", {}, "rooms-local"],
+    ["existing Rooms ChatView", { roomSlug: "rooms-local", environmentId: "env-1" }, undefined],
+    ["Rooms draft ChatView", { roomSlug: "rooms-local", draftId: "draft-1" }, undefined],
+    ["command palette", { roomSlug: "rooms-local" }, undefined],
+    [
+      "keyboard shortcut",
+      { roomSlug: "rooms-local", environmentId: "env-1", threadId: "thread-1" },
+      undefined,
+    ],
+  ])("keeps the %s creation entry point scoped to its room", (_label, params, explicitRoomSlug) => {
+    expect(resolveNewThreadDraftRouteScope(params, explicitRoomSlug)).toEqual({
       kind: "rooms",
       roomSlug: "rooms-local",
+    });
+  });
+
+  it("keeps native new-thread routes unchanged", () => {
+    expect(resolveNewThreadDraftRouteScope({})).toEqual({ kind: "native" });
+    expect(resolveNewThreadDraftRouteScope({ draftId: "draft-1" })).toEqual({ kind: "native" });
+    expect(
+      resolveNewThreadDraftRouteScope({ environmentId: "env-1", threadId: "thread-1" }),
+    ).toEqual({ kind: "native" });
+  });
+
+  it("builds room-preserving draft and promotion destinations with native fallbacks", () => {
+    const draftId = DraftId.make("draft-1");
+    const threadRef = scopeThreadRef("env-1" as never, ThreadId.make("thread-1"));
+
+    expect(
+      buildDraftThreadRouteDestination({ kind: "rooms", roomSlug: "rooms-local" }, draftId),
+    ).toEqual({
+      kind: "rooms",
+      to: "/rooms/$roomSlug/draft/$draftId",
+      params: { roomSlug: "rooms-local", draftId: "draft-1" },
+    });
+    expect(buildServerThreadRouteDestination(threadRef, "rooms-local")).toEqual({
+      kind: "rooms",
+      to: "/rooms/$roomSlug/threads/$environmentId/$threadId",
+      params: { roomSlug: "rooms-local", environmentId: "env-1", threadId: "thread-1" },
+    });
+
+    expect(buildDraftThreadRouteDestination({ kind: "native" }, draftId)).toEqual({
+      kind: "native",
+      to: "/draft/$draftId",
+      params: { draftId: "draft-1" },
+    });
+    expect(buildServerThreadRouteDestination(threadRef)).toEqual({
+      kind: "native",
+      to: "/$environmentId/$threadId",
+      params: { environmentId: "env-1", threadId: "thread-1" },
     });
   });
 

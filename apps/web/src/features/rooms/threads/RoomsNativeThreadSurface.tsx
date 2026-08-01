@@ -22,7 +22,11 @@ import {
 } from "~/state/entities";
 import { useEnvironmentQuery } from "~/state/query";
 import { environmentShell } from "~/state/shell";
-import { resolveThreadRouteRef, resolveThreadRouteRenderState } from "~/threadRoutes";
+import {
+  buildServerThreadRouteDestination,
+  resolveThreadRouteRef,
+  resolveThreadRouteRenderState,
+} from "~/threadRoutes";
 import { resolveThreadSyncPhase } from "~/threadSync";
 
 import type { RoomsWorkspaceSurface } from "../shell/navigation";
@@ -183,13 +187,11 @@ function RoomsDraftThreadSurface({
     let cancelled = false;
     void waitForDraftHeroTransition().then(() => {
       if (cancelled) return;
+      const destination = buildServerThreadRouteDestination(canonicalThreadRef, roomSlug);
+      if (destination.kind !== "rooms") return;
       void navigate({
-        to: "/rooms/$roomSlug/threads/$environmentId/$threadId",
-        params: {
-          roomSlug,
-          environmentId: canonicalThreadRef.environmentId,
-          threadId: canonicalThreadRef.threadId,
-        },
+        to: destination.to,
+        params: destination.params,
         replace: true,
       });
     });

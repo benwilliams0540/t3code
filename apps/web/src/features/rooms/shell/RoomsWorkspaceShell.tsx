@@ -93,7 +93,7 @@ function RoomsBreadcrumbBar({
   const breadcrumbs = buildRoomsBreadcrumbs(room, surface);
 
   return (
-    <header className="workspace-topbar flex shrink-0 items-center gap-1 border-b border-border px-3 sm:px-4">
+    <header className="workspace-topbar drag-region flex shrink-0 items-center gap-1 border-b border-border pl-[calc(var(--rooms-titlebar-leading-inset)+0.75rem)] pr-3 sm:pl-[calc(var(--rooms-titlebar-leading-inset)+1rem)] sm:pr-4">
       <Button
         aria-label="Go back"
         onClick={() => window.history.back()}

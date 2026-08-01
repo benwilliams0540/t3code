@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveAppSidebarPresentation } from "./AppSidebarLayout";
+import {
+  resolveAppSidebarPresentation,
+  resolveRoomsTitlebarPresentation,
+} from "./AppSidebarLayout";
 import { resolveAppSidebarVariantSelection } from "./appSidebarVariant";
 
 describe("app sidebar selection", () => {
@@ -68,5 +71,43 @@ describe("AppSidebarLayout sidebar exclusivity", () => {
         sidebarVariant: "v3",
       }),
     ).toEqual({ showRoomsSidebar: false, useSidebarV2: false, useSidebarV2Theme: true });
+  });
+});
+
+describe("Rooms macOS title-bar presentation", () => {
+  it("reserves the traffic-light strip only for windowed V3 on macOS desktop", () => {
+    expect(
+      resolveRoomsTitlebarPresentation({
+        isMacosDesktop: true,
+        isWindowFullscreen: false,
+        showRoomsSidebar: true,
+      }),
+    ).toEqual({
+      leadingInset: "calc(90px - 3.5rem)",
+      reserveMacosWindowControls: true,
+    });
+
+    for (const presentation of [
+      resolveRoomsTitlebarPresentation({
+        isMacosDesktop: true,
+        isWindowFullscreen: true,
+        showRoomsSidebar: true,
+      }),
+      resolveRoomsTitlebarPresentation({
+        isMacosDesktop: false,
+        isWindowFullscreen: false,
+        showRoomsSidebar: true,
+      }),
+      resolveRoomsTitlebarPresentation({
+        isMacosDesktop: true,
+        isWindowFullscreen: false,
+        showRoomsSidebar: false,
+      }),
+    ]) {
+      expect(presentation).toEqual({
+        leadingInset: "0px",
+        reserveMacosWindowControls: false,
+      });
+    }
   });
 });

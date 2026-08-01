@@ -176,7 +176,11 @@ import {
   deriveLogicalProjectKeyFromSettings,
   selectProjectGroupingSettings,
 } from "../logicalProject";
-import { buildDraftThreadRouteParams } from "../threadRoutes";
+import {
+  buildDraftThreadRouteDestination,
+  buildServerThreadRouteDestination,
+  resolveNewThreadDraftRouteScope,
+} from "../threadRoutes";
 import {
   type ComposerImageAttachment,
   type DraftThreadEnvMode,
@@ -1144,7 +1148,7 @@ function ChatViewContent(props: ChatViewProps) {
   const draftId = routeKind === "draft" ? props.draftId : null;
   const threadSyncPhase = routeKind === "server" ? (props.threadSyncPhase ?? null) : null;
   const threadDetailLoading = threadSyncPhase === "loading";
-  const handleNewThread = useNewThreadHandler();
+  const handleNewThread = useNewThreadHandler(roomsRoomSlug ? { roomsRoomSlug } : undefined);
   const routeThreadRef = useMemo(
     () => scopeThreadRef(environmentId, threadId),
     [environmentId, threadId],
@@ -1227,34 +1231,38 @@ function ChatViewContent(props: ChatViewProps) {
   const navigate = useNavigate();
   const navigateToDraftRoute = useCallback(
     (nextDraftId: DraftId) => {
-      if (roomsRoomSlug) {
+      const destination = buildDraftThreadRouteDestination(
+        resolveNewThreadDraftRouteScope({}, roomsRoomSlug),
+        nextDraftId,
+      );
+      if (destination.kind === "rooms") {
         return navigate({
-          to: "/rooms/$roomSlug/draft/$draftId",
-          params: { roomSlug: roomsRoomSlug, draftId: nextDraftId },
+          to: destination.to,
+          params: destination.params,
         });
       }
       return navigate({
-        to: "/draft/$draftId",
-        params: buildDraftThreadRouteParams(nextDraftId),
+        to: destination.to,
+        params: destination.params,
       });
     },
     [navigate, roomsRoomSlug],
   );
   const navigateToThreadRoute = useCallback(
     (nextEnvironmentId: EnvironmentId, nextThreadId: ThreadId) => {
-      if (roomsRoomSlug) {
+      const destination = buildServerThreadRouteDestination(
+        scopeThreadRef(nextEnvironmentId, nextThreadId),
+        roomsRoomSlug,
+      );
+      if (destination.kind === "rooms") {
         return navigate({
-          to: "/rooms/$roomSlug/threads/$environmentId/$threadId",
-          params: {
-            roomSlug: roomsRoomSlug,
-            environmentId: nextEnvironmentId,
-            threadId: nextThreadId,
-          },
+          to: destination.to,
+          params: destination.params,
         });
       }
       return navigate({
-        to: "/$environmentId/$threadId",
-        params: { environmentId: nextEnvironmentId, threadId: nextThreadId },
+        to: destination.to,
+        params: destination.params,
       });
     },
     [navigate, roomsRoomSlug],

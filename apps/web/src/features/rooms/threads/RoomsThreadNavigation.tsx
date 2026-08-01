@@ -136,11 +136,13 @@ function ProjectBindingMenu({
 function NewThreadControl({
   boundProjects,
   compact,
+  roomSlug,
 }: {
   readonly boundProjects: readonly EnvironmentProject[];
   readonly compact: boolean;
+  readonly roomSlug: string;
 }) {
-  const handleNewThread = useNewThreadHandler();
+  const handleNewThread = useNewThreadHandler({ roomsRoomSlug: roomSlug });
   const startThread = (project: EnvironmentProject) => {
     void handleNewThread(scopeProjectRef(project.environmentId, project.id));
   };
@@ -244,7 +246,7 @@ export function RoomsYourThreadsNavigation({
         <p className="min-w-0 flex-1 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground/65 uppercase">
           Your Threads
         </p>
-        <NewThreadControl boundProjects={boundProjects} compact />
+        <NewThreadControl boundProjects={boundProjects} compact roomSlug={room.slug} />
         <ProjectBindingMenu compact roomId={room.id} />
       </div>
       {surface.kind === "native-draft" ? (
@@ -334,7 +336,7 @@ export function RoomsThreadsSurface({
             {boundProjects.map((project) => project.title).join(", ")}
           </p>
         </div>
-        <NewThreadControl boundProjects={boundProjects} compact={false} />
+        <NewThreadControl boundProjects={boundProjects} compact={false} roomSlug={room.slug} />
         <ProjectBindingMenu compact roomId={room.id} />
       </div>
       {unresolvedBindings.length > 0 ? (
@@ -376,7 +378,11 @@ export function RoomsThreadsSurface({
               Start one through the native T3 draft and composer flow.
             </p>
             <div className="mt-3 flex justify-center">
-              <NewThreadControl boundProjects={boundProjects} compact={false} />
+              <NewThreadControl
+                boundProjects={boundProjects}
+                compact={false}
+                roomSlug={room.slug}
+              />
             </div>
           </div>
         ) : null}
