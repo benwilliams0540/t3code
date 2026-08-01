@@ -1,7 +1,29 @@
+import * as Schema from "effect/Schema";
 import { useEffect, useState } from "react";
 
 import { useClientSettings, useUpdateClientSettings } from "../../hooks/useSettings";
+import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
+import { useLocalStorage } from "../../hooks/useLocalStorage";
+import { useRoomsDataSource, type RoomsDataSourceMode } from "../../features/rooms/dataSource";
+import { buildRoomsDiagnostics } from "../../features/rooms/dataSource/diagnostics";
+import { resetRoomsBetaSettings } from "../../features/rooms/dataSource/reset";
+import { ROOMS_LAST_ROUTE_STORAGE_KEY } from "../../features/rooms/shell/navigation";
+import {
+  ROOMS_PROJECT_BINDINGS_STORAGE_KEY,
+  RoomsProjectBindings,
+  type RoomsProjectBindings as RoomsProjectBindingsType,
+} from "../../features/rooms/threads/roomProjectBindings";
 import { type AppSidebarVariant, useAppSidebarVariantSelection } from "../appSidebarVariant";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
+import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Radio, RadioGroup } from "../ui/radio-group";
 import { Switch } from "../ui/switch";
@@ -54,6 +76,22 @@ function AutoSettleDaysInput({
 
 export function BetaSettingsPanel() {
   const [sidebarVariant, setSidebarVariant] = useAppSidebarVariantSelection();
+  const { localConfig, mode, selectedBySource, selectedRoom, setMode, state } =
+    useRoomsDataSource();
+  const [resetRoomsOpen, setResetRoomsOpen] = useState(false);
+  const [sampleBindings] = useLocalStorage(
+    ROOMS_PROJECT_BINDINGS_STORAGE_KEY,
+    Object.freeze({}) as RoomsProjectBindingsType,
+    RoomsProjectBindings,
+  );
+  const [lastRoomsRoute] = useLocalStorage(
+    ROOMS_LAST_ROUTE_STORAGE_KEY,
+    null,
+    Schema.NullOr(Schema.String),
+  );
+  const { copyToClipboard, isCopied } = useCopyToClipboard({
+    target: "Rooms diagnostics",
+  });
   const sidebarAutoSettleAfterDays = useClientSettings(
     (settings) => settings.sidebarAutoSettleAfterDays,
   );
@@ -134,7 +172,96 @@ export function BetaSettingsPanel() {
             ) : null}
           </>
         ) : null}
+        <SettingsRow
+          title="Rooms content"
+          description="Sample is the certified demonstration workspace. Local shows only actual projects and threads stored by this T3 instance."
+        >
+          <RadioGroup
+            aria-label="Rooms content"
+            className="grid gap-2 py-3 sm:grid-cols-2"
+            onValueChange={(value) => setMode(value as RoomsDataSourceMode)}
+            value={mode}
+          >
+            {(
+              [
+                ["sample", "Sample workspace", "Certified Rooms data for evaluation."],
+                ["local", "Local workspace", "Actual local T3 projects and threads only."],
+              ] as const
+            ).map(([value, title, description]) => (
+              <label
+                className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border bg-background px-3 py-3 has-[[data-checked]]:border-primary has-[[data-checked]]:ring-1 has-[[data-checked]]:ring-primary/30"
+                key={value}
+              >
+                <Radio className="mt-0.5" value={value} />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-foreground">{title}</span>
+                  <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+                    {description}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </RadioGroup>
+        </SettingsRow>
+        <SettingsRow
+          title="Rooms diagnostics"
+          description="Copy a redacted snapshot of the Rooms mode, selected IDs, project references, source state, and last Rooms route."
+          control={
+            <Button
+              onClick={() =>
+                copyToClipboard(
+                  buildRoomsDiagnostics({
+                    mode,
+                    state,
+                    selectedBySource,
+                    selectedRoomId: selectedRoom?.id ?? null,
+                    localConfig,
+                    sampleBindings,
+                    lastRoomsRoute,
+                  }),
+                  undefined,
+                )
+              }
+              size="sm"
+              variant="outline"
+            >
+              {isCopied ? "Copied" : "Copy Rooms diagnostics"}
+            </Button>
+          }
+        />
+        <SettingsRow
+          title="Reset Rooms beta settings"
+          description="Return Rooms to Sample and clear only Rooms source, selection, project-binding, and V3 sidebar preferences. T3 projects and threads are never removed."
+          control={
+            <Button onClick={() => setResetRoomsOpen(true)} size="sm" variant="outline">
+              Reset Rooms…
+            </Button>
+          }
+        />
       </SettingsSection>
+      <AlertDialog open={resetRoomsOpen} onOpenChange={setResetRoomsOpen}>
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset Rooms beta settings?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This clears only Rooms source, room selection, local bindings, and V3 sidebar layout.
+              It does not delete T3 projects, threads, prompts, credentials, or app settings.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+            <Button
+              onClick={() => {
+                resetRoomsBetaSettings();
+                setResetRoomsOpen(false);
+              }}
+              variant="destructive"
+            >
+              Reset Rooms settings
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
     </SettingsPageContainer>
   );
 }

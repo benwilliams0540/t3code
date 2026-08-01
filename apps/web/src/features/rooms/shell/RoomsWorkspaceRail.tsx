@@ -4,12 +4,10 @@ import { useCallback, useEffect } from "react";
 
 import { cn } from "~/lib/utils";
 
-import { roomsWorkspaceFixture } from "../fixtures";
+import { useRoomsDataSource, type RoomsSourceRoom } from "../dataSource";
 import { roomForShortcut } from "../model/selection";
-import type { RoomsRoom } from "../model/workspace";
-import { useRoomsWorkspaceSelection } from "./useRoomsWorkspaceSelection";
 
-function roomMonogram(room: RoomsRoom): string {
+function roomMonogram(room: RoomsSourceRoom): string {
   return room.name
     .split(/\s+/)
     .map((word) => word[0])
@@ -24,9 +22,9 @@ export function RoomsWorkspaceRail({
   readonly reserveMacosWindowControls: boolean;
 }) {
   const navigate = useNavigate();
-  const { selectedRoom, selectRoom } = useRoomsWorkspaceSelection();
+  const { selectedRoom, selectRoom, state } = useRoomsDataSource();
   const openRoom = useCallback(
-    (room: RoomsRoom) => {
+    (room: RoomsSourceRoom) => {
       selectRoom(room);
       void navigate({
         to: "/rooms/$roomSlug/dashboard",
@@ -46,7 +44,7 @@ export function RoomsWorkspaceRail({
       ) {
         return;
       }
-      const room = roomForShortcut(roomsWorkspaceFixture.rooms, event);
+      const room = roomForShortcut(state.rooms, event);
       if (!room) return;
       event.preventDefault();
       openRoom(room);
@@ -54,7 +52,7 @@ export function RoomsWorkspaceRail({
 
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [openRoom]);
+  }, [openRoom, state.rooms]);
 
   return (
     <aside
@@ -72,15 +70,19 @@ export function RoomsWorkspaceRail({
         <span className="sr-only">Rooms</span>
       </div>
       <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto px-2 py-2">
-        {roomsWorkspaceFixture.rooms.map((room, index) => {
-          const isSelected = selectedRoom.id === room.id;
+        {state.rooms.map((room, index) => {
+          const isSelected = selectedRoom?.id === room.id;
           const LocalityIcon = room.locality === "local_only" ? LockKeyholeIcon : UsersIcon;
           const modifierLabel =
             typeof navigator !== "undefined" && navigator.platform.includes("Mac") ? "⌘" : "Ctrl+";
           return (
             <button
               aria-current={isSelected ? "page" : undefined}
-              aria-label={`${room.name}, ${room.unread.count} unread, ${room.locality === "local_only" ? "local only" : "shared"}`}
+              aria-label={
+                room.unreadCount === null
+                  ? `${room.name}, local only`
+                  : `${room.name}, ${room.unreadCount} unread, ${room.locality === "local_only" ? "local only" : "shared"}`
+              }
               className={cn(
                 "group/room relative flex size-10 shrink-0 items-center justify-center rounded-xl border text-xs font-semibold transition-[border-color,background-color,border-radius] motion-reduce:transition-none",
                 isSelected
@@ -101,9 +103,9 @@ export function RoomsWorkspaceRail({
                 aria-hidden
                 className="absolute -bottom-1 -left-1 size-3 rounded-full bg-sidebar p-0.5 text-muted-foreground"
               />
-              {room.unread.count > 0 ? (
+              {room.unreadCount !== null && room.unreadCount > 0 ? (
                 <span className="absolute -right-1.5 -top-1.5 min-w-4 rounded-full bg-red-500 px-1 text-center text-[9px] font-bold leading-4 text-white">
-                  {room.unread.count}
+                  {room.unreadCount}
                 </span>
               ) : null}
             </button>

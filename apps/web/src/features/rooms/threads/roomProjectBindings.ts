@@ -7,19 +7,21 @@ import { useCallback, useMemo } from "react";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useProjects } from "~/state/entities";
 
-export const ROOMS_PROJECT_BINDINGS_STORAGE_KEY = "t3code:rooms-project-bindings:v1";
+import {
+  PersistedRoomsProjectRef as PersistedRoomsProjectRefSchema,
+  type PersistedRoomsProjectRef as PersistedRoomsProjectRefType,
+  type RoomsDataSourceMode,
+} from "../dataSource/model";
+import { useRoomsDataSource } from "../dataSource/RoomsDataSourceProvider";
 
-const PersistedRoomsProjectRef = Schema.Struct({
-  environmentId: Schema.String,
-  projectId: Schema.String,
-});
+export const ROOMS_PROJECT_BINDINGS_STORAGE_KEY = "t3code:rooms-project-bindings:v1";
 
 export const RoomsProjectBindings = Schema.Record(
   Schema.String,
-  Schema.Array(PersistedRoomsProjectRef),
+  Schema.Array(PersistedRoomsProjectRefSchema),
 );
 export type RoomsProjectBindings = typeof RoomsProjectBindings.Type;
-export type PersistedRoomsProjectRef = typeof PersistedRoomsProjectRef.Type;
+export type PersistedRoomsProjectRef = PersistedRoomsProjectRefType;
 
 const EMPTY_ROOMS_PROJECT_BINDINGS: RoomsProjectBindings = Object.freeze({});
 
@@ -63,13 +65,19 @@ export function resolveRoomProjectBindings(
   bindings: RoomsProjectBindings,
   roomId: string,
   projects: ReadonlyArray<EnvironmentProject>,
+): ReturnType<typeof resolvePersistedRoomProjectBindings> {
+  return resolvePersistedRoomProjectBindings(bindings[roomId] ?? [], projects);
+}
+
+export function resolvePersistedRoomProjectBindings(
+  persistedRefs: readonly PersistedRoomsProjectRef[],
+  projects: ReadonlyArray<EnvironmentProject>,
 ): {
   readonly boundProjects: readonly EnvironmentProject[];
   readonly boundProjectRefs: readonly ScopedProjectRef[];
   readonly availableProjects: readonly EnvironmentProject[];
   readonly unresolvedBindings: readonly PersistedRoomsProjectRef[];
 } {
-  const persistedRefs = bindings[roomId] ?? [];
   const projectsByKey = new Map(
     projects.map((project) => [environmentProjectKey(project), project]),
   );
@@ -93,28 +101,65 @@ export function resolveRoomProjectBindings(
   };
 }
 
-export function useRoomProjectBindings(roomId: string) {
+export function useRoomProjectBindings(roomId: string, sourceMode: RoomsDataSourceMode) {
   const projects = useProjects();
-  const [bindings, setBindings] = useLocalStorage(
+  const [sampleBindings, setSampleBindings] = useLocalStorage(
     ROOMS_PROJECT_BINDINGS_STORAGE_KEY,
     EMPTY_ROOMS_PROJECT_BINDINGS,
     RoomsProjectBindings,
   );
+  const { localConfig, setLocalConfig } = useRoomsDataSource();
+  const persistedRefs =
+    sourceMode === "local"
+      ? localConfig?.roomId === roomId
+        ? localConfig.projectBindings
+        : []
+      : (sampleBindings[roomId] ?? []);
   const resolved = useMemo(
-    () => resolveRoomProjectBindings(bindings, roomId, projects),
-    [bindings, projects, roomId],
+    () => resolvePersistedRoomProjectBindings(persistedRefs, projects),
+    [persistedRefs, projects],
   );
   const bindProject = useCallback(
     (project: EnvironmentProject) => {
-      setBindings((current) => addRoomProjectBinding(current, roomId, project));
+      if (sourceMode === "local") {
+        setLocalConfig((current) => {
+          if (current === null || current.roomId !== roomId) return current;
+          const projectKey = environmentProjectKey(project);
+          if (current.projectBindings.some((ref) => persistedProjectKey(ref) === projectKey)) {
+            return current;
+          }
+          return {
+            ...current,
+            projectBindings: [
+              ...current.projectBindings,
+              { environmentId: project.environmentId, projectId: project.id },
+            ],
+          };
+        });
+        return;
+      }
+      setSampleBindings((current) => addRoomProjectBinding(current, roomId, project));
     },
-    [roomId, setBindings],
+    [roomId, setLocalConfig, setSampleBindings, sourceMode],
   );
   const unbindProject = useCallback(
     (projectRef: PersistedRoomsProjectRef) => {
-      setBindings((current) => removeRoomProjectBinding(current, roomId, projectRef));
+      if (sourceMode === "local") {
+        setLocalConfig((current) => {
+          if (current === null || current.roomId !== roomId) return current;
+          const key = persistedProjectKey(projectRef);
+          return {
+            ...current,
+            projectBindings: current.projectBindings.filter(
+              (candidate) => persistedProjectKey(candidate) !== key,
+            ),
+          };
+        });
+        return;
+      }
+      setSampleBindings((current) => removeRoomProjectBinding(current, roomId, projectRef));
     },
-    [roomId, setBindings],
+    [roomId, setLocalConfig, setSampleBindings, sourceMode],
   );
 
   return { ...resolved, bindProject, unbindProject };

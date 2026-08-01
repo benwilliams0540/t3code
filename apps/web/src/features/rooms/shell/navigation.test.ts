@@ -56,11 +56,12 @@ describe("Rooms shell navigation", () => {
       "Your Threads",
       "T3 Thread",
     ]);
-    expect(roomsSurfaceSourceLabel(threadSurface)).toBe("Local T3 thread");
-    expect(roomsSurfaceSourceLabel({ kind: "native-draft", draftId: "draft-native" })).toBe(
-      "Local T3 thread",
-    );
-    expect(roomsSurfaceSourceLabel({ kind: "threads" })).toBe("Local T3 projects");
+    expect(roomsSurfaceSourceLabel(threadSurface, "sample")).toBe("Local T3 thread");
+    expect(
+      roomsSurfaceSourceLabel({ kind: "native-draft", draftId: "draft-native" }, "sample"),
+    ).toBe("Local T3 thread");
+    expect(roomsSurfaceSourceLabel({ kind: "threads" }, "sample")).toBe("Local T3 projects");
+    expect(roomsSurfaceSourceLabel({ kind: "dashboard" }, "local")).toBe("Local T3 only");
   });
 
   it("keeps web routes path-based and adapts internal links to Electron hash history", () => {

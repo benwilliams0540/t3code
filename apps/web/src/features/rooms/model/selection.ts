@@ -36,15 +36,15 @@ export function workspaceForDeclaredRoom(
   return fixture.workspaces.find((workspace) => workspace.room_id === roomId) ?? null;
 }
 
-export function roomForShortcut(
-  rooms: readonly RoomsRoom[],
+export function roomForShortcut<Room>(
+  rooms: readonly Room[],
   input: { readonly key: string; readonly metaKey: boolean; readonly ctrlKey: boolean },
-): RoomsRoom | null {
+): Room | null {
   if (!input.metaKey && !input.ctrlKey) return null;
   if (!/^[1-9]$/.test(input.key)) return null;
   return rooms[Number(input.key) - 1] ?? null;
 }
 
-export function roomDashboardPath(room: RoomsRoom): string {
+export function roomDashboardPath(room: { readonly slug: string }): string {
   return `/rooms/${room.slug}/dashboard`;
 }

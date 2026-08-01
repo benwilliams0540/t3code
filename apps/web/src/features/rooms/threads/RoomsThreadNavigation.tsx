@@ -25,7 +25,7 @@ import { cn } from "~/lib/utils";
 import { useThreadShellsForProjectRefs } from "~/state/entities";
 import { formatRelativeTimeLabel } from "~/timestampFormat";
 
-import type { RoomsRoom } from "../model/workspace";
+import type { RoomsDataSourceMode, RoomsSourceRoom } from "../dataSource";
 import type { RoomsWorkspaceNavigate } from "../shell/RoomsWorkspaceNavigation";
 import type { RoomsWorkspaceSurface } from "../shell/navigation";
 import { type PersistedRoomsProjectRef, useRoomProjectBindings } from "./roomProjectBindings";
@@ -50,15 +50,17 @@ export function RoomsMenuGroup({
   );
 }
 
-function ProjectBindingMenu({
+export function RoomsProjectBindingMenu({
   compact,
   roomId,
+  sourceMode,
 }: {
   readonly compact: boolean;
   readonly roomId: string;
+  readonly sourceMode: RoomsDataSourceMode;
 }) {
   const { availableProjects, bindProject, boundProjects, unresolvedBindings, unbindProject } =
-    useRoomProjectBindings(roomId);
+    useRoomProjectBindings(roomId, sourceMode);
   const projects = useMemo(
     () =>
       [...boundProjects, ...availableProjects].toSorted((left, right) =>
@@ -228,12 +230,17 @@ export function RoomsYourThreadsNavigation({
   navigate,
   room,
   surface,
+  sourceMode,
 }: {
   readonly navigate: RoomsWorkspaceNavigate;
-  readonly room: RoomsRoom;
+  readonly room: RoomsSourceRoom;
   readonly surface: RoomsWorkspaceSurface;
+  readonly sourceMode: RoomsDataSourceMode;
 }) {
-  const { boundProjectRefs, boundProjects, unresolvedBindings } = useRoomProjectBindings(room.id);
+  const { boundProjectRefs, boundProjects, unresolvedBindings } = useRoomProjectBindings(
+    room.id,
+    sourceMode,
+  );
   const shells = useThreadShellsForProjectRefs(boundProjectRefs);
   const threads = useMemo(
     () => selectRoomsNativeThreadEntries(shells, boundProjects),
@@ -247,7 +254,7 @@ export function RoomsYourThreadsNavigation({
           Your Threads
         </p>
         <NewThreadControl boundProjects={boundProjects} compact roomSlug={room.slug} />
-        <ProjectBindingMenu compact roomId={room.id} />
+        <RoomsProjectBindingMenu compact roomId={room.id} sourceMode={sourceMode} />
       </div>
       {surface.kind === "native-draft" ? (
         <div className="flex w-full min-w-0 items-center gap-2 rounded-md bg-muted px-2 py-1.5 text-sm text-foreground">
@@ -273,7 +280,7 @@ export function RoomsYourThreadsNavigation({
           <p className="mb-2 text-xs leading-relaxed text-muted-foreground">
             Bind this local-only room to a real T3 project.
           </p>
-          <ProjectBindingMenu compact={false} roomId={room.id} />
+          <RoomsProjectBindingMenu compact={false} roomId={room.id} sourceMode={sourceMode} />
         </div>
       ) : threads.length === 0 && surface.kind !== "native-draft" ? (
         <p className="px-2 py-1.5 text-xs text-muted-foreground">No T3 threads yet.</p>
@@ -292,11 +299,16 @@ export function RoomsYourThreadsNavigation({
 export function RoomsThreadsSurface({
   navigate,
   room,
+  sourceMode,
 }: {
   readonly navigate: RoomsWorkspaceNavigate;
-  readonly room: RoomsRoom;
+  readonly room: RoomsSourceRoom;
+  readonly sourceMode: RoomsDataSourceMode;
 }) {
-  const { boundProjectRefs, boundProjects, unresolvedBindings } = useRoomProjectBindings(room.id);
+  const { boundProjectRefs, boundProjects, unresolvedBindings } = useRoomProjectBindings(
+    room.id,
+    sourceMode,
+  );
   const shells = useThreadShellsForProjectRefs(boundProjectRefs);
   const threads = useMemo(
     () => selectRoomsNativeThreadEntries(shells, boundProjects),
@@ -317,7 +329,7 @@ export function RoomsThreadsSurface({
             instance and is not shared room data.
           </p>
           <div className="mt-4 flex justify-center">
-            <ProjectBindingMenu compact={false} roomId={room.id} />
+            <RoomsProjectBindingMenu compact={false} roomId={room.id} sourceMode={sourceMode} />
           </div>
         </div>
       </section>
@@ -337,7 +349,7 @@ export function RoomsThreadsSurface({
           </p>
         </div>
         <NewThreadControl boundProjects={boundProjects} compact={false} roomSlug={room.slug} />
-        <ProjectBindingMenu compact roomId={room.id} />
+        <RoomsProjectBindingMenu compact roomId={room.id} sourceMode={sourceMode} />
       </div>
       {unresolvedBindings.length > 0 ? (
         <p className="mt-4 flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">

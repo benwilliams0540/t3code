@@ -16,13 +16,14 @@ import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useResizableWidth } from "~/hooks/useResizableWidth";
 import { cn } from "~/lib/utils";
 
-import { roomsWorkspaceFixture } from "../fixtures";
-import { findDeclaredRoomBySlug, workspaceForDeclaredRoom } from "../model/selection";
-import type { RoomsRoom } from "../model/workspace";
+import { findSourceRoomBySlug, useRoomsDataSource, type RoomsSourceRoom } from "../dataSource";
+import { workspaceForDeclaredRoom } from "../model/selection";
 import {
   buildRoomsBreadcrumbs,
   isRoomsWorkspaceEnabled,
   roomsSurfaceSourceLabel,
+  roomsRoutePath,
+  ROOMS_LAST_ROUTE_STORAGE_KEY,
   ROOMS_SIDEBAR_OPEN_STORAGE_KEY,
   type RoomsNavigationTarget,
   type RoomsWorkspaceSurface,
@@ -35,7 +36,6 @@ import {
   ROOMS_SIDEBAR_WIDTH_STORAGE_KEY,
 } from "./roomsSidebarWidth";
 import { RoomsWorkspaceSurfaceView } from "./RoomsWorkspaceSurface";
-import { useRoomsWorkspaceSelection } from "./useRoomsWorkspaceSelection";
 
 function subscribeToViewportWidth(onChange: () => void): () => void {
   window.addEventListener("resize", onChange);
@@ -46,7 +46,9 @@ function readViewportWidth(): number {
   return window.innerWidth;
 }
 
-function useNavigateWithinRoom(room: RoomsRoom | null): (target: RoomsNavigationTarget) => void {
+function useNavigateWithinRoom(
+  room: RoomsSourceRoom | null,
+): (target: RoomsNavigationTarget) => void {
   const navigate = useNavigate();
   return useCallback(
     (target: RoomsNavigationTarget) => {
@@ -115,7 +117,7 @@ function RoomsBreadcrumbBar({
 }: {
   readonly isSidebarVisible: boolean;
   readonly onToggleSidebar: () => void;
-  readonly room: RoomsRoom;
+  readonly room: RoomsSourceRoom;
   readonly surface: RoomsWorkspaceSurface;
 }) {
   const navigateWithinRoom = useNavigateWithinRoom(room);
@@ -184,9 +186,40 @@ function RoomsBreadcrumbBar({
         })}
       </div>
       <span className="ml-auto hidden rounded-full border border-border bg-muted/35 px-2 py-0.5 text-[10px] text-muted-foreground sm:inline-flex">
-        {roomsSurfaceSourceLabel(surface)}
+        {roomsSurfaceSourceLabel(surface, room.sourceMode)}
       </span>
     </header>
+  );
+}
+
+function RoomsSourceStatePanel({
+  initializeLocalWorkspace,
+  message,
+  onUseSample,
+  title,
+}: {
+  readonly initializeLocalWorkspace?: (() => void) | undefined;
+  readonly message: string;
+  readonly onUseSample: () => void;
+  readonly title: string;
+}) {
+  return (
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground">
+      <section className="flex flex-1 items-center justify-center p-6">
+        <div className="max-w-md rounded-2xl border border-border bg-card p-7 text-center">
+          <h1 className="text-lg font-semibold">{title}</h1>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{message}</p>
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            {initializeLocalWorkspace ? (
+              <Button onClick={initializeLocalWorkspace}>Create local workspace</Button>
+            ) : null}
+            <Button onClick={onUseSample} variant="outline">
+              Use Sample workspace
+            </Button>
+          </div>
+        </div>
+      </section>
+    </SidebarInset>
   );
 }
 
@@ -199,8 +232,15 @@ export function RoomsWorkspaceShell({
 }) {
   const navigate = useNavigate();
   const [sidebarVariant] = useAppSidebarVariantSelection();
-  const room = findDeclaredRoomBySlug(roomsWorkspaceFixture.rooms, roomSlug);
-  const { selectRoom } = useRoomsWorkspaceSelection();
+  const { initializeLocalWorkspace, selectRoom, selectedRoom, setMode, state } =
+    useRoomsDataSource();
+  const room = findSourceRoomBySlug(state, roomSlug);
+  const currentRoute = roomsRoutePath(roomSlug, surface);
+  const [, setLastRoomsRoute] = useLocalStorage(
+    ROOMS_LAST_ROUTE_STORAGE_KEY,
+    null,
+    Schema.NullOr(Schema.String),
+  );
   const [isSidebarVisible, setSidebarVisible] = useLocalStorage(
     ROOMS_SIDEBAR_OPEN_STORAGE_KEY,
     true,
@@ -223,29 +263,63 @@ export function RoomsWorkspaceShell({
       void navigate({ to: "/", replace: true });
       return;
     }
-    if (room) selectRoom(room);
-  }, [navigate, room, selectRoom, sidebarVariant]);
+    if (room) {
+      selectRoom(room);
+      setLastRoomsRoute(currentRoute);
+      return;
+    }
+    if (state.status === "ready" && selectedRoom) {
+      void navigate({
+        to: "/rooms/$roomSlug/dashboard",
+        params: { roomSlug: selectedRoom.slug },
+        replace: true,
+      });
+    }
+  }, [
+    currentRoute,
+    navigate,
+    room,
+    selectRoom,
+    selectedRoom,
+    setLastRoomsRoute,
+    sidebarVariant,
+    state.status,
+  ]);
 
   if (!isRoomsWorkspaceEnabled(sidebarVariant)) {
     return <SidebarInset className="h-dvh min-h-0 bg-background" />;
   }
 
-  if (!room) {
+  if (state.status === "setup-required") {
     return (
-      <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground">
-        <section className="flex flex-1 items-center justify-center p-6">
-          <div className="max-w-md text-center">
-            <h1 className="text-lg font-semibold">Room not found</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              The requested room is not declared by workspace-read v2.
-            </p>
-          </div>
-        </section>
-      </SidebarInset>
+      <RoomsSourceStatePanel
+        initializeLocalWorkspace={initializeLocalWorkspace}
+        message="Create a local workspace to bind actual T3 projects and threads. Sample data stays separate."
+        onUseSample={() => setMode("sample")}
+        title="Local workspace setup required"
+      />
     );
   }
 
-  const workspace = workspaceForDeclaredRoom(roomsWorkspaceFixture, room.id);
+  if (state.status === "unavailable") {
+    return (
+      <RoomsSourceStatePanel
+        message="Rooms could not load this source. Retry from Beta settings or return to the Sample workspace."
+        onUseSample={() => setMode("sample")}
+        title="Rooms source unavailable"
+      />
+    );
+  }
+
+  if (!room) {
+    return <SidebarInset className="h-dvh min-h-0 bg-background" />;
+  }
+
+  const workspace = (() => {
+    if (state.mode !== "sample") return null;
+    const declaredRoom = state.fixture.rooms.find((candidate) => candidate.id === room.id);
+    return declaredRoom ? workspaceForDeclaredRoom(state.fixture, declaredRoom.id) : null;
+  })();
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground">
       <RoomsBreadcrumbBar
@@ -264,6 +338,7 @@ export function RoomsWorkspaceShell({
             <RoomsWorkspaceNavigation
               navigate={navigateWithinRoom as RoomsWorkspaceNavigate}
               room={room}
+              sourceMode={state.mode}
               surface={surface}
               workspace={workspace}
             />
@@ -297,6 +372,7 @@ export function RoomsWorkspaceShell({
               <RoomsWorkspaceNavigation
                 navigate={navigateWithinRoom as RoomsWorkspaceNavigate}
                 room={room}
+                sourceMode={state.mode}
                 surface={surface}
                 workspace={workspace}
               />
@@ -311,6 +387,7 @@ export function RoomsWorkspaceShell({
             <RoomsWorkspaceSurfaceView
               navigate={navigateWithinRoom as RoomsWorkspaceNavigate}
               room={room}
+              sourceState={state}
               surface={surface}
               workspace={workspace}
             />
@@ -324,18 +401,40 @@ export function RoomsWorkspaceShell({
 export function RoomsWorkspaceLanding() {
   const navigate = useNavigate();
   const [sidebarVariant] = useAppSidebarVariantSelection();
-  const { selectedRoom } = useRoomsWorkspaceSelection();
+  const { initializeLocalWorkspace, selectedRoom, setMode, state } = useRoomsDataSource();
   useEffect(() => {
     if (!isRoomsWorkspaceEnabled(sidebarVariant)) {
       void navigate({ to: "/", replace: true });
       return;
     }
-    void navigate({
-      to: "/rooms/$roomSlug/dashboard",
-      params: { roomSlug: selectedRoom.slug },
-      replace: true,
-    });
-  }, [navigate, selectedRoom.slug, sidebarVariant]);
+    if (selectedRoom) {
+      void navigate({
+        to: "/rooms/$roomSlug/dashboard",
+        params: { roomSlug: selectedRoom.slug },
+        replace: true,
+      });
+    }
+  }, [navigate, selectedRoom, sidebarVariant]);
+
+  if (state.status === "setup-required") {
+    return (
+      <RoomsSourceStatePanel
+        initializeLocalWorkspace={initializeLocalWorkspace}
+        message="Create a local workspace to bind actual T3 projects and threads."
+        onUseSample={() => setMode("sample")}
+        title="Local workspace setup required"
+      />
+    );
+  }
+  if (state.status === "unavailable") {
+    return (
+      <RoomsSourceStatePanel
+        message="Rooms could not load this source. Return to the Sample workspace and try again."
+        onUseSample={() => setMode("sample")}
+        title="Rooms source unavailable"
+      />
+    );
+  }
 
   return <SidebarInset className="h-dvh min-h-0 bg-background" />;
 }

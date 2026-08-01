@@ -10,13 +10,14 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { roomsWorkspaceFixture } from "../fixtures";
-import type { RoomsPrincipal, RoomsRoom, RoomsWorkspace } from "../model/workspace";
+import type { RoomsDataSourceState, RoomsSourceRoom } from "../dataSource";
+import type { RoomsPrincipal, RoomsWorkspace, RoomsWorkspaceReadFixture } from "../model/workspace";
 import type { RoomsWorkspaceSurface } from "./navigation";
 import type { RoomsWorkspaceNavigate } from "./RoomsWorkspaceNavigation";
 import { roomsWorkspaceSlots } from "./slots";
 import { RoomsNativeThreadSurface } from "../threads/RoomsNativeThreadSurface";
 import { RoomsThreadsSurface } from "../threads/RoomsThreadNavigation";
+import { RoomsLocalWorkspaceSurfaceView } from "./RoomsLocalWorkspaceSurface";
 
 function SurfacePlaceholder({ surface }: { readonly surface: RoomsWorkspaceSurface }) {
   const copy = (() => {
@@ -82,13 +83,15 @@ function PresenceGroup({
   icon: Icon,
   ids,
   label,
+  principals: declaredPrincipals,
 }: {
   readonly icon: LucideIcon;
   readonly ids: readonly string[];
   readonly label: string;
+  readonly principals: readonly RoomsPrincipal[];
 }) {
   const principals = ids
-    .map((id) => roomsWorkspaceFixture.principals.find((principal) => principal.id === id))
+    .map((id) => declaredPrincipals.find((principal) => principal.id === id))
     .filter((principal): principal is RoomsPrincipal => principal !== undefined);
   return (
     <section>
@@ -108,12 +111,33 @@ function PresenceGroup({
   );
 }
 
-function PresentSurface({ workspace }: { readonly workspace: RoomsWorkspace }) {
+function PresentSurface({
+  fixture,
+  workspace,
+}: {
+  readonly fixture: RoomsWorkspaceReadFixture;
+  readonly workspace: RoomsWorkspace;
+}) {
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-6 p-5 sm:p-8 lg:grid-cols-3">
-      <PresenceGroup icon={CircleUserRoundIcon} ids={workspace.presence.human_ids} label="Humans" />
-      <PresenceGroup icon={BotIcon} ids={workspace.presence.agent_ids} label="Agents" />
-      <PresenceGroup icon={MonitorIcon} ids={workspace.presence.machine_ids} label="Machines" />
+      <PresenceGroup
+        icon={CircleUserRoundIcon}
+        ids={workspace.presence.human_ids}
+        label="Humans"
+        principals={fixture.principals}
+      />
+      <PresenceGroup
+        icon={BotIcon}
+        ids={workspace.presence.agent_ids}
+        label="Agents"
+        principals={fixture.principals}
+      />
+      <PresenceGroup
+        icon={MonitorIcon}
+        ids={workspace.presence.machine_ids}
+        label="Machines"
+        principals={fixture.principals}
+      />
     </div>
   );
 }
@@ -121,15 +145,34 @@ function PresentSurface({ workspace }: { readonly workspace: RoomsWorkspace }) {
 export function RoomsWorkspaceSurfaceView({
   navigate,
   room,
+  sourceState,
   surface,
   workspace,
 }: {
   readonly navigate: RoomsWorkspaceNavigate;
-  readonly room: RoomsRoom;
+  readonly room: RoomsSourceRoom;
+  readonly sourceState: Extract<RoomsDataSourceState, { readonly status: "ready" }>;
   readonly surface: RoomsWorkspaceSurface;
   readonly workspace: RoomsWorkspace | null;
 }) {
-  if (!workspace) {
+  if (surface.kind === "native-thread" || surface.kind === "native-draft") {
+    return (
+      <RoomsNativeThreadSurface
+        roomId={room.id}
+        roomSlug={room.slug}
+        sourceMode={sourceState.mode}
+        surface={surface}
+      />
+    );
+  }
+
+  if (sourceState.mode === "local") {
+    return <RoomsLocalWorkspaceSurfaceView navigate={navigate} room={room} surface={surface} />;
+  }
+
+  const fixture = sourceState.fixture;
+  const sampleRoom = fixture.rooms.find((candidate) => candidate.id === room.id) ?? null;
+  if (!workspace || !sampleRoom) {
     return (
       <section className="flex min-h-full items-center justify-center p-6">
         <div className="max-w-md rounded-2xl border border-border bg-card p-7 text-center">
@@ -144,11 +187,10 @@ export function RoomsWorkspaceSurfaceView({
     );
   }
 
-  if (surface.kind === "threads") return <RoomsThreadsSurface navigate={navigate} room={room} />;
-  if (surface.kind === "native-thread" || surface.kind === "native-draft") {
-    return <RoomsNativeThreadSurface roomId={room.id} roomSlug={room.slug} surface={surface} />;
+  if (surface.kind === "threads") {
+    return <RoomsThreadsSurface navigate={navigate} room={room} sourceMode="sample" />;
   }
-  if (surface.kind === "present") return <PresentSurface workspace={workspace} />;
+  if (surface.kind === "present") return <PresentSurface fixture={fixture} workspace={workspace} />;
 
   const slot =
     surface.kind === "dashboard"
@@ -160,7 +202,5 @@ export function RoomsWorkspaceSurfaceView({
           : roomsWorkspaceSlots.project;
   if (!slot) return <SurfacePlaceholder surface={surface} />;
   const Slot = slot;
-  return (
-    <Slot fixture={roomsWorkspaceFixture} room={room} surface={surface} workspace={workspace} />
-  );
+  return <Slot fixture={fixture} room={sampleRoom} surface={surface} workspace={workspace} />;
 }

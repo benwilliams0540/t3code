@@ -29,6 +29,7 @@ import {
 } from "~/threadRoutes";
 import { resolveThreadSyncPhase } from "~/threadSync";
 
+import type { RoomsDataSourceMode } from "../dataSource";
 import type { RoomsWorkspaceSurface } from "../shell/navigation";
 import { useRoomProjectBindings } from "./roomProjectBindings";
 import { isThreadBoundToRoom } from "./roomsNativeThreads";
@@ -62,14 +63,16 @@ function NativeThreadLoading() {
 function RoomsServerThreadSurface({
   roomId,
   roomSlug,
+  sourceMode,
   surface,
 }: {
   readonly roomId: string;
   readonly roomSlug: string;
+  readonly sourceMode: RoomsDataSourceMode;
   readonly surface: Extract<RoomsWorkspaceSurface, { kind: "native-thread" }>;
 }) {
   const threadRef = resolveThreadRouteRef(surface);
-  const { boundProjectRefs } = useRoomProjectBindings(roomId);
+  const { boundProjectRefs } = useRoomProjectBindings(roomId, sourceMode);
   const environmentIsBound =
     threadRef !== null &&
     boundProjectRefs.some((ref) => ref.environmentId === threadRef.environmentId);
@@ -143,15 +146,17 @@ function RoomsServerThreadSurface({
 function RoomsDraftThreadSurface({
   roomId,
   roomSlug,
+  sourceMode,
   surface,
 }: {
   readonly roomId: string;
   readonly roomSlug: string;
+  readonly sourceMode: RoomsDataSourceMode;
   readonly surface: Extract<RoomsWorkspaceSurface, { kind: "native-draft" }>;
 }) {
   const navigate = useNavigate();
   const draftId = DraftId.make(surface.draftId);
-  const { boundProjectRefs } = useRoomProjectBindings(roomId);
+  const { boundProjectRefs } = useRoomProjectBindings(roomId, sourceMode);
   const draftSession = useComposerDraftStore((store) => store.getDraftSession(draftId));
   const draftProjectRef = draftSession
     ? scopeProjectRef(draftSession.environmentId, draftSession.projectId)
@@ -227,15 +232,27 @@ function RoomsDraftThreadSurface({
 export function RoomsNativeThreadSurface({
   roomId,
   roomSlug,
+  sourceMode,
   surface,
 }: {
   readonly roomId: string;
   readonly roomSlug: string;
+  readonly sourceMode: RoomsDataSourceMode;
   readonly surface: Extract<RoomsWorkspaceSurface, { kind: "native-thread" | "native-draft" }>;
 }) {
   return surface.kind === "native-thread" ? (
-    <RoomsServerThreadSurface roomId={roomId} roomSlug={roomSlug} surface={surface} />
+    <RoomsServerThreadSurface
+      roomId={roomId}
+      roomSlug={roomSlug}
+      sourceMode={sourceMode}
+      surface={surface}
+    />
   ) : (
-    <RoomsDraftThreadSurface roomId={roomId} roomSlug={roomSlug} surface={surface} />
+    <RoomsDraftThreadSurface
+      roomId={roomId}
+      roomSlug={roomSlug}
+      sourceMode={sourceMode}
+      surface={surface}
+    />
   );
 }

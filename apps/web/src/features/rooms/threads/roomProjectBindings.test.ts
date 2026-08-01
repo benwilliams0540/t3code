@@ -5,6 +5,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   addRoomProjectBinding,
   removeRoomProjectBinding,
+  resolvePersistedRoomProjectBindings,
   resolveRoomProjectBindings,
   type RoomsProjectBindings,
 } from "./roomProjectBindings";
@@ -70,5 +71,17 @@ describe("local Rooms project bindings", () => {
       resolveRoomProjectBindings(next, "room:rooms", [roomsProject, unrelatedProject])
         .boundProjects,
     ).toEqual([unrelatedProject]);
+  });
+
+  it("resolves Local bindings without interpreting Sample room ids", () => {
+    const resolved = resolvePersistedRoomProjectBindings(
+      [{ environmentId: "environment-local", projectId: "project-rooms" }],
+      [roomsProject, unrelatedProject],
+    );
+
+    expect(resolved.boundProjects).toEqual([roomsProject]);
+    expect(resolved.boundProjectRefs).toEqual([
+      { environmentId: "environment-local", projectId: "project-rooms" },
+    ]);
   });
 });

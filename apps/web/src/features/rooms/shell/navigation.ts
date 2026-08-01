@@ -1,6 +1,7 @@
-import type { RoomsRoom } from "../model/workspace";
+import type { RoomsDataSourceMode } from "../dataSource";
 
 export const ROOMS_SIDEBAR_OPEN_STORAGE_KEY = "t3code:rooms-workspace-sidebar-open:v1";
+export const ROOMS_LAST_ROUTE_STORAGE_KEY = "t3code:rooms-last-route:v1";
 
 export type RoomsWorkspaceSurface =
   | { readonly kind: "dashboard" }
@@ -62,7 +63,11 @@ export function projectSectionLabel(projectSection: string): string {
   return projectSection.charAt(0).toUpperCase() + projectSection.slice(1).replaceAll("-", " ");
 }
 
-export function roomsSurfaceSourceLabel(surface: RoomsWorkspaceSurface): string {
+export function roomsSurfaceSourceLabel(
+  surface: RoomsWorkspaceSurface,
+  sourceMode: RoomsDataSourceMode,
+): string {
+  if (sourceMode === "local") return "Local T3 only";
   return surface.kind === "native-thread" || surface.kind === "native-draft"
     ? "Local T3 thread"
     : surface.kind === "threads"
@@ -71,7 +76,7 @@ export function roomsSurfaceSourceLabel(surface: RoomsWorkspaceSurface): string 
 }
 
 export function buildRoomsBreadcrumbs(
-  room: RoomsRoom,
+  room: { readonly name: string },
   surface: RoomsWorkspaceSurface,
 ): readonly RoomsBreadcrumb[] {
   const roomCrumb = { label: room.name, target: { kind: "dashboard" } as const };
@@ -115,5 +120,27 @@ export function buildRoomsBreadcrumbs(
     }
     case "present":
       return [roomCrumb, { label: "Present" }];
+  }
+}
+
+export function roomsRoutePath(roomSlug: string, surface: RoomsWorkspaceSurface): string {
+  const roomBase = `/rooms/${encodeURIComponent(roomSlug)}`;
+  switch (surface.kind) {
+    case "dashboard":
+      return `${roomBase}/dashboard`;
+    case "channel":
+      return `${roomBase}/channels/${encodeURIComponent(surface.channelSlug)}`;
+    case "threads":
+      return `${roomBase}/threads`;
+    case "native-thread":
+      return `${roomBase}/threads/${encodeURIComponent(surface.environmentId)}/${encodeURIComponent(surface.threadId)}`;
+    case "native-draft":
+      return `${roomBase}/draft/${encodeURIComponent(surface.draftId)}`;
+    case "project": {
+      const base = `${roomBase}/project/${encodeURIComponent(surface.projectSection)}`;
+      return surface.projectView ? `${base}/${encodeURIComponent(surface.projectView)}` : base;
+    }
+    case "present":
+      return `${roomBase}/present`;
   }
 }

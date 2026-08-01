@@ -38,6 +38,7 @@ import {
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { RoomsWorkspaceRail } from "../features/rooms/shell/RoomsWorkspaceRail";
 import { ROOMS_SIDEBAR_OPEN_STORAGE_KEY } from "../features/rooms/shell/navigation";
+import { RoomsDataSourceProvider } from "../features/rooms/dataSource";
 
 const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "90px";
 const ROOMS_WORKSPACE_RAIL_WIDTH = "3.5rem";
@@ -256,40 +257,42 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   }, [navigate, pathname]);
 
   return (
-    <SidebarProvider className="h-dvh! min-h-0!" defaultOpen style={sidebarProviderStyle}>
-      {showRoomsSidebar ? (
-        <RoomsWorkspaceRail
-          reserveMacosWindowControls={roomsTitlebarPresentation.reserveMacosWindowControls}
-        />
-      ) : null}
-      {showRoomsSidebar ? null : (
-        <Sidebar
-          side="left"
-          collapsible="offcanvas"
-          data-app-sidebar=""
-          data-sidebar-version={useSidebarV2Theme ? "v2" : "v1"}
-          className="left-[var(--rooms-workspace-rail-width)] border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
-          resizable={{
-            maxWidth: sidebarMaximumWidth,
-            minWidth: THREAD_SIDEBAR_MIN_WIDTH,
-            shouldAcceptWidth: ({ currentWidth, nextWidth, wrapper }) =>
-              nextWidth <= currentWidth ||
-              wrapper.clientWidth - nextWidth >= THREAD_MAIN_CONTENT_MIN_WIDTH,
-            storageKey: THREAD_SIDEBAR_WIDTH_STORAGE_KEY,
-            onResize: setSidebarWidth,
-          }}
-        >
-          {useSidebarV2 ? <ThreadSidebarV2 /> : <ThreadSidebar />}
-          <SidebarRail />
-        </Sidebar>
-      )}
-      {children}
-      {showRoomsSidebar ? (
-        <RoomsSidebarShortcut toggleSidebar={toggleRoomsSidebar} />
-      ) : (
-        <SidebarControl />
-      )}
-    </SidebarProvider>
+    <RoomsDataSourceProvider>
+      <SidebarProvider className="h-dvh! min-h-0!" defaultOpen style={sidebarProviderStyle}>
+        {showRoomsSidebar ? (
+          <RoomsWorkspaceRail
+            reserveMacosWindowControls={roomsTitlebarPresentation.reserveMacosWindowControls}
+          />
+        ) : null}
+        {showRoomsSidebar ? null : (
+          <Sidebar
+            side="left"
+            collapsible="offcanvas"
+            data-app-sidebar=""
+            data-sidebar-version={useSidebarV2Theme ? "v2" : "v1"}
+            className="left-[var(--rooms-workspace-rail-width)] border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
+            resizable={{
+              maxWidth: sidebarMaximumWidth,
+              minWidth: THREAD_SIDEBAR_MIN_WIDTH,
+              shouldAcceptWidth: ({ currentWidth, nextWidth, wrapper }) =>
+                nextWidth <= currentWidth ||
+                wrapper.clientWidth - nextWidth >= THREAD_MAIN_CONTENT_MIN_WIDTH,
+              storageKey: THREAD_SIDEBAR_WIDTH_STORAGE_KEY,
+              onResize: setSidebarWidth,
+            }}
+          >
+            {useSidebarV2 ? <ThreadSidebarV2 /> : <ThreadSidebar />}
+            <SidebarRail />
+          </Sidebar>
+        )}
+        {children}
+        {showRoomsSidebar ? (
+          <RoomsSidebarShortcut toggleSidebar={toggleRoomsSidebar} />
+        ) : (
+          <SidebarControl />
+        )}
+      </SidebarProvider>
+    </RoomsDataSourceProvider>
   );
 }
 

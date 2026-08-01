@@ -8,16 +8,36 @@ import {
 
 import { cn } from "~/lib/utils";
 
+import type { RoomsDataSourceMode, RoomsSourceRoom } from "../dataSource";
 import {
   channelSlugFromName,
   projectSectionSlug,
   type RoomsNavigationTarget,
   type RoomsWorkspaceSurface,
 } from "./navigation";
-import type { RoomsRoom, RoomsWorkspace } from "../model/workspace";
+import type { RoomsWorkspace } from "../model/workspace";
 import { RoomsYourThreadsNavigation } from "../threads/RoomsThreadNavigation";
 
 export type RoomsWorkspaceNavigate = (target: RoomsNavigationTarget) => void;
+
+const LOCAL_PROJECT_NAVIGATION = [
+  { key: "vision", label: "Vision" },
+  { key: "stories", label: "Stories" },
+  { key: "evidence", label: "Evidence" },
+  { key: "audit_decisions", label: "Audit & Decisions" },
+] as const;
+
+export function roomsProjectNavigationItems(
+  sourceMode: RoomsDataSourceMode,
+  workspace: RoomsWorkspace | null,
+): readonly { readonly key: string; readonly label: string }[] {
+  if (sourceMode === "local") return LOCAL_PROJECT_NAVIGATION;
+  return (
+    workspace?.navigation.filter((item) =>
+      ["vision", "stories", "evidence", "audit_decisions"].includes(item.key),
+    ) ?? []
+  );
+}
 
 function WorkspaceNavItem({
   active,
@@ -56,11 +76,13 @@ function WorkspaceNavItem({
 export function RoomsWorkspaceNavigation({
   navigate,
   room,
+  sourceMode,
   surface,
   workspace,
 }: {
   readonly navigate: RoomsWorkspaceNavigate;
-  readonly room: RoomsRoom;
+  readonly room: RoomsSourceRoom;
+  readonly sourceMode: RoomsDataSourceMode;
   readonly surface: RoomsWorkspaceSurface;
   readonly workspace: RoomsWorkspace | null;
 }) {
@@ -72,14 +94,15 @@ export function RoomsWorkspaceNavigation({
       <div className="border-b border-border px-3 py-3">
         <p className="truncate text-sm font-semibold text-foreground">{room.name}</p>
         <p className="mt-0.5 text-[11px] text-muted-foreground">
-          {room.locality === "local_only" ? "Local-only room" : "Shared room"} ·{" "}
-          {room.membership.role}
+          {sourceMode === "local"
+            ? "Local T3 only"
+            : `${room.locality === "local_only" ? "Local-only room" : "Shared room"} · ${room.membershipRole}`}
         </p>
       </div>
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-2 py-3">
         <WorkspaceNavItem
           active={surface.kind === "dashboard"}
-          badge={room.unread.count}
+          badge={room.unreadCount ?? undefined}
           icon={LayoutDashboardIcon}
           label="Dashboard"
           onClick={() => navigate({ kind: "dashboard" })}
@@ -88,7 +111,11 @@ export function RoomsWorkspaceNavigation({
         <p className="mb-1 mt-5 px-2 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground/65 uppercase">
           Channels
         </p>
-        {workspace ? (
+        {sourceMode === "local" ? (
+          <p className="px-2 py-1.5 text-xs leading-relaxed text-muted-foreground">
+            Channel messaging isn&apos;t connected yet.
+          </p>
+        ) : workspace ? (
           workspace.channels.map((channel) => {
             const channelSlug = channelSlugFromName(channel.name);
             return (
@@ -106,31 +133,31 @@ export function RoomsWorkspaceNavigation({
           <p className="px-2 py-1.5 text-xs text-muted-foreground">No channel fixture.</p>
         )}
 
-        <RoomsYourThreadsNavigation navigate={navigate} room={room} surface={surface} />
+        <RoomsYourThreadsNavigation
+          navigate={navigate}
+          room={room}
+          sourceMode={sourceMode}
+          surface={surface}
+        />
 
         <p className="mb-1 mt-5 px-2 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground/65 uppercase">
           Project
         </p>
-        {workspace ? (
-          workspace.navigation
-            .filter((item) =>
-              ["vision", "stories", "evidence", "audit_decisions"].includes(item.key),
-            )
-            .map((item) => {
-              const projectSection = projectSectionSlug(item.key);
-              return (
-                <WorkspaceNavItem
-                  active={surface.kind === "project" && surface.projectSection === projectSection}
-                  icon={FileTextIcon}
-                  key={item.key}
-                  label={item.label}
-                  onClick={() => navigate({ kind: "project", projectSection })}
-                />
-              );
-            })
-        ) : (
+        {roomsProjectNavigationItems(sourceMode, workspace).map((item) => {
+          const projectSection = projectSectionSlug(item.key);
+          return (
+            <WorkspaceNavItem
+              active={surface.kind === "project" && surface.projectSection === projectSection}
+              icon={FileTextIcon}
+              key={item.key}
+              label={item.label}
+              onClick={() => navigate({ kind: "project", projectSection })}
+            />
+          );
+        })}
+        {sourceMode === "sample" && !workspace ? (
           <p className="px-2 py-1.5 text-xs text-muted-foreground">No project fixture.</p>
-        )}
+        ) : null}
 
         <p className="mb-1 mt-5 px-2 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground/65 uppercase">
           Present
@@ -138,7 +165,7 @@ export function RoomsWorkspaceNavigation({
         <WorkspaceNavItem
           active={surface.kind === "present"}
           badge={
-            workspace
+            sourceMode === "sample" && workspace
               ? workspace.presence.human_ids.length +
                 workspace.presence.agent_ids.length +
                 workspace.presence.machine_ids.length
