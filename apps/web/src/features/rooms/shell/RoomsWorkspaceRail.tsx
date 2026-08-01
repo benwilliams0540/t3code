@@ -63,11 +63,11 @@ export function RoomsWorkspaceRail({
       data-rooms-workspace-rail=""
     >
       <div
-        className="drag-region flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-center"
+        className="drag-region relative z-10 flex h-[var(--workspace-topbar-height)] w-[var(--rooms-window-controls-width)] shrink-0 self-start bg-sidebar"
         data-rooms-macos-window-controls-spacer={reserveMacosWindowControls ? "" : undefined}
       >
         {reserveMacosWindowControls ? null : (
-          <BoxesIcon aria-hidden className="size-4 text-muted-foreground" />
+          <BoxesIcon aria-hidden className="m-auto size-4 text-muted-foreground" />
         )}
         <span className="sr-only">Rooms</span>
       </div>

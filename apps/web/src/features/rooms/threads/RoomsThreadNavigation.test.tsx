@@ -1,9 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { DropdownMenuLabel } from "~/components/ui/menu";
 
-import { RoomsMenuGroup } from "./RoomsThreadNavigation";
+import { RoomsMenuGroup, RoomsNativeThreadNavItem } from "./RoomsThreadNavigation";
 
 describe("Rooms thread menu groups", () => {
   it("keeps every group label inside the Base UI menu-group context", () => {
@@ -20,5 +21,32 @@ describe("Rooms thread menu groups", () => {
     expect(markup).toContain('data-slot="menu-group"');
     expect(markup).toContain('data-slot="menu-label"');
     expect(markup).toContain("Local room projects");
+  });
+});
+
+describe("Rooms native thread navigation", () => {
+  it("ellipsizes a long thread title while preserving the full title for hover", () => {
+    const title = "Inspect t3rooms Application Environment Without Losing the End";
+    const markup = renderToStaticMarkup(
+      <RoomsNativeThreadNavItem
+        active
+        navigate={() => undefined}
+        projectTitle="t3rooms"
+        thread={{
+          environmentId: EnvironmentId.make("environment-local"),
+          projectId: ProjectId.make("project-rooms"),
+          threadId: ThreadId.make("thread-long-title"),
+          title,
+          projectTitle: "t3rooms",
+          updatedAt: "2026-08-01T13:30:00.000Z",
+        }}
+      />,
+    );
+
+    expect(markup).toContain(title);
+    expect(markup).toContain(`title="${title} · t3rooms"`);
+    expect(markup).toContain("overflow-hidden");
+    expect(markup).toContain("truncate");
+    expect(markup).not.toContain("break-words");
   });
 });

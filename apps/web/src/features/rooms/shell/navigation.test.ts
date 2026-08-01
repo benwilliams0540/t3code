@@ -8,6 +8,7 @@ import {
   isRoomsWorkspaceEnabled,
   projectSectionSlug,
   roomsSurfaceSourceLabel,
+  shouldUseRoomsWorkspaceLanding,
 } from "./navigation";
 
 describe("Rooms shell navigation", () => {
@@ -23,6 +24,9 @@ describe("Rooms shell navigation", () => {
     expect(isRoomsWorkspaceEnabled("v1")).toBe(false);
     expect(isRoomsWorkspaceEnabled("v2")).toBe(false);
     expect(isRoomsWorkspaceEnabled("v3")).toBe(true);
+    expect(shouldUseRoomsWorkspaceLanding("v1")).toBe(false);
+    expect(shouldUseRoomsWorkspaceLanding("v2")).toBe(false);
+    expect(shouldUseRoomsWorkspaceLanding("v3")).toBe(true);
   });
 
   it("builds nested project and channel breadcrumbs", () => {

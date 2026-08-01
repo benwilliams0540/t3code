@@ -189,7 +189,7 @@ function NewThreadControl({
   );
 }
 
-function NativeThreadNavItem({
+export function RoomsNativeThreadNavItem({
   active,
   navigate,
   projectTitle,
@@ -204,7 +204,7 @@ function NativeThreadNavItem({
     <button
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+        "flex w-full min-w-0 items-center gap-2 overflow-hidden rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
         active && "bg-muted text-foreground",
       )}
       data-rooms-native-thread-id={thread.threadId}
@@ -219,7 +219,7 @@ function NativeThreadNavItem({
       type="button"
     >
       <MessageSquareTextIcon aria-hidden className="size-3.5 shrink-0" />
-      <span className="truncate">{thread.title}</span>
+      <span className="min-w-0 flex-1 truncate">{thread.title}</span>
     </button>
   );
 }
@@ -241,7 +241,7 @@ export function RoomsYourThreadsNavigation({
   );
 
   return (
-    <section aria-label="Your Threads" data-rooms-native-threads="">
+    <section aria-label="Your Threads" className="min-w-0" data-rooms-native-threads="">
       <div className="mb-1 mt-5 flex items-center gap-1 px-2">
         <p className="min-w-0 flex-1 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground/65 uppercase">
           Your Threads
@@ -256,7 +256,7 @@ export function RoomsYourThreadsNavigation({
         </div>
       ) : null}
       {threads.map((thread) => (
-        <NativeThreadNavItem
+        <RoomsNativeThreadNavItem
           active={
             surface.kind === "native-thread" &&
             surface.environmentId === thread.environmentId &&

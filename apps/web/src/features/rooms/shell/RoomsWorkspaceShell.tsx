@@ -1,10 +1,19 @@
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowLeftIcon, ArrowRightIcon, ChevronRightIcon } from "lucide-react";
-import { useCallback, useEffect } from "react";
+import * as Schema from "effect/Schema";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  ChevronRightIcon,
+  PanelLeftCloseIcon,
+  PanelLeftIcon,
+} from "lucide-react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 
 import { useAppSidebarVariantSelection } from "~/components/appSidebarVariant";
 import { Button } from "~/components/ui/button";
 import { SidebarInset } from "~/components/ui/sidebar";
+import { useLocalStorage } from "~/hooks/useLocalStorage";
+import { useResizableWidth } from "~/hooks/useResizableWidth";
 import { cn } from "~/lib/utils";
 
 import { roomsWorkspaceFixture } from "../fixtures";
@@ -14,12 +23,28 @@ import {
   buildRoomsBreadcrumbs,
   isRoomsWorkspaceEnabled,
   roomsSurfaceSourceLabel,
+  ROOMS_SIDEBAR_OPEN_STORAGE_KEY,
   type RoomsNavigationTarget,
   type RoomsWorkspaceSurface,
 } from "./navigation";
 import { RoomsWorkspaceNavigation, type RoomsWorkspaceNavigate } from "./RoomsWorkspaceNavigation";
+import {
+  resolveRoomsSidebarMaximumWidth,
+  ROOMS_SIDEBAR_DEFAULT_WIDTH,
+  ROOMS_SIDEBAR_MIN_WIDTH,
+  ROOMS_SIDEBAR_WIDTH_STORAGE_KEY,
+} from "./roomsSidebarWidth";
 import { RoomsWorkspaceSurfaceView } from "./RoomsWorkspaceSurface";
 import { useRoomsWorkspaceSelection } from "./useRoomsWorkspaceSelection";
+
+function subscribeToViewportWidth(onChange: () => void): () => void {
+  window.addEventListener("resize", onChange);
+  return () => window.removeEventListener("resize", onChange);
+}
+
+function readViewportWidth(): number {
+  return window.innerWidth;
+}
 
 function useNavigateWithinRoom(room: RoomsRoom | null): (target: RoomsNavigationTarget) => void {
   const navigate = useNavigate();
@@ -83,9 +108,13 @@ function useNavigateWithinRoom(room: RoomsRoom | null): (target: RoomsNavigation
 }
 
 function RoomsBreadcrumbBar({
+  isSidebarVisible,
+  onToggleSidebar,
   room,
   surface,
 }: {
+  readonly isSidebarVisible: boolean;
+  readonly onToggleSidebar: () => void;
   readonly room: RoomsRoom;
   readonly surface: RoomsWorkspaceSurface;
 }) {
@@ -93,9 +122,21 @@ function RoomsBreadcrumbBar({
   const breadcrumbs = buildRoomsBreadcrumbs(room, surface);
 
   return (
-    <header className="workspace-topbar drag-region flex shrink-0 items-center gap-1 border-b border-border pl-[calc(var(--rooms-titlebar-leading-inset)+0.75rem)] pr-3 sm:pl-[calc(var(--rooms-titlebar-leading-inset)+1rem)] sm:pr-4">
+    <header className="workspace-topbar drag-region relative z-40 flex shrink-0 items-center gap-1 border-b border-border pl-[calc(var(--rooms-titlebar-leading-inset)+0.75rem)] pr-3 sm:pl-[calc(var(--rooms-titlebar-leading-inset)+1rem)] sm:pr-4">
+      <Button
+        aria-label={isSidebarVisible ? "Collapse Rooms sidebar" : "Expand Rooms sidebar"}
+        aria-pressed={isSidebarVisible}
+        className="mr-1 hidden size-[var(--workspace-titlebar-control-size)] shrink-0 md:inline-flex"
+        onClick={onToggleSidebar}
+        size="icon"
+        title={isSidebarVisible ? "Collapse Rooms sidebar" : "Expand Rooms sidebar"}
+        variant="ghost"
+      >
+        {isSidebarVisible ? <PanelLeftCloseIcon /> : <PanelLeftIcon />}
+      </Button>
       <Button
         aria-label="Go back"
+        className="shrink-0"
         onClick={() => window.history.back()}
         size="icon-xs"
         title="Back"
@@ -105,6 +146,7 @@ function RoomsBreadcrumbBar({
       </Button>
       <Button
         aria-label="Go forward"
+        className="shrink-0"
         onClick={() => window.history.forward()}
         size="icon-xs"
         title="Forward"
@@ -159,6 +201,22 @@ export function RoomsWorkspaceShell({
   const [sidebarVariant] = useAppSidebarVariantSelection();
   const room = findDeclaredRoomBySlug(roomsWorkspaceFixture.rooms, roomSlug);
   const { selectRoom } = useRoomsWorkspaceSelection();
+  const [isSidebarVisible, setSidebarVisible] = useLocalStorage(
+    ROOMS_SIDEBAR_OPEN_STORAGE_KEY,
+    true,
+    Schema.Boolean,
+  );
+  const toggleSidebar = useCallback(() => {
+    setSidebarVisible((visible) => !visible);
+  }, [setSidebarVisible]);
+  const viewportWidth = useSyncExternalStore(subscribeToViewportWidth, readViewportWidth);
+  const { width: sidebarWidth, handlers: sidebarResizeHandlers } = useResizableWidth({
+    storageKey: ROOMS_SIDEBAR_WIDTH_STORAGE_KEY,
+    defaultWidth: ROOMS_SIDEBAR_DEFAULT_WIDTH,
+    minWidth: ROOMS_SIDEBAR_MIN_WIDTH,
+    maxWidth: resolveRoomsSidebarMaximumWidth(viewportWidth),
+    edge: "right",
+  });
   const navigateWithinRoom = useNavigateWithinRoom(room);
   useEffect(() => {
     if (!isRoomsWorkspaceEnabled(sidebarVariant)) {
@@ -190,16 +248,39 @@ export function RoomsWorkspaceShell({
   const workspace = workspaceForDeclaredRoom(roomsWorkspaceFixture, room.id);
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground">
-      <RoomsBreadcrumbBar room={room} surface={surface} />
+      <RoomsBreadcrumbBar
+        isSidebarVisible={isSidebarVisible}
+        onToggleSidebar={toggleSidebar}
+        room={room}
+        surface={surface}
+      />
       <div className="flex min-h-0 min-w-0 flex-1">
-        <aside className="hidden w-60 shrink-0 border-r border-border bg-sidebar/45 md:flex">
-          <RoomsWorkspaceNavigation
-            navigate={navigateWithinRoom as RoomsWorkspaceNavigate}
-            room={room}
-            surface={surface}
-            workspace={workspace}
-          />
-        </aside>
+        {isSidebarVisible ? (
+          <aside
+            className="relative hidden shrink-0 border-r border-border bg-sidebar/45 md:flex"
+            data-rooms-sidebar=""
+            style={{ width: `${sidebarWidth}px` }}
+          >
+            <RoomsWorkspaceNavigation
+              navigate={navigateWithinRoom as RoomsWorkspaceNavigate}
+              room={room}
+              surface={surface}
+              workspace={workspace}
+            />
+            <button
+              aria-label="Resize Rooms sidebar"
+              className="absolute inset-y-0 -right-2 z-30 w-4 cursor-col-resize touch-none after:absolute after:inset-y-0 after:left-1/2 after:w-px hover:after:bg-sidebar-border"
+              data-rooms-sidebar-resize-handle=""
+              onPointerCancel={sidebarResizeHandlers.onPointerCancel}
+              onPointerDown={sidebarResizeHandlers.onPointerDown}
+              onPointerMove={sidebarResizeHandlers.onPointerMove}
+              onPointerUp={sidebarResizeHandlers.onPointerUp}
+              tabIndex={-1}
+              title="Drag to resize Rooms sidebar"
+              type="button"
+            />
+          </aside>
+        ) : null}
         <div
           className={cn(
             "flex min-h-0 min-w-0 flex-1 flex-col",

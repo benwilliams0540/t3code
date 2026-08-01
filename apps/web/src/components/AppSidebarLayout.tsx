@@ -1,6 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import * as Schema from "effect/Schema";
 import {
+  useCallback,
   useEffect,
   useState,
   useSyncExternalStore,
@@ -10,7 +11,7 @@ import {
 import { useLocation, useNavigate } from "@tanstack/react-router";
 
 import { isElectron } from "../env";
-import { getLocalStorageItem } from "../hooks/useLocalStorage";
+import { getLocalStorageItem, useLocalStorage } from "../hooks/useLocalStorage";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import { cn, isMacPlatform } from "../lib/utils";
 import { primaryServerKeybindingsAtom } from "../state/server";
@@ -36,10 +37,12 @@ import {
 } from "./ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { RoomsWorkspaceRail } from "../features/rooms/shell/RoomsWorkspaceRail";
+import { ROOMS_SIDEBAR_OPEN_STORAGE_KEY } from "../features/rooms/shell/navigation";
 
 const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "90px";
 const ROOMS_WORKSPACE_RAIL_WIDTH = "3.5rem";
-const ROOMS_MACOS_TITLEBAR_LEADING_INSET = `calc(${MACOS_TRAFFIC_LIGHTS_LEFT_INSET} - ${ROOMS_WORKSPACE_RAIL_WIDTH})`;
+const ROOMS_MACOS_TRAFFIC_LIGHTS_SAFE_INSET = "112px";
+const ROOMS_MACOS_TITLEBAR_CONTROL_GAP = "0.75rem";
 
 export function resolveRoomsTitlebarPresentation(input: {
   readonly isMacosDesktop: boolean;
@@ -48,12 +51,16 @@ export function resolveRoomsTitlebarPresentation(input: {
 }): {
   readonly leadingInset: string;
   readonly reserveMacosWindowControls: boolean;
+  readonly windowControlsWidth: string;
 } {
   const reserveMacosWindowControls =
     input.showRoomsSidebar && input.isMacosDesktop && !input.isWindowFullscreen;
   return {
-    leadingInset: reserveMacosWindowControls ? ROOMS_MACOS_TITLEBAR_LEADING_INSET : "0px",
+    leadingInset: reserveMacosWindowControls ? ROOMS_MACOS_TITLEBAR_CONTROL_GAP : "0px",
     reserveMacosWindowControls,
+    windowControlsWidth: reserveMacosWindowControls
+      ? ROOMS_MACOS_TRAFFIC_LIGHTS_SAFE_INSET
+      : ROOMS_WORKSPACE_RAIL_WIDTH,
   };
 }
 
@@ -136,6 +143,32 @@ function SidebarControl() {
   );
 }
 
+function RoomsSidebarShortcut({ toggleSidebar }: { readonly toggleSidebar: () => void }) {
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.closest("[data-keybinding-capture]")
+      ) {
+        return;
+      }
+      if (resolveShortcutCommand(event, keybindings) !== "sidebar.toggle") return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      toggleSidebar();
+    };
+
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [keybindings, toggleSidebar]);
+
+  return null;
+}
+
 export function AppSidebarLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [sidebarVariant] = useAppSidebarVariantSelection();
@@ -149,6 +182,14 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   });
   const isMacosDesktop = isElectron && isMacPlatform(navigator.platform);
   const [sidebarWidth, setSidebarWidth] = useState(readInitialThreadSidebarWidth);
+  const [, setRoomsSidebarOpen] = useLocalStorage(
+    ROOMS_SIDEBAR_OPEN_STORAGE_KEY,
+    true,
+    Schema.Boolean,
+  );
+  const toggleRoomsSidebar = useCallback(() => {
+    setRoomsSidebarOpen((open) => !open);
+  }, [setRoomsSidebarOpen]);
   // Subscribed rather than read once: the clamp must track live window size,
   // and a clamped drag ends with an unchanged width, which skips the re-render
   // that would otherwise refresh a render-time snapshot.
@@ -172,6 +213,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   const sidebarProviderStyle = {
     "--rooms-workspace-rail-width": showRoomsSidebar ? ROOMS_WORKSPACE_RAIL_WIDTH : "0rem",
     "--rooms-titlebar-leading-inset": roomsTitlebarPresentation.leadingInset,
+    "--rooms-window-controls-width": roomsTitlebarPresentation.windowControlsWidth,
     "--sidebar-width": sidebarWidth + "px",
     "--workspace-controls-left": workspaceControlsLeft,
   } as CSSProperties;
@@ -242,7 +284,11 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
         </Sidebar>
       )}
       {children}
-      {showRoomsSidebar ? null : <SidebarControl />}
+      {showRoomsSidebar ? (
+        <RoomsSidebarShortcut toggleSidebar={toggleRoomsSidebar} />
+      ) : (
+        <SidebarControl />
+      )}
     </SidebarProvider>
   );
 }

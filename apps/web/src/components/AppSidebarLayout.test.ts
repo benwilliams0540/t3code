@@ -83,8 +83,9 @@ describe("Rooms macOS title-bar presentation", () => {
         showRoomsSidebar: true,
       }),
     ).toEqual({
-      leadingInset: "calc(90px - 3.5rem)",
+      leadingInset: "0.75rem",
       reserveMacosWindowControls: true,
+      windowControlsWidth: "112px",
     });
 
     for (const presentation of [
@@ -107,6 +108,7 @@ describe("Rooms macOS title-bar presentation", () => {
       expect(presentation).toEqual({
         leadingInset: "0px",
         reserveMacosWindowControls: false,
+        windowControlsWidth: "3.5rem",
       });
     }
   });

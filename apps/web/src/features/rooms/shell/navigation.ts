@@ -1,5 +1,7 @@
 import type { RoomsRoom } from "../model/workspace";
 
+export const ROOMS_SIDEBAR_OPEN_STORAGE_KEY = "t3code:rooms-workspace-sidebar-open:v1";
+
 export type RoomsWorkspaceSurface =
   | { readonly kind: "dashboard" }
   | { readonly kind: "channel"; readonly channelSlug: string }
@@ -41,6 +43,10 @@ export interface RoomsBreadcrumb {
 
 export function isRoomsWorkspaceEnabled(sidebarVariant: "v1" | "v2" | "v3"): boolean {
   return sidebarVariant === "v3";
+}
+
+export function shouldUseRoomsWorkspaceLanding(sidebarVariant: "v1" | "v2" | "v3"): boolean {
+  return isRoomsWorkspaceEnabled(sidebarVariant);
 }
 
 export function channelSlugFromName(channelName: string): string {

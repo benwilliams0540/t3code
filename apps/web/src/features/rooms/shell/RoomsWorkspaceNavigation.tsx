@@ -65,7 +65,10 @@ export function RoomsWorkspaceNavigation({
   readonly workspace: RoomsWorkspace | null;
 }) {
   return (
-    <nav aria-label={room.name + " workspace"} className="flex min-h-0 flex-1 flex-col">
+    <nav
+      aria-label={room.name + " workspace"}
+      className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden"
+    >
       <div className="border-b border-border px-3 py-3">
         <p className="truncate text-sm font-semibold text-foreground">{room.name}</p>
         <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -73,7 +76,7 @@ export function RoomsWorkspaceNavigation({
           {room.membership.role}
         </p>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-2 py-3">
         <WorkspaceNavItem
           active={surface.kind === "dashboard"}
           badge={room.unread.count}
@@ -94,7 +97,7 @@ export function RoomsWorkspaceNavigation({
                 badge={channel.unread.count}
                 icon={HashIcon}
                 key={channel.id}
-                label={channel.name}
+                label={channelSlug}
                 onClick={() => navigate({ kind: "channel", channelSlug })}
               />
             );
