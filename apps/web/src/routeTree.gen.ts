@@ -32,7 +32,9 @@ import { Route as ChatRoomsRoomSlugThreadsRouteImport } from './routes/_chat.roo
 import { Route as ChatRoomsRoomSlugPresentRouteImport } from './routes/_chat.rooms.$roomSlug.present'
 import { Route as ChatRoomsRoomSlugDashboardRouteImport } from './routes/_chat.rooms.$roomSlug.dashboard'
 import { Route as ChatRoomsRoomSlugProjectProjectSectionRouteImport } from './routes/_chat.rooms.$roomSlug.project.$projectSection'
+import { Route as ChatRoomsRoomSlugDraftDraftIdRouteImport } from './routes/_chat.rooms.$roomSlug.draft.$draftId'
 import { Route as ChatRoomsRoomSlugChannelsChannelSlugRouteImport } from './routes/_chat.rooms.$roomSlug.channels.$channelSlug'
+import { Route as ChatRoomsRoomSlugThreadsEnvironmentIdThreadIdRouteImport } from './routes/_chat.rooms.$roomSlug.threads_.$environmentId.$threadId'
 import { Route as ChatRoomsRoomSlugProjectProjectSectionProjectViewRouteImport } from './routes/_chat.rooms.$roomSlug.project.$projectSection_.$projectView'
 
 const SettingsRoute = SettingsRouteImport.update({
@@ -154,10 +156,22 @@ const ChatRoomsRoomSlugProjectProjectSectionRoute =
     path: '/$roomSlug/project/$projectSection',
     getParentRoute: () => ChatRoomsRoute,
   } as any)
+const ChatRoomsRoomSlugDraftDraftIdRoute =
+  ChatRoomsRoomSlugDraftDraftIdRouteImport.update({
+    id: '/$roomSlug/draft/$draftId',
+    path: '/$roomSlug/draft/$draftId',
+    getParentRoute: () => ChatRoomsRoute,
+  } as any)
 const ChatRoomsRoomSlugChannelsChannelSlugRoute =
   ChatRoomsRoomSlugChannelsChannelSlugRouteImport.update({
     id: '/$roomSlug/channels/$channelSlug',
     path: '/$roomSlug/channels/$channelSlug',
+    getParentRoute: () => ChatRoomsRoute,
+  } as any)
+const ChatRoomsRoomSlugThreadsEnvironmentIdThreadIdRoute =
+  ChatRoomsRoomSlugThreadsEnvironmentIdThreadIdRouteImport.update({
+    id: '/$roomSlug/threads_/$environmentId/$threadId',
+    path: '/$roomSlug/threads/$environmentId/$threadId',
     getParentRoute: () => ChatRoomsRoute,
   } as any)
 const ChatRoomsRoomSlugProjectProjectSectionProjectViewRoute =
@@ -190,8 +204,10 @@ export interface FileRoutesByFullPath {
   '/rooms/$roomSlug/present': typeof ChatRoomsRoomSlugPresentRoute
   '/rooms/$roomSlug/threads': typeof ChatRoomsRoomSlugThreadsRoute
   '/rooms/$roomSlug/channels/$channelSlug': typeof ChatRoomsRoomSlugChannelsChannelSlugRoute
+  '/rooms/$roomSlug/draft/$draftId': typeof ChatRoomsRoomSlugDraftDraftIdRoute
   '/rooms/$roomSlug/project/$projectSection': typeof ChatRoomsRoomSlugProjectProjectSectionRoute
   '/rooms/$roomSlug/project/$projectSection/$projectView': typeof ChatRoomsRoomSlugProjectProjectSectionProjectViewRoute
+  '/rooms/$roomSlug/threads/$environmentId/$threadId': typeof ChatRoomsRoomSlugThreadsEnvironmentIdThreadIdRoute
 }
 export interface FileRoutesByTo {
   '/connect': typeof ConnectRoute
@@ -215,8 +231,10 @@ export interface FileRoutesByTo {
   '/rooms/$roomSlug/present': typeof ChatRoomsRoomSlugPresentRoute
   '/rooms/$roomSlug/threads': typeof ChatRoomsRoomSlugThreadsRoute
   '/rooms/$roomSlug/channels/$channelSlug': typeof ChatRoomsRoomSlugChannelsChannelSlugRoute
+  '/rooms/$roomSlug/draft/$draftId': typeof ChatRoomsRoomSlugDraftDraftIdRoute
   '/rooms/$roomSlug/project/$projectSection': typeof ChatRoomsRoomSlugProjectProjectSectionRoute
   '/rooms/$roomSlug/project/$projectSection/$projectView': typeof ChatRoomsRoomSlugProjectProjectSectionProjectViewRoute
+  '/rooms/$roomSlug/threads/$environmentId/$threadId': typeof ChatRoomsRoomSlugThreadsEnvironmentIdThreadIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -243,8 +261,10 @@ export interface FileRoutesById {
   '/_chat/rooms/$roomSlug/present': typeof ChatRoomsRoomSlugPresentRoute
   '/_chat/rooms/$roomSlug/threads': typeof ChatRoomsRoomSlugThreadsRoute
   '/_chat/rooms/$roomSlug/channels/$channelSlug': typeof ChatRoomsRoomSlugChannelsChannelSlugRoute
+  '/_chat/rooms/$roomSlug/draft/$draftId': typeof ChatRoomsRoomSlugDraftDraftIdRoute
   '/_chat/rooms/$roomSlug/project/$projectSection': typeof ChatRoomsRoomSlugProjectProjectSectionRoute
   '/_chat/rooms/$roomSlug/project/$projectSection_/$projectView': typeof ChatRoomsRoomSlugProjectProjectSectionProjectViewRoute
+  '/_chat/rooms/$roomSlug/threads_/$environmentId/$threadId': typeof ChatRoomsRoomSlugThreadsEnvironmentIdThreadIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -271,8 +291,10 @@ export interface FileRouteTypes {
     | '/rooms/$roomSlug/present'
     | '/rooms/$roomSlug/threads'
     | '/rooms/$roomSlug/channels/$channelSlug'
+    | '/rooms/$roomSlug/draft/$draftId'
     | '/rooms/$roomSlug/project/$projectSection'
     | '/rooms/$roomSlug/project/$projectSection/$projectView'
+    | '/rooms/$roomSlug/threads/$environmentId/$threadId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/connect'
@@ -296,8 +318,10 @@ export interface FileRouteTypes {
     | '/rooms/$roomSlug/present'
     | '/rooms/$roomSlug/threads'
     | '/rooms/$roomSlug/channels/$channelSlug'
+    | '/rooms/$roomSlug/draft/$draftId'
     | '/rooms/$roomSlug/project/$projectSection'
     | '/rooms/$roomSlug/project/$projectSection/$projectView'
+    | '/rooms/$roomSlug/threads/$environmentId/$threadId'
   id:
     | '__root__'
     | '/_chat'
@@ -323,8 +347,10 @@ export interface FileRouteTypes {
     | '/_chat/rooms/$roomSlug/present'
     | '/_chat/rooms/$roomSlug/threads'
     | '/_chat/rooms/$roomSlug/channels/$channelSlug'
+    | '/_chat/rooms/$roomSlug/draft/$draftId'
     | '/_chat/rooms/$roomSlug/project/$projectSection'
     | '/_chat/rooms/$roomSlug/project/$projectSection_/$projectView'
+    | '/_chat/rooms/$roomSlug/threads_/$environmentId/$threadId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -498,11 +524,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatRoomsRoomSlugProjectProjectSectionRouteImport
       parentRoute: typeof ChatRoomsRoute
     }
+    '/_chat/rooms/$roomSlug/draft/$draftId': {
+      id: '/_chat/rooms/$roomSlug/draft/$draftId'
+      path: '/$roomSlug/draft/$draftId'
+      fullPath: '/rooms/$roomSlug/draft/$draftId'
+      preLoaderRoute: typeof ChatRoomsRoomSlugDraftDraftIdRouteImport
+      parentRoute: typeof ChatRoomsRoute
+    }
     '/_chat/rooms/$roomSlug/channels/$channelSlug': {
       id: '/_chat/rooms/$roomSlug/channels/$channelSlug'
       path: '/$roomSlug/channels/$channelSlug'
       fullPath: '/rooms/$roomSlug/channels/$channelSlug'
       preLoaderRoute: typeof ChatRoomsRoomSlugChannelsChannelSlugRouteImport
+      parentRoute: typeof ChatRoomsRoute
+    }
+    '/_chat/rooms/$roomSlug/threads_/$environmentId/$threadId': {
+      id: '/_chat/rooms/$roomSlug/threads_/$environmentId/$threadId'
+      path: '/$roomSlug/threads/$environmentId/$threadId'
+      fullPath: '/rooms/$roomSlug/threads/$environmentId/$threadId'
+      preLoaderRoute: typeof ChatRoomsRoomSlugThreadsEnvironmentIdThreadIdRouteImport
       parentRoute: typeof ChatRoomsRoute
     }
     '/_chat/rooms/$roomSlug/project/$projectSection_/$projectView': {
@@ -521,8 +561,10 @@ interface ChatRoomsRouteChildren {
   ChatRoomsRoomSlugPresentRoute: typeof ChatRoomsRoomSlugPresentRoute
   ChatRoomsRoomSlugThreadsRoute: typeof ChatRoomsRoomSlugThreadsRoute
   ChatRoomsRoomSlugChannelsChannelSlugRoute: typeof ChatRoomsRoomSlugChannelsChannelSlugRoute
+  ChatRoomsRoomSlugDraftDraftIdRoute: typeof ChatRoomsRoomSlugDraftDraftIdRoute
   ChatRoomsRoomSlugProjectProjectSectionRoute: typeof ChatRoomsRoomSlugProjectProjectSectionRoute
   ChatRoomsRoomSlugProjectProjectSectionProjectViewRoute: typeof ChatRoomsRoomSlugProjectProjectSectionProjectViewRoute
+  ChatRoomsRoomSlugThreadsEnvironmentIdThreadIdRoute: typeof ChatRoomsRoomSlugThreadsEnvironmentIdThreadIdRoute
 }
 
 const ChatRoomsRouteChildren: ChatRoomsRouteChildren = {
@@ -532,10 +574,13 @@ const ChatRoomsRouteChildren: ChatRoomsRouteChildren = {
   ChatRoomsRoomSlugThreadsRoute: ChatRoomsRoomSlugThreadsRoute,
   ChatRoomsRoomSlugChannelsChannelSlugRoute:
     ChatRoomsRoomSlugChannelsChannelSlugRoute,
+  ChatRoomsRoomSlugDraftDraftIdRoute: ChatRoomsRoomSlugDraftDraftIdRoute,
   ChatRoomsRoomSlugProjectProjectSectionRoute:
     ChatRoomsRoomSlugProjectProjectSectionRoute,
   ChatRoomsRoomSlugProjectProjectSectionProjectViewRoute:
     ChatRoomsRoomSlugProjectProjectSectionProjectViewRoute,
+  ChatRoomsRoomSlugThreadsEnvironmentIdThreadIdRoute:
+    ChatRoomsRoomSlugThreadsEnvironmentIdThreadIdRoute,
 }
 
 const ChatRoomsRouteWithChildren = ChatRoomsRoute._addFileChildren(

@@ -1,5 +1,4 @@
 import {
-  BotIcon,
   FileTextIcon,
   HashIcon,
   LayoutDashboardIcon,
@@ -9,17 +8,16 @@ import {
 
 import { cn } from "~/lib/utils";
 
-import { channelSlugFromName, projectSectionSlug, type RoomsWorkspaceSurface } from "./navigation";
+import {
+  channelSlugFromName,
+  projectSectionSlug,
+  type RoomsNavigationTarget,
+  type RoomsWorkspaceSurface,
+} from "./navigation";
 import type { RoomsRoom, RoomsWorkspace } from "../model/workspace";
+import { RoomsYourThreadsNavigation } from "../threads/RoomsThreadNavigation";
 
-export type RoomsWorkspaceNavigate = (
-  target:
-    | { readonly kind: "dashboard" }
-    | { readonly kind: "channel"; readonly channelSlug: string }
-    | { readonly kind: "threads" }
-    | { readonly kind: "project"; readonly projectSection: string }
-    | { readonly kind: "present" },
-) => void;
+export type RoomsWorkspaceNavigate = (target: RoomsNavigationTarget) => void;
 
 function WorkspaceNavItem({
   active,
@@ -105,16 +103,7 @@ export function RoomsWorkspaceNavigation({
           <p className="px-2 py-1.5 text-xs text-muted-foreground">No channel fixture.</p>
         )}
 
-        <p className="mb-1 mt-5 px-2 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground/65 uppercase">
-          Your Threads
-        </p>
-        <WorkspaceNavItem
-          active={surface.kind === "threads"}
-          badge={workspace?.threads.filter((thread) => thread.status === "blocked").length}
-          icon={BotIcon}
-          label="Agent runs"
-          onClick={() => navigate({ kind: "threads" })}
-        />
+        <RoomsYourThreadsNavigation navigate={navigate} room={room} surface={surface} />
 
         <p className="mb-1 mt-5 px-2 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground/65 uppercase">
           Project

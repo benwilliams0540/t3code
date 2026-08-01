@@ -5,6 +5,7 @@ import { useCallback, useEffect } from "react";
 import { useAppSidebarVariantSelection } from "~/components/appSidebarVariant";
 import { Button } from "~/components/ui/button";
 import { SidebarInset } from "~/components/ui/sidebar";
+import { cn } from "~/lib/utils";
 
 import { roomsWorkspaceFixture } from "../fixtures";
 import { findDeclaredRoomBySlug, workspaceForDeclaredRoom } from "../model/selection";
@@ -12,6 +13,7 @@ import type { RoomsRoom } from "../model/workspace";
 import {
   buildRoomsBreadcrumbs,
   isRoomsWorkspaceEnabled,
+  roomsSurfaceSourceLabel,
   type RoomsNavigationTarget,
   type RoomsWorkspaceSurface,
 } from "./navigation";
@@ -41,6 +43,16 @@ function useNavigateWithinRoom(room: RoomsRoom | null): (target: RoomsNavigation
           void navigate({
             to: "/rooms/$roomSlug/threads",
             params: { roomSlug: room.slug },
+          });
+          return;
+        case "native-thread":
+          void navigate({
+            to: "/rooms/$roomSlug/threads/$environmentId/$threadId",
+            params: {
+              roomSlug: room.slug,
+              environmentId: target.environmentId,
+              threadId: target.threadId,
+            },
           });
           return;
         case "project":
@@ -130,7 +142,7 @@ function RoomsBreadcrumbBar({
         })}
       </div>
       <span className="ml-auto hidden rounded-full border border-border bg-muted/35 px-2 py-0.5 text-[10px] text-muted-foreground sm:inline-flex">
-        Fixture · workspace-read v2
+        {roomsSurfaceSourceLabel(surface)}
       </span>
     </header>
   );
@@ -188,7 +200,14 @@ export function RoomsWorkspaceShell({
             workspace={workspace}
           />
         </aside>
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
+        <div
+          className={cn(
+            "flex min-h-0 min-w-0 flex-1 flex-col",
+            surface.kind === "native-thread" || surface.kind === "native-draft"
+              ? "overflow-hidden"
+              : "overflow-y-auto",
+          )}
+        >
           <details className="shrink-0 border-b border-border bg-sidebar/45 md:hidden">
             <summary className="cursor-pointer px-4 py-2 text-sm font-medium text-foreground">
               {room.name} navigation
@@ -202,8 +221,18 @@ export function RoomsWorkspaceShell({
               />
             </div>
           </details>
-          <div className="min-h-0 flex-1">
-            <RoomsWorkspaceSurfaceView room={room} surface={surface} workspace={workspace} />
+          <div
+            className={cn(
+              "min-h-0 flex-1",
+              (surface.kind === "native-thread" || surface.kind === "native-draft") && "flex",
+            )}
+          >
+            <RoomsWorkspaceSurfaceView
+              navigate={navigateWithinRoom as RoomsWorkspaceNavigate}
+              room={room}
+              surface={surface}
+              workspace={workspace}
+            />
           </div>
         </div>
       </div>

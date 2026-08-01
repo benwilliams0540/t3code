@@ -7,6 +7,7 @@ import {
   buildDraftThreadRouteParams,
   buildThreadRouteParams,
   resolveActiveThreadRouteRef,
+  resolveNewThreadDraftRouteScope,
   resolveThreadRouteRenderState,
   resolveThreadRouteRef,
   resolveThreadRouteTarget,
@@ -64,6 +65,14 @@ describe("threadRoutes", () => {
     ).toEqual({
       kind: "draft",
       draftId: "draft-1",
+    });
+  });
+
+  it("keeps native new-thread routing unchanged and scopes Rooms drafts to the selected room", () => {
+    expect(resolveNewThreadDraftRouteScope({})).toEqual({ kind: "native" });
+    expect(resolveNewThreadDraftRouteScope({ roomSlug: "rooms-local" })).toEqual({
+      kind: "rooms",
+      roomSlug: "rooms-local",
     });
   });
 

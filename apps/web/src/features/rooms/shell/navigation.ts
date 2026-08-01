@@ -5,6 +5,12 @@ export type RoomsWorkspaceSurface =
   | { readonly kind: "channel"; readonly channelSlug: string }
   | { readonly kind: "threads" }
   | {
+      readonly kind: "native-thread";
+      readonly environmentId: string;
+      readonly threadId: string;
+    }
+  | { readonly kind: "native-draft"; readonly draftId: string }
+  | {
       readonly kind: "project";
       readonly projectSection: string;
       readonly projectView?: string;
@@ -15,6 +21,11 @@ export type RoomsNavigationTarget =
   | { readonly kind: "dashboard" }
   | { readonly kind: "channel"; readonly channelSlug: string }
   | { readonly kind: "threads" }
+  | {
+      readonly kind: "native-thread";
+      readonly environmentId: string;
+      readonly threadId: string;
+    }
   | { readonly kind: "project"; readonly projectSection: string }
   | {
       readonly kind: "project-view";
@@ -45,6 +56,14 @@ export function projectSectionLabel(projectSection: string): string {
   return projectSection.charAt(0).toUpperCase() + projectSection.slice(1).replaceAll("-", " ");
 }
 
+export function roomsSurfaceSourceLabel(surface: RoomsWorkspaceSurface): string {
+  return surface.kind === "native-thread" || surface.kind === "native-draft"
+    ? "Local T3 thread"
+    : surface.kind === "threads"
+      ? "Local T3 projects"
+      : "Fixture · workspace-read v2";
+}
+
 export function buildRoomsBreadcrumbs(
   room: RoomsRoom,
   surface: RoomsWorkspaceSurface,
@@ -57,6 +76,18 @@ export function buildRoomsBreadcrumbs(
       return [roomCrumb, { label: "Channels" }, { label: `# ${surface.channelSlug}` }];
     case "threads":
       return [roomCrumb, { label: "Your Threads" }];
+    case "native-thread":
+      return [
+        roomCrumb,
+        { label: "Your Threads", target: { kind: "threads" } },
+        { label: "T3 Thread" },
+      ];
+    case "native-draft":
+      return [
+        roomCrumb,
+        { label: "Your Threads", target: { kind: "threads" } },
+        { label: "New T3 Thread" },
+      ];
     case "project": {
       const sectionLabel = projectSectionLabel(surface.projectSection);
       return [

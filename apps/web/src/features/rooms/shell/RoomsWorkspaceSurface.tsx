@@ -13,7 +13,10 @@ import {
 import { roomsWorkspaceFixture } from "../fixtures";
 import type { RoomsPrincipal, RoomsRoom, RoomsWorkspace } from "../model/workspace";
 import type { RoomsWorkspaceSurface } from "./navigation";
+import type { RoomsWorkspaceNavigate } from "./RoomsWorkspaceNavigation";
 import { roomsWorkspaceSlots } from "./slots";
+import { RoomsNativeThreadSurface } from "../threads/RoomsNativeThreadSurface";
+import { RoomsThreadsSurface } from "../threads/RoomsThreadNavigation";
 
 function SurfacePlaceholder({ surface }: { readonly surface: RoomsWorkspaceSurface }) {
   const copy = (() => {
@@ -42,6 +45,18 @@ function SurfacePlaceholder({ surface }: { readonly surface: RoomsWorkspaceSurfa
           description: "Detailed T3 agent work mounts in this slot.",
           icon: BotIcon,
         };
+      case "native-thread":
+        return {
+          title: "T3 Thread",
+          description: "The native T3 thread mounts in this slot.",
+          icon: BotIcon,
+        };
+      case "native-draft":
+        return {
+          title: "New T3 Thread",
+          description: "The native T3 draft and composer mount in this slot.",
+          icon: BotIcon,
+        };
       case "present":
         return {
           title: "Present",
@@ -58,48 +73,6 @@ function SurfacePlaceholder({ surface }: { readonly surface: RoomsWorkspaceSurfa
         <Icon aria-hidden className="mx-auto size-6 text-muted-foreground" />
         <h1 className="mt-4 text-lg font-semibold text-foreground">{copy.title}</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{copy.description}</p>
-      </div>
-    </section>
-  );
-}
-
-function ThreadSurface({ workspace }: { readonly workspace: RoomsWorkspace }) {
-  return (
-    <section className="mx-auto w-full max-w-4xl p-5 sm:p-8">
-      <div className="mb-5">
-        <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-          Your Threads
-        </p>
-        <h1 className="mt-1 text-xl font-semibold text-foreground">
-          Detailed agent work stays in T3
-        </h1>
-      </div>
-      <div className="grid gap-3">
-        {workspace.threads.map((thread) => (
-          <article className="rounded-xl border border-border bg-card p-4" key={thread.id}>
-            <div className="flex flex-wrap items-center gap-2">
-              <BotIcon aria-hidden className="size-4 text-muted-foreground" />
-              <h2 className="font-medium text-foreground">{thread.title}</h2>
-              <span className="ml-auto rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
-                {thread.status}
-              </span>
-            </div>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {thread.provider} · {thread.environment_id} · as of{" "}
-              {new Date(thread.as_of).toLocaleString()}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Delegate {thread.delegated_agent_id} · adapter {thread.mirror.adapter_principal_id} ·
-              machine {thread.machine_id}
-            </p>
-            {thread.machine.reachable && thread.mirror.freshness === "stale" ? (
-              <p className="mt-2 text-xs font-medium text-amber-600 dark:text-amber-400">
-                Machine reachable · mirror stale since{" "}
-                {new Date(thread.mirror.last_synced_at).toLocaleString()}
-              </p>
-            ) : null}
-          </article>
-        ))}
       </div>
     </section>
   );
@@ -146,10 +119,12 @@ function PresentSurface({ workspace }: { readonly workspace: RoomsWorkspace }) {
 }
 
 export function RoomsWorkspaceSurfaceView({
+  navigate,
   room,
   surface,
   workspace,
 }: {
+  readonly navigate: RoomsWorkspaceNavigate;
   readonly room: RoomsRoom;
   readonly surface: RoomsWorkspaceSurface;
   readonly workspace: RoomsWorkspace | null;
@@ -169,7 +144,10 @@ export function RoomsWorkspaceSurfaceView({
     );
   }
 
-  if (surface.kind === "threads") return <ThreadSurface workspace={workspace} />;
+  if (surface.kind === "threads") return <RoomsThreadsSurface navigate={navigate} room={room} />;
+  if (surface.kind === "native-thread" || surface.kind === "native-draft") {
+    return <RoomsNativeThreadSurface roomId={room.id} roomSlug={room.slug} surface={surface} />;
+  }
   if (surface.kind === "present") return <PresentSurface workspace={workspace} />;
 
   const slot =

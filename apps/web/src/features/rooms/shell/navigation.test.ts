@@ -7,6 +7,7 @@ import {
   channelSlugFromName,
   isRoomsWorkspaceEnabled,
   projectSectionSlug,
+  roomsSurfaceSourceLabel,
 } from "./navigation";
 
 describe("Rooms shell navigation", () => {
@@ -37,6 +38,25 @@ describe("Rooms shell navigation", () => {
         projectView: "atlas",
       }).map((crumb) => crumb.label),
     ).toEqual(["Rooms", "Project", "Vision", "Atlas"]);
+  });
+
+  it("keeps Rooms chrome around native T3 thread and draft surfaces", () => {
+    const threadSurface = {
+      kind: "native-thread",
+      environmentId: "environment-local",
+      threadId: "thread-native",
+    } as const;
+
+    expect(buildRoomsBreadcrumbs(room, threadSurface).map((crumb) => crumb.label)).toEqual([
+      "Rooms",
+      "Your Threads",
+      "T3 Thread",
+    ]);
+    expect(roomsSurfaceSourceLabel(threadSurface)).toBe("Local T3 thread");
+    expect(roomsSurfaceSourceLabel({ kind: "native-draft", draftId: "draft-native" })).toBe(
+      "Local T3 thread",
+    );
+    expect(roomsSurfaceSourceLabel({ kind: "threads" })).toBe("Local T3 projects");
   });
 
   it("keeps web routes path-based and adapts internal links to Electron hash history", () => {

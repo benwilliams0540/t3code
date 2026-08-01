@@ -20,6 +20,16 @@ type DraftThreadRouteState = {
 
 export type ThreadRouteRenderState = "loading" | "ready" | "missing";
 
+export type NewThreadDraftRouteScope =
+  | { readonly kind: "native" }
+  | { readonly kind: "rooms"; readonly roomSlug: string };
+
+export function resolveNewThreadDraftRouteScope(
+  params: Partial<Record<"roomSlug", string | undefined>>,
+): NewThreadDraftRouteScope {
+  return params.roomSlug ? { kind: "rooms", roomSlug: params.roomSlug } : { kind: "native" };
+}
+
 export function resolveThreadRouteRenderState(input: {
   bootstrapComplete: boolean;
   serverThreadShellExists: boolean;
