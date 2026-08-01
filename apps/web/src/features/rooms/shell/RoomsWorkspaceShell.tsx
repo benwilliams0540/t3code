@@ -28,6 +28,7 @@ import {
   type RoomsNavigationTarget,
   type RoomsWorkspaceSurface,
 } from "./navigation";
+import { localSourceStateCopy } from "./localSourceStateCopy";
 import { RoomsWorkspaceNavigation, type RoomsWorkspaceNavigate } from "./RoomsWorkspaceNavigation";
 import {
   resolveRoomsSidebarMaximumWidth,
@@ -193,13 +194,17 @@ function RoomsBreadcrumbBar({
 }
 
 function RoomsSourceStatePanel({
-  initializeLocalWorkspace,
+  errorCode,
   message,
+  onOpenSettings,
+  onRetry,
   onUseSample,
   title,
 }: {
-  readonly initializeLocalWorkspace?: (() => void) | undefined;
+  readonly errorCode?: string | undefined;
   readonly message: string;
+  readonly onOpenSettings: () => void;
+  readonly onRetry?: (() => void) | undefined;
   readonly onUseSample: () => void;
   readonly title: string;
 }) {
@@ -209,10 +214,14 @@ function RoomsSourceStatePanel({
         <div className="max-w-md rounded-2xl border border-border bg-card p-7 text-center">
           <h1 className="text-lg font-semibold">{title}</h1>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{message}</p>
+          {errorCode ? (
+            <code className="mt-2 block text-[10px] text-muted-foreground">{errorCode}</code>
+          ) : null}
           <div className="mt-5 flex flex-wrap justify-center gap-2">
-            {initializeLocalWorkspace ? (
-              <Button onClick={initializeLocalWorkspace}>Create local workspace</Button>
-            ) : null}
+            {onRetry ? <Button onClick={onRetry}>Retry connection</Button> : null}
+            <Button onClick={onOpenSettings} variant="outline">
+              Rooms settings
+            </Button>
             <Button onClick={onUseSample} variant="outline">
               Use Sample workspace
             </Button>
@@ -232,8 +241,7 @@ export function RoomsWorkspaceShell({
 }) {
   const navigate = useNavigate();
   const [sidebarVariant] = useAppSidebarVariantSelection();
-  const { initializeLocalWorkspace, selectRoom, selectedRoom, setMode, state } =
-    useRoomsDataSource();
+  const { retryLocalWorkspace, selectRoom, selectedRoom, setMode, state } = useRoomsDataSource();
   const room = findSourceRoomBySlug(state, roomSlug);
   const currentRoute = roomsRoutePath(roomSlug, surface);
   const [, setLastRoomsRoute] = useLocalStorage(
@@ -290,23 +298,16 @@ export function RoomsWorkspaceShell({
     return <SidebarInset className="h-dvh min-h-0 bg-background" />;
   }
 
-  if (state.status === "setup-required") {
+  if (state.status !== "ready") {
+    const copy = localSourceStateCopy(state);
     return (
       <RoomsSourceStatePanel
-        initializeLocalWorkspace={initializeLocalWorkspace}
-        message="Create a local workspace to bind actual T3 projects and threads. Sample data stays separate."
+        errorCode={state.error?.code}
+        message={copy.message}
+        onOpenSettings={() => void navigate({ to: "/settings/beta" })}
+        onRetry={copy.canRetry ? () => void retryLocalWorkspace() : undefined}
         onUseSample={() => setMode("sample")}
-        title="Local workspace setup required"
-      />
-    );
-  }
-
-  if (state.status === "unavailable") {
-    return (
-      <RoomsSourceStatePanel
-        message="Rooms could not load this source. Retry from Beta settings or return to the Sample workspace."
-        onUseSample={() => setMode("sample")}
-        title="Rooms source unavailable"
+        title={copy.title}
       />
     );
   }
@@ -320,6 +321,11 @@ export function RoomsWorkspaceShell({
     const declaredRoom = state.fixture.rooms.find((candidate) => candidate.id === room.id);
     return declaredRoom ? workspaceForDeclaredRoom(state.fixture, declaredRoom.id) : null;
   })();
+  const localWorkspace = state.mode === "local" ? state.workspace : null;
+  const surfaceOwnsScrolling =
+    surface.kind === "native-thread" ||
+    surface.kind === "native-draft" ||
+    (state.mode === "local" && surface.kind === "channel");
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground">
       <RoomsBreadcrumbBar
@@ -348,6 +354,7 @@ export function RoomsWorkspaceShell({
             style={{ width: `${sidebarWidth}px` }}
           >
             <RoomsWorkspaceNavigation
+              localWorkspace={localWorkspace}
               navigate={navigateWithinRoom as RoomsWorkspaceNavigate}
               room={room}
               sourceMode={state.mode}
@@ -373,9 +380,7 @@ export function RoomsWorkspaceShell({
         <div
           className={cn(
             "flex min-h-0 min-w-0 flex-1 flex-col",
-            surface.kind === "native-thread" || surface.kind === "native-draft"
-              ? "overflow-hidden"
-              : "overflow-y-auto",
+            surfaceOwnsScrolling ? "overflow-hidden" : "overflow-y-auto",
           )}
         >
           <details className="shrink-0 border-b border-sidebar-border bg-sidebar text-sidebar-foreground surface-grain md:hidden">
@@ -384,6 +389,7 @@ export function RoomsWorkspaceShell({
             </summary>
             <div className="max-h-[42vh] w-60 max-w-full overflow-y-auto">
               <RoomsWorkspaceNavigation
+                localWorkspace={localWorkspace}
                 navigate={navigateWithinRoom as RoomsWorkspaceNavigate}
                 room={room}
                 sourceMode={state.mode}
@@ -392,12 +398,7 @@ export function RoomsWorkspaceShell({
               />
             </div>
           </details>
-          <div
-            className={cn(
-              "min-h-0 flex-1",
-              (surface.kind === "native-thread" || surface.kind === "native-draft") && "flex",
-            )}
-          >
+          <div className={cn("min-h-0 flex-1", surfaceOwnsScrolling && "flex")}>
             <RoomsWorkspaceSurfaceView
               navigate={navigateWithinRoom as RoomsWorkspaceNavigate}
               room={room}
@@ -415,7 +416,7 @@ export function RoomsWorkspaceShell({
 export function RoomsWorkspaceLanding() {
   const navigate = useNavigate();
   const [sidebarVariant] = useAppSidebarVariantSelection();
-  const { initializeLocalWorkspace, selectedRoom, setMode, state } = useRoomsDataSource();
+  const { retryLocalWorkspace, selectedRoom, setMode, state } = useRoomsDataSource();
   useEffect(() => {
     if (!isRoomsWorkspaceEnabled(sidebarVariant)) {
       void navigate({ to: "/", replace: true });
@@ -430,22 +431,16 @@ export function RoomsWorkspaceLanding() {
     }
   }, [navigate, selectedRoom, sidebarVariant]);
 
-  if (state.status === "setup-required") {
+  if (state.status !== "ready") {
+    const copy = localSourceStateCopy(state);
     return (
       <RoomsSourceStatePanel
-        initializeLocalWorkspace={initializeLocalWorkspace}
-        message="Create a local workspace to bind actual T3 projects and threads."
+        errorCode={state.error?.code}
+        message={copy.message}
+        onOpenSettings={() => void navigate({ to: "/settings/beta" })}
+        onRetry={copy.canRetry ? () => void retryLocalWorkspace() : undefined}
         onUseSample={() => setMode("sample")}
-        title="Local workspace setup required"
-      />
-    );
-  }
-  if (state.status === "unavailable") {
-    return (
-      <RoomsSourceStatePanel
-        message="Rooms could not load this source. Return to the Sample workspace and try again."
-        onUseSample={() => setMode("sample")}
-        title="Rooms source unavailable"
+        title={copy.title}
       />
     );
   }

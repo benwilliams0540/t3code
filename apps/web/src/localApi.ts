@@ -58,6 +58,25 @@ function createBrowserLocalApi(): LocalApi {
         writeBrowserClientSettings(settings);
       },
     },
+    roomsLocal: {
+      request: async (request) => {
+        if (window.desktopBridge?.requestRoomsLocal) {
+          return window.desktopBridge.requestRoomsLocal(request);
+        }
+        const target = new URL(request.path, request.baseUrl);
+        const response = await fetch(target, {
+          method: request.method,
+          ...(request.body === undefined
+            ? {}
+            : { headers: { "content-type": "application/json" }, body: request.body }),
+        });
+        return {
+          status: response.status,
+          headers: Object.fromEntries(response.headers.entries()),
+          body: await response.text(),
+        };
+      },
+    },
   };
 }
 

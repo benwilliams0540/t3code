@@ -958,6 +958,21 @@ export const DesktopPreviewAutomationWaitForInputSchema = Schema.Struct({
   input: PreviewAutomationWaitForInput,
 });
 
+export const RoomsLocalHttpRequestSchema = Schema.Struct({
+  baseUrl: Schema.String,
+  path: Schema.String,
+  method: Schema.Literals(["GET", "POST"]),
+  body: Schema.optionalKey(Schema.String),
+});
+export type RoomsLocalHttpRequest = typeof RoomsLocalHttpRequestSchema.Type;
+
+export const RoomsLocalHttpResponseSchema = Schema.Struct({
+  status: Schema.Int,
+  headers: Schema.Record(Schema.String, Schema.String),
+  body: Schema.String,
+});
+export type RoomsLocalHttpResponse = typeof RoomsLocalHttpResponseSchema.Type;
+
 export interface DesktopBridge {
   getAppBranding: () => DesktopAppBranding | null;
   // One bootstrap per pool instance currently registered with bootstrap
@@ -967,6 +982,7 @@ export interface DesktopBridge {
   getLocalEnvironmentBearerToken: () => Promise<string>;
   getClientSettings: () => Promise<ClientSettings | null>;
   setClientSettings: (settings: ClientSettings) => Promise<void>;
+  requestRoomsLocal?: (request: RoomsLocalHttpRequest) => Promise<RoomsLocalHttpResponse>;
   getConnectionCatalog?: () => Promise<string | null>;
   setConnectionCatalog?: (catalog: string) => Promise<boolean>;
   clearConnectionCatalog?: () => Promise<void>;
@@ -1121,6 +1137,9 @@ export interface LocalApi {
   persistence: {
     getClientSettings: () => Promise<ClientSettings | null>;
     setClientSettings: (settings: ClientSettings) => Promise<void>;
+  };
+  roomsLocal?: {
+    request: (request: RoomsLocalHttpRequest) => Promise<RoomsLocalHttpResponse>;
   };
 }
 

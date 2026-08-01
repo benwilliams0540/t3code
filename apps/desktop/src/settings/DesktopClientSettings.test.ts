@@ -22,6 +22,7 @@ const clientSettings: ClientSettings = {
   favorites: [],
   glassOpacity: 80,
   providerModelPreferences: {},
+  roomsLocalApiBaseUrl: "http://127.0.0.1:3000",
   sidebarAutoSettleAfterDays: 3,
   sidebarProjectGroupingMode: "repository_path",
   sidebarProjectGroupingOverrides: {

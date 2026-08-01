@@ -1,0 +1,27 @@
+{
+  "contract": {
+    "id": "rooms.local-channels",
+    "version": 1,
+    "schema_uri": "contracts/rooms/local-channels/v1/schema.json"
+  },
+  "status": "ready",
+  "room": {
+    "id": "room:019fb9f0-1000-7000-8000-000000000001",
+    "slug": "local-workspace-019fb9f0-1000-7000-8000-000000000001",
+    "name": "Local workspace",
+    "locality": "local_only"
+  },
+  "principal": {
+    "id": "h:019fb9f0-0001-7000-8000-000000000001",
+    "type": "human",
+    "display_name": "Local user",
+    "role": "admin"
+  },
+  "capabilities": {
+    "workspace.read": true,
+    "channel.read": true,
+    "channel.create": true,
+    "message.create": true
+  },
+  "channels": []
+}

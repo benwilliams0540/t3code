@@ -2,14 +2,18 @@ import {
   FileTextIcon,
   HashIcon,
   LayoutDashboardIcon,
+  PlusIcon,
   UsersIcon,
   type LucideIcon,
 } from "lucide-react";
+import { useState } from "react";
 
 import { cn } from "~/lib/utils";
 import { SidebarChromeFooter } from "~/components/sidebar/SidebarChrome";
 
 import type { RoomsDataSourceMode, RoomsSourceRoom } from "../dataSource";
+import type { RoomsLocalWorkspace } from "../dataSource/localChannelsContract";
+import { RoomsAddChannelDialog } from "../channel/RoomsAddChannelDialog";
 import {
   channelSlugFromName,
   projectSectionSlug,
@@ -76,17 +80,20 @@ function WorkspaceNavItem({
 
 export function RoomsWorkspaceNavigation({
   navigate,
+  localWorkspace,
   room,
   sourceMode,
   surface,
   workspace,
 }: {
   readonly navigate: RoomsWorkspaceNavigate;
+  readonly localWorkspace: RoomsLocalWorkspace | null;
   readonly room: RoomsSourceRoom;
   readonly sourceMode: RoomsDataSourceMode;
   readonly surface: RoomsWorkspaceSurface;
   readonly workspace: RoomsWorkspace | null;
 }) {
+  const [addChannelOpen, setAddChannelOpen] = useState(false);
   return (
     <nav
       aria-label={room.name + " workspace"}
@@ -109,13 +116,39 @@ export function RoomsWorkspaceNavigation({
           onClick={() => navigate({ kind: "dashboard" })}
         />
 
-        <p className="mb-1 mt-5 px-2 text-[10px] font-semibold tracking-[0.12em] text-sidebar-muted-foreground/65 uppercase">
-          Channels
-        </p>
-        {sourceMode === "local" ? (
-          <p className="px-2 py-1.5 text-xs leading-relaxed text-sidebar-muted-foreground">
-            Channel messaging isn&apos;t connected yet.
+        <div className="mb-1 mt-5 flex items-center px-2">
+          <p className="text-[10px] font-semibold tracking-[0.12em] text-sidebar-muted-foreground/65 uppercase">
+            Channels
           </p>
+          {sourceMode === "local" ? (
+            <button
+              aria-label="Add channel"
+              className="ml-auto rounded p-0.5 text-sidebar-muted-foreground transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-foreground disabled:cursor-not-allowed disabled:opacity-45"
+              disabled={!localWorkspace?.capabilities["channel.create"]}
+              onClick={() => setAddChannelOpen(true)}
+              title="Add channel"
+              type="button"
+            >
+              <PlusIcon aria-hidden className="size-3.5" />
+            </button>
+          ) : null}
+        </div>
+        {sourceMode === "local" ? (
+          localWorkspace?.channels.length ? (
+            localWorkspace.channels.map((channel) => (
+              <WorkspaceNavItem
+                active={surface.kind === "channel" && surface.channelSlug === channel.slug}
+                icon={HashIcon}
+                key={channel.id}
+                label={channel.slug}
+                onClick={() => navigate({ kind: "channel", channelSlug: channel.slug })}
+              />
+            ))
+          ) : (
+            <p className="px-2 py-1.5 text-xs leading-relaxed text-sidebar-muted-foreground">
+              No channels yet. Add one to begin.
+            </p>
+          )
         ) : workspace ? (
           workspace.channels.map((channel) => {
             const channelSlug = channelSlugFromName(channel.name);
@@ -178,6 +211,13 @@ export function RoomsWorkspaceNavigation({
         />
       </div>
       <SidebarChromeFooter />
+      {sourceMode === "local" ? (
+        <RoomsAddChannelDialog
+          onCreated={(channel) => navigate({ kind: "channel", channelSlug: channel.slug })}
+          onOpenChange={setAddChannelOpen}
+          open={addChannelOpen}
+        />
+      ) : null}
     </nav>
   );
 }

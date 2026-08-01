@@ -3,7 +3,6 @@ import {
   CircleUserRoundIcon,
   FileTextIcon,
   FolderGit2Icon,
-  HashIcon,
   LayoutDashboardIcon,
   TriangleAlertIcon,
 } from "lucide-react";
@@ -12,6 +11,8 @@ import { Button } from "~/components/ui/button";
 import { useThreadShellsForProjectRefs } from "~/state/entities";
 
 import type { RoomsSourceRoom } from "../dataSource";
+import { RoomsLocalChannelSurface } from "../channel/RoomsLocalChannelFeed";
+import type { RoomsLocalWorkspace } from "../dataSource/localChannelsContract";
 import { RoomsProjectBindingMenu, RoomsThreadsSurface } from "../threads/RoomsThreadNavigation";
 import { useRoomProjectBindings } from "../threads/roomProjectBindings";
 import { selectRoomsNativeThreadEntries } from "../threads/roomsNativeThreads";
@@ -20,19 +21,13 @@ import type { RoomsWorkspaceNavigate } from "./RoomsWorkspaceNavigation";
 
 type LocalUnavailableSurface = Extract<
   RoomsWorkspaceSurface,
-  { readonly kind: "channel" | "project" | "present" }
+  { readonly kind: "project" | "present" }
 >;
 
 export function localUnavailableSurfaceCopy(surface: LocalUnavailableSurface): {
   readonly title: string;
   readonly description: string;
 } {
-  if (surface.kind === "channel") {
-    return {
-      title: `# ${surface.channelSlug}`,
-      description: "Channel messaging isn’t connected yet.",
-    };
-  }
   if (surface.kind === "present") {
     return {
       title: "Present",
@@ -66,12 +61,7 @@ export function RoomsLocalUnavailableSurface({
   readonly surface: LocalUnavailableSurface;
 }) {
   const copy = localUnavailableSurfaceCopy(surface);
-  const Icon =
-    surface.kind === "channel"
-      ? HashIcon
-      : surface.kind === "present"
-        ? CircleUserRoundIcon
-        : FileTextIcon;
+  const Icon = surface.kind === "present" ? CircleUserRoundIcon : FileTextIcon;
   return (
     <section
       className="flex min-h-full items-center justify-center p-6"
@@ -182,6 +172,7 @@ export function RoomsLocalWorkspaceSurfaceView({
   navigate,
   room,
   surface,
+  workspace,
 }: {
   readonly navigate: RoomsWorkspaceNavigate;
   readonly room: RoomsSourceRoom;
@@ -189,8 +180,12 @@ export function RoomsLocalWorkspaceSurfaceView({
     RoomsWorkspaceSurface,
     { readonly kind: "native-thread" | "native-draft" }
   >;
+  readonly workspace: RoomsLocalWorkspace;
 }) {
   if (surface.kind === "dashboard") return <RoomsLocalDashboard navigate={navigate} room={room} />;
+  if (surface.kind === "channel") {
+    return <RoomsLocalChannelSurface channelSlug={surface.channelSlug} workspace={workspace} />;
+  }
   if (surface.kind === "threads") {
     return <RoomsThreadsSurface navigate={navigate} room={room} sourceMode="local" />;
   }

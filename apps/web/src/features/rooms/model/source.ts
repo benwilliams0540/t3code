@@ -21,3 +21,10 @@ export const ROOMS_WORKSPACE_READ_SOURCE = {
   validatorGitBlob: "014e3a18ce0f4eadb26703d86ba174154df53296",
   validatorSha256: "c0d2be48baff78b8f99acc0453d873fb616050df857a2047784330d14ede3db3",
 } as const;
+
+export const ROOMS_LOCAL_CHANNELS_SOURCE = {
+  repositorySha: "75d4f6b6660f8572b34d979cb3b89e3523ec0372",
+  contractId: "rooms.local-channels",
+  contractVersion: 1,
+  schemaUri: "contracts/rooms/local-channels/v1/schema.json",
+} as const;

@@ -167,7 +167,14 @@ export function RoomsWorkspaceSurfaceView({
   }
 
   if (sourceState.mode === "local") {
-    return <RoomsLocalWorkspaceSurfaceView navigate={navigate} room={room} surface={surface} />;
+    return (
+      <RoomsLocalWorkspaceSurfaceView
+        navigate={navigate}
+        room={room}
+        surface={surface}
+        workspace={sourceState.workspace}
+      />
+    );
   }
 
   const fixture = sourceState.fixture;

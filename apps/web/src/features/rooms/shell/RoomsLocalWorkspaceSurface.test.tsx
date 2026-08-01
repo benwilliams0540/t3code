@@ -1,12 +1,17 @@
+import * as Schema from "effect/Schema";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
+import zeroWorkspaceDocument from "../dataSource/fixtures/local-channels-v1-zero-workspace.json";
 import {
-  createRoomsLocalWorkspaceConfig,
+  reconcileLocalWorkspaceConfig,
   resolveLocalRoomsDataSourceState,
 } from "../dataSource/local";
+import { RoomsLocalWorkspace } from "../dataSource/localChannelsContract";
 import { roomsProjectNavigationItems } from "./RoomsWorkspaceNavigation";
 import { RoomsLocalUnavailableSurface } from "./RoomsLocalWorkspaceSurface";
+
+const decodeWorkspace = Schema.decodeUnknownSync(RoomsLocalWorkspace);
 
 const SAMPLE_ONLY_MARKERS = [
   "room:019fb920-1000-7000-8000-000000000001",
@@ -18,11 +23,11 @@ const SAMPLE_ONLY_MARKERS = [
 ];
 
 describe("Rooms Local source isolation", () => {
-  it("renders honest IA placeholders without Sample workspace content", () => {
-    const config = createRoomsLocalWorkspaceConfig(() => "no-fixture-leak");
-    const localState = resolveLocalRoomsDataSourceState(config);
+  it("renders honest unavailable IA surfaces without Sample workspace content", () => {
+    const workspace = decodeWorkspace(zeroWorkspaceDocument);
+    const config = reconcileLocalWorkspaceConfig(null, workspace);
+    const localState = resolveLocalRoomsDataSourceState(workspace, config);
     const surfaces = [
-      { kind: "channel", channelSlug: "local" },
       { kind: "project", projectSection: "vision" },
       { kind: "project", projectSection: "stories" },
       { kind: "project", projectSection: "evidence" },
@@ -38,7 +43,6 @@ describe("Rooms Local source isolation", () => {
     });
 
     expect(output).toContain("Local workspace");
-    expect(output).toContain("Channel messaging isn’t connected yet.");
     expect(output).toContain("No vision revisions yet.");
     for (const marker of SAMPLE_ONLY_MARKERS) expect(output).not.toContain(marker);
   });

@@ -1,0 +1,35 @@
+{
+  "room_id": "room:019fb9f0-1000-7000-8000-000000000001",
+  "channel_id": "channel:019fb9f0-2000-7000-8000-000000000001",
+  "page_info": {
+    "after_seq": 0,
+    "limit": 50,
+    "snapshot_head_seq": 4,
+    "next_cursor": 4,
+    "has_more": false
+  },
+  "items": [
+    {
+      "id": "feed-item:019fb9f0-3000-7000-8000-000000000001",
+      "room_id": "room:019fb9f0-1000-7000-8000-000000000001",
+      "channel_id": "channel:019fb9f0-2000-7000-8000-000000000001",
+      "kind": "human_message",
+      "occurred_at": "2026-08-01T15:30:00.000Z",
+      "summary": "**Hello** from the durable local feed.",
+      "source_event": {
+        "seq": 4,
+        "event_id": "019fb9f0-3000-7000-8000-000000000001",
+        "type": "message.created",
+        "schema": 1
+      },
+      "attribution": {
+        "mode": "explicit_principal",
+        "writer_principal_id": "h:019fb9f0-0001-7000-8000-000000000001",
+        "actor_principal_id": "h:019fb9f0-0001-7000-8000-000000000001"
+      },
+      "payload": {
+        "body_markdown": "**Hello** from the durable local feed."
+      }
+    }
+  ]
+}

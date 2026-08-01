@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 
 import type { RoomsWorkspaceReadFixture } from "../model/workspace";
+import type { RoomsLocalWorkspace } from "./localChannelsContract";
 
 export const ROOMS_DATA_SOURCE_STORAGE_KEY = "t3code:rooms-data-source:v1";
 export const ROOMS_LOCAL_WORKSPACE_STORAGE_KEY = "t3code:rooms-local-workspace:v1";
@@ -57,27 +58,35 @@ export interface RoomsLocalSourceReady {
   readonly status: "ready";
   readonly rooms: readonly [RoomsSourceRoom];
   readonly config: RoomsLocalWorkspaceConfig;
+  readonly workspace: RoomsLocalWorkspace;
+  readonly channelState: "empty" | "populated";
 }
 
-export interface RoomsLocalSourceSetupRequired {
+export type RoomsLocalSourceFailureStatus =
+  | "connecting"
+  | "disabled"
+  | "uninitialized"
+  | "unavailable-outside-development"
+  | "invalid-bootstrap"
+  | "authorization-failure"
+  | "invalid-configuration"
+  | "error";
+
+export interface RoomsLocalSourceFailure {
   readonly mode: "local";
-  readonly status: "setup-required";
+  readonly status: RoomsLocalSourceFailureStatus;
   readonly rooms: readonly [];
-  readonly reason: "missing-local-workspace";
-}
-
-export interface RoomsSourceUnavailable {
-  readonly mode: RoomsDataSourceMode;
-  readonly status: "unavailable";
-  readonly rooms: readonly [];
-  readonly reason: string;
+  readonly error: {
+    readonly code: string;
+    readonly message: string;
+    readonly httpStatus: number | null;
+  } | null;
 }
 
 export type RoomsDataSourceState =
   | RoomsSampleSourceReady
   | RoomsLocalSourceReady
-  | RoomsLocalSourceSetupRequired
-  | RoomsSourceUnavailable;
+  | RoomsLocalSourceFailure;
 
 export function resolveSelectedSourceRoom(
   state: RoomsDataSourceState,

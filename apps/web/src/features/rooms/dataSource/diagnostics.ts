@@ -17,6 +17,7 @@ interface RoomsDiagnosticsInput {
   readonly localConfig: RoomsLocalWorkspaceConfig | null;
   readonly sampleBindings: RoomsProjectBindings;
   readonly lastRoomsRoute: string | null;
+  readonly localApiBaseUrl: string;
 }
 
 function refsForDiagnostics(
@@ -34,6 +35,7 @@ export function buildRoomsDiagnostics(input: RoomsDiagnosticsInput): string {
       source: {
         mode: input.mode,
         status: input.state.status,
+        error: input.state.status === "ready" ? null : input.state.error,
         selectedRoomId: input.selectedRoomId,
         selections: input.selectedBySource,
         roomIds: input.state.rooms.map((room) => room.id),
@@ -47,6 +49,7 @@ export function buildRoomsDiagnostics(input: RoomsDiagnosticsInput): string {
             : null,
       },
       projectRefs: refsForDiagnostics(input),
+      localApiBaseUrl: input.localApiBaseUrl,
       lastRoomsRoute: input.lastRoomsRoute,
     },
     null,

@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+import { DEFAULT_ROOMS_LOCAL_API_BASE_URL } from "@t3tools/contracts/settings";
 import { useEffect, useState } from "react";
 
 import { useClientSettings, useUpdateClientSettings } from "../../hooks/useSettings";
@@ -7,6 +8,7 @@ import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { useRoomsDataSource, type RoomsDataSourceMode } from "../../features/rooms/dataSource";
 import { buildRoomsDiagnostics } from "../../features/rooms/dataSource/diagnostics";
 import { resetRoomsBetaSettings } from "../../features/rooms/dataSource/reset";
+import { validateRoomsLocalApiBaseUrl } from "../../features/rooms/dataSource/localChannelsClient";
 import { ROOMS_LAST_ROUTE_STORAGE_KEY } from "../../features/rooms/shell/navigation";
 import {
   ROOMS_PROJECT_BINDINGS_STORAGE_KEY,
@@ -74,6 +76,44 @@ function AutoSettleDaysInput({
   );
 }
 
+function RoomsLocalApiBaseUrlInput({
+  onCommit,
+  value,
+}: {
+  readonly onCommit: (value: string) => void;
+  readonly value: string;
+}) {
+  const [draft, setDraft] = useState(value);
+  const validation = validateRoomsLocalApiBaseUrl(draft);
+  useEffect(() => setDraft(value), [value]);
+
+  const commit = () => {
+    if (validation.ok) onCommit(validation.value);
+  };
+
+  return (
+    <div className="grid w-full gap-1.5 py-3">
+      <Input
+        aria-invalid={!validation.ok}
+        aria-label="Rooms Local API address"
+        onBlur={commit}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            commit();
+          }
+        }}
+        placeholder={DEFAULT_ROOMS_LOCAL_API_BASE_URL}
+        value={draft}
+      />
+      <p className={validation.ok ? "text-xs text-muted-foreground" : "text-xs text-destructive"}>
+        {validation.ok ? "Loopback only. Alternate local ports are supported." : validation.message}
+      </p>
+    </div>
+  );
+}
+
 export function BetaSettingsPanel() {
   const [sidebarVariant, setSidebarVariant] = useAppSidebarVariantSelection();
   const { localConfig, mode, selectedBySource, selectedRoom, setMode, state } =
@@ -95,6 +135,7 @@ export function BetaSettingsPanel() {
   const sidebarAutoSettleAfterDays = useClientSettings(
     (settings) => settings.sidebarAutoSettleAfterDays,
   );
+  const roomsLocalApiBaseUrl = useClientSettings((settings) => settings.roomsLocalApiBaseUrl);
   const updateSettings = useUpdateClientSettings();
 
   return (
@@ -174,7 +215,7 @@ export function BetaSettingsPanel() {
         ) : null}
         <SettingsRow
           title="Rooms content"
-          description="Sample is the certified demonstration workspace. Local shows only actual projects and threads stored by this T3 instance."
+          description="Sample is the certified demonstration workspace. Local connects to the development-only t3rooms service and keeps native T3 projects and threads."
         >
           <RadioGroup
             aria-label="Rooms content"
@@ -204,6 +245,20 @@ export function BetaSettingsPanel() {
           </RadioGroup>
         </SettingsRow>
         <SettingsRow
+          title="Local Rooms API"
+          description="Development-only loopback service for one durable Local workspace. This is not remote or multiplayer connectivity."
+        >
+          <RoomsLocalApiBaseUrlInput
+            onCommit={(value) => updateSettings({ roomsLocalApiBaseUrl: value })}
+            value={roomsLocalApiBaseUrl}
+          />
+          <p className="pb-3 text-xs text-muted-foreground">
+            Current source state:{" "}
+            <span className="font-medium text-foreground">{state.status}</span>
+            {state.status !== "ready" && state.error ? ` · ${state.error.code}` : ""}
+          </p>
+        </SettingsRow>
+        <SettingsRow
           title="Rooms diagnostics"
           description="Copy a redacted snapshot of the Rooms mode, selected IDs, project references, source state, and last Rooms route."
           control={
@@ -218,6 +273,7 @@ export function BetaSettingsPanel() {
                     localConfig,
                     sampleBindings,
                     lastRoomsRoute,
+                    localApiBaseUrl: roomsLocalApiBaseUrl,
                   }),
                   undefined,
                 )
@@ -253,6 +309,7 @@ export function BetaSettingsPanel() {
             <Button
               onClick={() => {
                 resetRoomsBetaSettings();
+                updateSettings({ roomsLocalApiBaseUrl: DEFAULT_ROOMS_LOCAL_API_BASE_URL });
                 setResetRoomsOpen(false);
               }}
               variant="destructive"

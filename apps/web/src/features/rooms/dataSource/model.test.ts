@@ -1,18 +1,22 @@
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
-import { roomsRoutePath } from "../shell/navigation";
-import { createRoomsLocalWorkspaceConfig, resolveLocalRoomsDataSourceState } from "./local";
+import zeroWorkspaceDocument from "./fixtures/local-channels-v1-zero-workspace.json";
+import { reconcileLocalWorkspaceConfig, resolveLocalRoomsDataSourceState } from "./local";
+import { RoomsLocalWorkspace } from "./localChannelsContract";
 import {
   findSourceRoomBySlug,
   RoomsDataSourceMode,
   RoomsLocalWorkspaceConfig,
   resolveSelectedSourceRoom,
 } from "./model";
+import { roomsRoutePath } from "../shell/navigation";
 import { roomsSampleDataSource } from "./sample";
 
 const decodeRoomsDataSourceMode = Schema.decodeUnknownSync(RoomsDataSourceMode);
 const decodeRoomsLocalWorkspaceConfig = Schema.decodeUnknownSync(RoomsLocalWorkspaceConfig);
+const decodeWorkspace = Schema.decodeUnknownSync(RoomsLocalWorkspace);
+const workspace = decodeWorkspace(zeroWorkspaceDocument);
 
 describe("Rooms data source boundary", () => {
   it("defaults to the certified Sample workspace without changing its declared identities", () => {
@@ -23,56 +27,89 @@ describe("Rooms data source boundary", () => {
     );
   });
 
-  it("creates a persistent local identity that cannot be mistaken for a sample room", () => {
-    const config = createRoomsLocalWorkspaceConfig(() => "local-test-id");
+  it("replaces shell-only identity with server truth while preserving native project bindings", () => {
+    const legacyConfig = decodeRoomsLocalWorkspaceConfig({
+      version: 1,
+      roomId: "room:local:legacy-shell-id",
+      name: "Local workspace",
+      slug: "local-workspace-legacy-shell-id",
+      projectBindings: [{ environmentId: "environment-local", projectId: "project-rooms" }],
+    });
+    const config = reconcileLocalWorkspaceConfig(legacyConfig, workspace);
+
     expect(config).toEqual({
       version: 1,
-      roomId: "room:local:local-test-id",
-      name: "Local workspace",
-      slug: "local-workspace-local-test-id",
-      projectBindings: [],
+      roomId: workspace.room.id,
+      name: workspace.room.name,
+      slug: workspace.room.slug,
+      projectBindings: legacyConfig.projectBindings,
     });
+    expect(config.roomId).not.toBe(legacyConfig.roomId);
     expect(roomsSampleDataSource.rooms.some((room) => room.id === config.roomId)).toBe(false);
-    expect(decodeRoomsLocalWorkspaceConfig(config)).toEqual(config);
   });
 
-  it("keeps Sample and Local selections independent across mode switches", () => {
-    const config = createRoomsLocalWorkspaceConfig(() => "selection-test");
-    const localState = resolveLocalRoomsDataSourceState(config);
+  it("keeps Sample and Local selections independent after authoritative migration", () => {
+    const config = reconcileLocalWorkspaceConfig(null, workspace);
+    const localState = resolveLocalRoomsDataSourceState(workspace, config);
     const secondSample = roomsSampleDataSource.rooms[1]!;
-    const selected = { sample: secondSample.id, local: config.roomId };
+    const selected = { sample: secondSample.id, local: workspace.room.id };
 
     expect(resolveSelectedSourceRoom(roomsSampleDataSource, selected, null)?.id).toBe(
       secondSample.id,
     );
-    expect(resolveSelectedSourceRoom(localState, selected, null)?.id).toBe(config.roomId);
+    expect(resolveSelectedSourceRoom(localState, selected, null)?.id).toBe(workspace.room.id);
     expect(resolveSelectedSourceRoom(roomsSampleDataSource, selected, null)?.id).toBe(
       secondSample.id,
     );
   });
 
-  it("exposes honest local setup state and direct routes for both sources", () => {
-    expect(resolveLocalRoomsDataSourceState(null)).toMatchObject({
-      mode: "local",
-      status: "setup-required",
-      rooms: [],
-    });
-    const config = createRoomsLocalWorkspaceConfig(() => "direct-route");
-    const localState = resolveLocalRoomsDataSourceState(config);
-    expect(findSourceRoomBySlug(localState, config.slug)?.id).toBe(config.roomId);
+  it("recovers stale shell selection and direct routes from the server room identity", () => {
+    const config = reconcileLocalWorkspaceConfig(null, workspace);
+    const localState = resolveLocalRoomsDataSourceState(workspace, config);
+
     expect(
-      findSourceRoomBySlug(roomsSampleDataSource, roomsSampleDataSource.rooms[0]!.slug),
-    ).not.toBeNull();
-    expect(roomsRoutePath(config.slug, { kind: "dashboard" })).toBe(
-      "/rooms/local-workspace-direct-route/dashboard",
+      resolveSelectedSourceRoom(
+        localState,
+        { sample: null, local: "room:local:stale-shell-id" },
+        null,
+      )?.id,
+    ).toBe(workspace.room.id);
+    expect(findSourceRoomBySlug(localState, workspace.room.slug)?.id).toBe(workspace.room.id);
+    expect(roomsRoutePath(workspace.room.slug, { kind: "dashboard" })).toBe(
+      `/rooms/${workspace.room.slug}/dashboard`,
     );
     expect(
-      roomsRoutePath(config.slug, {
+      roomsRoutePath(workspace.room.slug, {
         kind: "native-thread",
         environmentId: "environment-local",
         threadId: "thread-local",
       }),
-    ).toBe("/rooms/local-workspace-direct-route/threads/environment-local/thread-local");
+    ).toBe(`/rooms/${workspace.room.slug}/threads/environment-local/thread-local`);
+  });
+
+  it("distinguishes ready zero-channel and populated Local workspaces", () => {
+    const config = reconcileLocalWorkspaceConfig(null, workspace);
+    expect(resolveLocalRoomsDataSourceState(workspace, config).channelState).toBe("empty");
+    const populated = {
+      ...workspace,
+      channels: [
+        {
+          id: "channel:019fb9f0-2000-7000-8000-000000000001",
+          room_id: workspace.room.id,
+          name: "# infra",
+          slug: "infra",
+          purpose: null,
+          created_at: "2026-08-01T15:00:00.000Z",
+          source_event: {
+            seq: 3,
+            event_id: "019fb9f0-2000-7000-8000-000000000001",
+            type: "channel.created",
+            schema: 1,
+          },
+        },
+      ],
+    } satisfies RoomsLocalWorkspace;
+    expect(resolveLocalRoomsDataSourceState(populated, config).channelState).toBe("populated");
   });
 
   it("accepts only the two versioned source mode values", () => {

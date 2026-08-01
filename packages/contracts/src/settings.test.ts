@@ -5,6 +5,7 @@ import { ProviderInstanceId } from "./providerInstance.ts";
 import {
   ClientSettingsSchema,
   ClientSettingsPatch,
+  DEFAULT_ROOMS_LOCAL_API_BASE_URL,
   DEFAULT_SERVER_SETTINGS,
   ServerSettings,
   ServerSettingsPatch,
@@ -108,6 +109,16 @@ describe("ClientSettings sidebar v2", () => {
   it.each([-1, 0, 91])("rejects an auto-settle threshold outside 1..90: %s", (value) => {
     expect(() => decodeClientSettings({ sidebarAutoSettleAfterDays: value })).toThrow();
     expect(() => decodeClientSettingsPatch({ sidebarAutoSettleAfterDays: value })).toThrow();
+  });
+});
+
+describe("ClientSettings Rooms Local API", () => {
+  it("defaults to the development loopback service and accepts alternate loopback ports", () => {
+    expect(decodeClientSettings({}).roomsLocalApiBaseUrl).toBe(DEFAULT_ROOMS_LOCAL_API_BASE_URL);
+    expect(
+      decodeClientSettingsPatch({ roomsLocalApiBaseUrl: "http://127.0.0.1:3101" })
+        .roomsLocalApiBaseUrl,
+    ).toBe("http://127.0.0.1:3101");
   });
 });
 
