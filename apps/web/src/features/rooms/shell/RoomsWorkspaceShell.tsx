@@ -329,10 +329,22 @@ export function RoomsWorkspaceShell({
         surface={surface}
       />
       <div className="flex min-h-0 min-w-0 flex-1">
-        {isSidebarVisible ? (
-          <aside
-            className="relative hidden shrink-0 border-r border-border bg-sidebar/45 md:flex"
-            data-rooms-sidebar=""
+        <aside
+          aria-hidden={!isSidebarVisible}
+          className={cn(
+            "relative hidden shrink-0 overflow-hidden border-r bg-sidebar text-sidebar-foreground surface-grain transition-[width,border-color] duration-200 ease-linear motion-reduce:transition-none md:flex",
+            isSidebarVisible ? "border-sidebar-border" : "pointer-events-none border-transparent",
+          )}
+          data-rooms-sidebar=""
+          data-state={isSidebarVisible ? "expanded" : "collapsed"}
+          inert={!isSidebarVisible}
+          style={{ width: isSidebarVisible ? `${sidebarWidth}px` : "0px" }}
+        >
+          <div
+            className={cn(
+              "flex min-h-0 shrink-0 transition-transform duration-200 ease-linear motion-reduce:transition-none",
+              !isSidebarVisible && "-translate-x-full",
+            )}
             style={{ width: `${sidebarWidth}px` }}
           >
             <RoomsWorkspaceNavigation
@@ -342,6 +354,8 @@ export function RoomsWorkspaceShell({
               surface={surface}
               workspace={workspace}
             />
+          </div>
+          {isSidebarVisible ? (
             <button
               aria-label="Resize Rooms sidebar"
               className="absolute inset-y-0 -right-2 z-30 w-4 cursor-col-resize touch-none after:absolute after:inset-y-0 after:left-1/2 after:w-px hover:after:bg-sidebar-border"
@@ -354,8 +368,8 @@ export function RoomsWorkspaceShell({
               title="Drag to resize Rooms sidebar"
               type="button"
             />
-          </aside>
-        ) : null}
+          ) : null}
+        </aside>
         <div
           className={cn(
             "flex min-h-0 min-w-0 flex-1 flex-col",
@@ -364,7 +378,7 @@ export function RoomsWorkspaceShell({
               : "overflow-y-auto",
           )}
         >
-          <details className="shrink-0 border-b border-border bg-sidebar/45 md:hidden">
+          <details className="shrink-0 border-b border-sidebar-border bg-sidebar text-sidebar-foreground surface-grain md:hidden">
             <summary className="cursor-pointer px-4 py-2 text-sm font-medium text-foreground">
               {room.name} navigation
             </summary>

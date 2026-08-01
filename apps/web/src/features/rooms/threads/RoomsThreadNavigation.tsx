@@ -206,8 +206,8 @@ export function RoomsNativeThreadNavItem({
     <button
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex w-full min-w-0 items-center gap-2 overflow-hidden rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-        active && "bg-muted text-foreground",
+        "flex w-full min-w-0 items-center gap-2 overflow-hidden rounded-md px-2 py-1.5 text-left text-sm text-sidebar-muted-foreground transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
+        active && "bg-sidebar-row-selected text-sidebar-foreground",
       )}
       data-rooms-native-thread-id={thread.threadId}
       onClick={() =>
@@ -250,14 +250,14 @@ export function RoomsYourThreadsNavigation({
   return (
     <section aria-label="Your Threads" className="min-w-0" data-rooms-native-threads="">
       <div className="mb-1 mt-5 flex items-center gap-1 px-2">
-        <p className="min-w-0 flex-1 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground/65 uppercase">
+        <p className="min-w-0 flex-1 text-[10px] font-semibold tracking-[0.12em] text-sidebar-muted-foreground/65 uppercase">
           Your Threads
         </p>
         <NewThreadControl boundProjects={boundProjects} compact roomSlug={room.slug} />
         <RoomsProjectBindingMenu compact roomId={room.id} sourceMode={sourceMode} />
       </div>
       {surface.kind === "native-draft" ? (
-        <div className="flex w-full min-w-0 items-center gap-2 rounded-md bg-muted px-2 py-1.5 text-sm text-foreground">
+        <div className="flex w-full min-w-0 items-center gap-2 rounded-md bg-sidebar-row-selected px-2 py-1.5 text-sm text-sidebar-foreground">
           <MessageSquareTextIcon aria-hidden className="size-3.5 shrink-0" />
           <span className="truncate">New T3 thread</span>
         </div>
@@ -277,13 +277,13 @@ export function RoomsYourThreadsNavigation({
       ))}
       {boundProjects.length === 0 ? (
         <div className="px-2 py-1.5">
-          <p className="mb-2 text-xs leading-relaxed text-muted-foreground">
+          <p className="mb-2 text-xs leading-relaxed text-sidebar-muted-foreground">
             Bind this local-only room to a real T3 project.
           </p>
           <RoomsProjectBindingMenu compact={false} roomId={room.id} sourceMode={sourceMode} />
         </div>
       ) : threads.length === 0 && surface.kind !== "native-draft" ? (
-        <p className="px-2 py-1.5 text-xs text-muted-foreground">No T3 threads yet.</p>
+        <p className="px-2 py-1.5 text-xs text-sidebar-muted-foreground">No T3 threads yet.</p>
       ) : null}
       {unresolvedBindings.length > 0 ? (
         <p className="flex items-center gap-1 px-2 py-1.5 text-[11px] text-amber-600 dark:text-amber-400">

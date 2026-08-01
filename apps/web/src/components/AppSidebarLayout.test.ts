@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   resolveAppSidebarPresentation,
   resolveRoomsTitlebarPresentation,
+  shouldRouteIntoRoomsWorkspace,
 } from "./AppSidebarLayout";
 import { resolveAppSidebarVariantSelection } from "./appSidebarVariant";
 
@@ -24,6 +25,24 @@ describe("app sidebar selection", () => {
 });
 
 describe("AppSidebarLayout sidebar exclusivity", () => {
+  it("hands non-Rooms chat routes into the complete v3 workspace", () => {
+    for (const pathname of ["/", "/draft/draft-local", "/environment-local/thread-local"]) {
+      expect(shouldRouteIntoRoomsWorkspace({ pathname, sidebarVariant: "v3" })).toBe(true);
+    }
+    expect(
+      shouldRouteIntoRoomsWorkspace({
+        pathname: "/rooms/rooms-local/dashboard",
+        sidebarVariant: "v3",
+      }),
+    ).toBe(false);
+    expect(
+      shouldRouteIntoRoomsWorkspace({ pathname: "/settings/beta", sidebarVariant: "v3" }),
+    ).toBe(false);
+    expect(
+      shouldRouteIntoRoomsWorkspace({ pathname: "/draft/example", sidebarVariant: "v2" }),
+    ).toBe(false);
+  });
+
   it("uses Rooms as the only sidebar for v3", () => {
     expect(
       resolveAppSidebarPresentation({

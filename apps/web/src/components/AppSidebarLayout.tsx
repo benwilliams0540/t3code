@@ -29,6 +29,7 @@ import {
 } from "./threadSidebarWidth";
 import {
   Sidebar,
+  SidebarInset,
   SidebarProvider,
   SidebarRail,
   SidebarTrigger,
@@ -177,6 +178,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   // and is identical for both sidebars — so v1 stays mounted there.
   const pathname = useLocation({ select: (location) => location.pathname });
   const isOnSettings = pathname === "/settings" || pathname.startsWith("/settings/");
+  const shouldEnterRoomsWorkspace = shouldRouteIntoRoomsWorkspace({ pathname, sidebarVariant });
   const { showRoomsSidebar, useSidebarV2, useSidebarV2Theme } = resolveAppSidebarPresentation({
     isOnSettings,
     sidebarVariant,
@@ -256,6 +258,11 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
     };
   }, [navigate, pathname]);
 
+  useEffect(() => {
+    if (!shouldEnterRoomsWorkspace) return;
+    void navigate({ to: "/rooms", replace: true });
+  }, [navigate, shouldEnterRoomsWorkspace]);
+
   return (
     <RoomsDataSourceProvider>
       <SidebarProvider className="h-dvh! min-h-0!" defaultOpen style={sidebarProviderStyle}>
@@ -285,7 +292,11 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
             <SidebarRail />
           </Sidebar>
         )}
-        {children}
+        {shouldEnterRoomsWorkspace ? (
+          <SidebarInset className="h-dvh min-h-0 bg-background" />
+        ) : (
+          children
+        )}
         {showRoomsSidebar ? (
           <RoomsSidebarShortcut toggleSidebar={toggleRoomsSidebar} />
         ) : (
@@ -294,6 +305,15 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
       </SidebarProvider>
     </RoomsDataSourceProvider>
   );
+}
+
+export function shouldRouteIntoRoomsWorkspace(input: {
+  readonly pathname: string;
+  readonly sidebarVariant: AppSidebarVariant;
+}): boolean {
+  if (input.sidebarVariant !== "v3") return false;
+  if (/^\/settings(\/|$)/.test(input.pathname)) return false;
+  return !/^\/rooms(\/|$)/.test(input.pathname);
 }
 
 export function resolveAppSidebarPresentation(input: {

@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "~/lib/utils";
+import { SidebarChromeFooter } from "~/components/sidebar/SidebarChrome";
 
 import type { RoomsDataSourceMode, RoomsSourceRoom } from "../dataSource";
 import {
@@ -56,8 +57,8 @@ function WorkspaceNavItem({
     <button
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-        active && "bg-muted text-foreground",
+        "flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-sidebar-muted-foreground transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
+        active && "bg-sidebar-row-selected text-sidebar-foreground",
       )}
       onClick={onClick}
       type="button"
@@ -65,7 +66,7 @@ function WorkspaceNavItem({
       <Icon aria-hidden className="size-3.5 shrink-0" />
       <span className="truncate">{label}</span>
       {badge !== undefined && badge > 0 ? (
-        <span className="ml-auto rounded-full bg-muted-foreground/15 px-1.5 text-[10px] font-semibold text-muted-foreground">
+        <span className="ml-auto rounded-full bg-sidebar-muted-foreground/15 px-1.5 text-[10px] font-semibold text-sidebar-muted-foreground">
           {badge}
         </span>
       ) : null}
@@ -91,9 +92,9 @@ export function RoomsWorkspaceNavigation({
       aria-label={room.name + " workspace"}
       className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden"
     >
-      <div className="border-b border-border px-3 py-3">
-        <p className="truncate text-sm font-semibold text-foreground">{room.name}</p>
-        <p className="mt-0.5 text-[11px] text-muted-foreground">
+      <div className="border-b border-sidebar-border px-3 py-3">
+        <p className="truncate text-sm font-semibold text-sidebar-foreground">{room.name}</p>
+        <p className="mt-0.5 text-[11px] text-sidebar-muted-foreground">
           {sourceMode === "local"
             ? "Local T3 only"
             : `${room.locality === "local_only" ? "Local-only room" : "Shared room"} · ${room.membershipRole}`}
@@ -108,11 +109,11 @@ export function RoomsWorkspaceNavigation({
           onClick={() => navigate({ kind: "dashboard" })}
         />
 
-        <p className="mb-1 mt-5 px-2 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground/65 uppercase">
+        <p className="mb-1 mt-5 px-2 text-[10px] font-semibold tracking-[0.12em] text-sidebar-muted-foreground/65 uppercase">
           Channels
         </p>
         {sourceMode === "local" ? (
-          <p className="px-2 py-1.5 text-xs leading-relaxed text-muted-foreground">
+          <p className="px-2 py-1.5 text-xs leading-relaxed text-sidebar-muted-foreground">
             Channel messaging isn&apos;t connected yet.
           </p>
         ) : workspace ? (
@@ -130,7 +131,7 @@ export function RoomsWorkspaceNavigation({
             );
           })
         ) : (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">No channel fixture.</p>
+          <p className="px-2 py-1.5 text-xs text-sidebar-muted-foreground">No channel fixture.</p>
         )}
 
         <RoomsYourThreadsNavigation
@@ -140,7 +141,7 @@ export function RoomsWorkspaceNavigation({
           surface={surface}
         />
 
-        <p className="mb-1 mt-5 px-2 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground/65 uppercase">
+        <p className="mb-1 mt-5 px-2 text-[10px] font-semibold tracking-[0.12em] text-sidebar-muted-foreground/65 uppercase">
           Project
         </p>
         {roomsProjectNavigationItems(sourceMode, workspace).map((item) => {
@@ -156,10 +157,10 @@ export function RoomsWorkspaceNavigation({
           );
         })}
         {sourceMode === "sample" && !workspace ? (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">No project fixture.</p>
+          <p className="px-2 py-1.5 text-xs text-sidebar-muted-foreground">No project fixture.</p>
         ) : null}
 
-        <p className="mb-1 mt-5 px-2 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground/65 uppercase">
+        <p className="mb-1 mt-5 px-2 text-[10px] font-semibold tracking-[0.12em] text-sidebar-muted-foreground/65 uppercase">
           Present
         </p>
         <WorkspaceNavItem
@@ -176,6 +177,7 @@ export function RoomsWorkspaceNavigation({
           onClick={() => navigate({ kind: "present" })}
         />
       </div>
+      <SidebarChromeFooter />
     </nav>
   );
 }
