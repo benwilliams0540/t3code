@@ -120,14 +120,44 @@ or dependency mutation was required.
 The production build emitted the repository's existing chunk-size and plugin
 timing warnings but no failure.
 
+## Isolated native runtime and restart evidence
+
+The final consumer ran against the producer image carrying exact revision
+`67b20ef49cb9584af60f6c4e810659b7c77ce286` at
+`http://127.0.0.1:33103`. It used ignored project-owned scratch state at
+`/Users/brw/Developer/apps/t3code/.t3/rooms-m4-evidence-gate`, with the T3
+backend on `16167`, Vite on `8127`, and Electron remote debugging on `9322`.
+
+The real story `story:019fc0bd-3bb7-77d6-8a45-dd4ad8396a99` and its persisted
+native association recovered in the app. The link resolved to environment
+`76cbf64b-4f14-4b1d-93c7-d07be825eb7b`, project
+`6b5f3347-dce2-49eb-b456-02dfd8a0acb4`, and thread
+`d29e0556-5278-405e-bd46-dc945cd12540`, rendered as
+`Orient Native Rooms T3 Thread`.
+
+Through the real story UI, the story moved from backlog to in-progress, the
+consumer uploaded and attached the app handoff as artifact evidence
+`019fc3eb-a6d0-7c44-b15f-37a5271b27f0`, and the story moved to `human-qa`.
+The rendered CAS tuple is
+`a1c803f4a8a75ab298ca0e94fb416b9faaaf952909c7cd5632e49328ecbf8283`,
+`7718` bytes, `text/markdown`. At scope head `10`, `Approve Human QA` is
+available and `Complete story` is disabled. The UI opened the exact native
+thread without sending a provider turn.
+
+After an isolated Rails restart and then a full app restart, the same story,
+thread identity, Human QA stage, evidence tuple, five workflow activity
+entries, enabled review action, and disabled completion action recovered. No
+review or completion request was issued. The retained runtime is therefore
+prepared for Ben's final manual pass, not recorded as accepted.
+
 ## Honest limits and manual gate
 
 - Automated client and server tests prove the command protocol, rendering,
   retry identity, error preservation, and native-link routing. They do not
   constitute Ben's Human QA decision or physical keyboard-feel assessment.
-- The final isolated runtime must retain the real story at `Human QA` with a
-  real bounded artifact attached. Ben's approval, completion click, native
-  thread open, shortcut feel, and post-restart verification remain manual.
+- The retained isolated runtime leaves the real story at `Human QA` with a
+  real bounded artifact attached. Ben's approval, completion click, shortcut
+  feel, and post-completion restart verification remain manual.
 - A story has no persisted channel association in the current producer. The
   story's ordered Workflow activity is the honest audit surface; the app does
   not select or mutate an arbitrary channel to simulate ownership.
@@ -141,7 +171,7 @@ Until the manual actions pass, the correct status is:
 ## Workspace hygiene
 
 The pre-existing untracked
-`reports/monroe-rooms-dogfood-agent-handoff.md` was not read, edited, staged, or
+`reports/monroe-rooms-dogfood-agent-handoff.md` was not edited, staged, or
 committed. The existing M3 T3 desktop/backend/Vite runtime and scratch state
 were not stopped or repurposed. No worktree, PR, merge, rebase, force-push,
 deployment, personal T3 state, or unrelated cleanup was used.
