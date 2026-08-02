@@ -2,6 +2,7 @@ import type {
   RoomsEvidence,
   RoomsFeedItem,
   RoomsPrincipal,
+  RoomsSourceEvent,
   RoomsStage,
   RoomsStory,
   RoomsThread,
@@ -24,6 +25,42 @@ export type RoomsActivityCardKind =
 
 export type RoomsPrincipalTone = "human" | "agent" | "machine" | "unknown";
 
+/**
+ * Registers are presentation, not vocabulary. Every register renders items from the same frozen
+ * feed-kind union; they differ only in how much of the durable record stays on the reading surface.
+ */
+export type RoomsActivityRegister = "conversation" | "excerpt" | "record";
+
+export function roomsActivityRegister(cardKind: RoomsActivityCardKind): RoomsActivityRegister {
+  switch (cardKind) {
+    case "message":
+    case "reaction":
+      return "conversation";
+    case "run":
+    case "story":
+      return "excerpt";
+    case "evidence":
+    case "approval":
+    case "gate":
+    case "unknown":
+    case "unavailable":
+      return "record";
+  }
+}
+
+/**
+ * A writer the current source cannot resolve to a full principal record. Local channels return a
+ * bare principal ID for anyone other than the generated Local human, and an unresolved writer must
+ * stay visible rather than being silently attributed to someone else.
+ */
+export interface RoomsUnresolvedPrincipal {
+  readonly id: string;
+  readonly type: "unresolved";
+  readonly display_name: string;
+}
+
+export type RoomsActivityPrincipal = RoomsPrincipal | RoomsUnresolvedPrincipal;
+
 export interface RoomsPrincipalPresentation {
   readonly label: "Human" | "Agent" | "Machine" | "Unknown principal";
   readonly tone: RoomsPrincipalTone;
@@ -31,15 +68,27 @@ export interface RoomsPrincipalPresentation {
 
 export interface RoomsProjectedAttribution {
   readonly mode: "explicit_principal" | "mirrored_source";
-  readonly writer: RoomsPrincipal;
-  readonly actor: RoomsPrincipal | null;
+  readonly writer: RoomsActivityPrincipal;
+  readonly actor: RoomsActivityPrincipal | null;
   readonly upstream: RoomsUpstreamAttribution | null;
   readonly delegatedAgent: RoomsPrincipal | null;
   readonly machine: RoomsPrincipal | null;
 }
 
+/**
+ * The durable facts every register renders, independent of which source produced the item. Local
+ * feed items satisfy this without being widened into the fixture-only `RoomsFeedItem` union.
+ */
+export interface RoomsActivityItemFacts {
+  readonly id: string;
+  readonly kind: string;
+  readonly occurred_at: string;
+  readonly summary: string;
+  readonly source_event: RoomsSourceEvent;
+}
+
 export interface RoomsProjectedActivity {
-  readonly item: RoomsFeedItem;
+  readonly item: RoomsActivityItemFacts;
   readonly cardKind: RoomsActivityCardKind;
   readonly attribution: RoomsProjectedAttribution;
   readonly bodyMarkdown: string | null;
@@ -70,7 +119,7 @@ export interface RoomsProjectedActivity {
 }
 
 export function principalPresentation(
-  principal: Pick<RoomsPrincipal, "type"> | null,
+  principal: Pick<RoomsActivityPrincipal, "type"> | null,
 ): RoomsPrincipalPresentation {
   switch (principal?.type) {
     case "human":

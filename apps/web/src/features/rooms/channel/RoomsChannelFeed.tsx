@@ -9,9 +9,10 @@ import {
   WifiIcon,
 } from "lucide-react";
 
-import { RoomsActivityItem } from "../activity/RoomsActivityItem";
+import { RoomsActivityFeed } from "../activity/RoomsActivityFeed";
 import type { RoomsStateExample } from "../model/workspace";
 import type { RoomsWorkspaceSlotProps } from "../shell/slots";
+import { roomsChannelDisplayName } from "./channelName";
 import { projectRoomsChannel } from "./projection";
 
 function ErrorState({
@@ -165,7 +166,9 @@ export function RoomsChannelFeed({ fixture, room, surface, workspace }: RoomsWor
             <HashIcon aria-hidden className="size-4 text-muted-foreground" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-xl font-semibold text-foreground">{projection.channel.name}</h1>
+            <h1 className="text-xl font-semibold text-foreground">
+              {roomsChannelDisplayName(projection.channel.name)}
+            </h1>
             <p className="mt-1 text-sm text-muted-foreground">{projection.channel.purpose}</p>
           </div>
           <span className="ml-auto rounded-full border border-border px-2 py-1 text-[10px] text-muted-foreground">
@@ -179,13 +182,10 @@ export function RoomsChannelFeed({ fixture, room, surface, workspace }: RoomsWor
           <span>{projection.feed.page_info.has_more ? "more available" : "snapshot complete"}</span>
         </div>
       </header>
-      <ol aria-label={`Ordered ${projection.channel.name} activity`} className="grid gap-3">
-        {projection.items.map((activity) => (
-          <li key={activity.item.id}>
-            <RoomsActivityItem activity={activity} />
-          </li>
-        ))}
-      </ol>
+      <RoomsActivityFeed
+        activities={projection.items}
+        label={`Ordered ${roomsChannelDisplayName(projection.channel.name)} activity`}
+      />
     </main>
   );
 }

@@ -1,11 +1,17 @@
 import { AlertTriangleIcon, HashIcon, InboxIcon, RefreshCwIcon, SendIcon } from "lucide-react";
-import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
 
+import { RoomsActivityFeed, useRoomsFeedAutoScroll } from "../activity/RoomsActivityFeed";
+import { RoomsActivityRowView } from "../activity/RoomsActivityItem";
+import { roomsActivityRegister } from "../activity/projection";
+import { roomsChannelDisplayName } from "./channelName";
+import {
+  projectRoomsLocalActivityItem,
+  projectRoomsLocalActivityItems,
+} from "./localActivityProjection";
 import { useRoomsDataSource } from "../dataSource";
 import { isRoomsLocalClientError, RoomsLocalClientError } from "../dataSource/localChannelsClient";
 import type {
@@ -56,6 +62,10 @@ export function isCurrentRoomsLocalFeedRequest(
   return requestGeneration === currentGeneration;
 }
 
+/**
+ * Renders one durable Local item through the shared activity renderer. Local and Sample channels
+ * differ in where their truth comes from, not in how a message reads.
+ */
 export function RoomsLocalFeedItemCard({
   item,
   workspace,
@@ -63,39 +73,17 @@ export function RoomsLocalFeedItemCard({
   item: RoomsLocalFeedItem;
   workspace: RoomsLocalWorkspace;
 }) {
-  const displayName =
-    item.attribution.writer_principal_id === workspace.principal.id
-      ? workspace.principal.display_name
-      : item.attribution.writer_principal_id;
-  if (item.kind === "unknown_schema") {
-    return (
-      <article className="rounded-xl border border-amber-500/30 bg-amber-500/[0.07] p-4">
-        <div className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-300">
-          <AlertTriangleIcon aria-hidden className="size-4" />
-          Unsupported channel event
-        </div>
-        <p className="mt-2 text-sm text-muted-foreground">{item.summary}</p>
-        <p className="mt-2 font-mono text-[10px] text-muted-foreground">
-          {item.payload.event_type} schema {item.payload.event_schema} · seq {item.source_event.seq}
-        </p>
-      </article>
-    );
-  }
+  const activity = projectRoomsLocalActivityItem(workspace, item);
   return (
-    <article className="rounded-xl border border-border bg-card p-4">
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <p className="text-sm font-semibold text-foreground">{displayName}</p>
-        <code className="text-[10px] text-muted-foreground">
-          {item.attribution.writer_principal_id}
-        </code>
-        <span className="ml-auto text-[10px] text-muted-foreground">
-          seq {item.source_event.seq}
-        </span>
-      </div>
-      <div className="prose prose-sm mt-3 max-w-none text-foreground dark:prose-invert">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.payload.body_markdown}</ReactMarkdown>
-      </div>
-    </article>
+    <RoomsActivityRowView
+      row={{
+        kind: "activity",
+        key: activity.item.id,
+        activity,
+        register: roomsActivityRegister(activity.cardKind),
+        showHeader: true,
+      }}
+    />
   );
 }
 
@@ -210,6 +198,12 @@ export function RoomsLocalChannelFeed({
   const [feedInvalidated, setFeedInvalidated] = useState(false);
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
   const loadGeneration = useRef(0);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const activities = useMemo(
+    () => projectRoomsLocalActivityItems(workspace, feed?.items ?? []),
+    [feed?.items, workspace],
+  );
+  useRoomsFeedAutoScroll(scrollRef, activities.length);
 
   const reload = useCallback(
     async (loadCompleteSnapshot = false) => {
@@ -300,15 +294,17 @@ export function RoomsLocalChannelFeed({
       className="flex h-full min-h-0 flex-1 flex-col"
       data-rooms-local-channel={channel.slug}
     >
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <main className="mx-auto w-full max-w-4xl p-5 sm:p-8">
+      <div className="min-h-0 flex-1 overflow-y-auto" ref={scrollRef}>
+        <main className="mx-auto flex min-h-full w-full max-w-4xl flex-col p-5 sm:p-8">
           <header className="mb-5 border-b border-border pb-5">
             <div className="flex items-start gap-3">
               <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/45">
                 <HashIcon aria-hidden className="size-4 text-muted-foreground" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-xl font-semibold text-foreground">{channel.name}</h1>
+                <h1 className="text-xl font-semibold text-foreground">
+                  {roomsChannelDisplayName(channel.name)}
+                </h1>
                 {channel.purpose ? (
                   <p className="mt-1 text-sm text-muted-foreground">{channel.purpose}</p>
                 ) : null}
@@ -335,7 +331,7 @@ export function RoomsLocalChannelFeed({
               </Button>
             </div>
           ) : feed?.items.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-8 text-center">
+            <div className="mt-auto rounded-2xl border border-dashed border-border bg-muted/20 p-8 text-center">
               <InboxIcon aria-hidden className="mx-auto size-6 text-muted-foreground" />
               <h2 className="mt-4 text-lg font-semibold text-foreground">No messages yet</h2>
               <p className="mt-2 text-sm text-muted-foreground">
@@ -343,13 +339,12 @@ export function RoomsLocalChannelFeed({
               </p>
             </div>
           ) : (
-            <ol aria-label={`Ordered ${channel.name} messages`} className="grid gap-3">
-              {feed?.items.map((item) => (
-                <li key={item.id}>
-                  <RoomsLocalFeedItemCard item={item} workspace={workspace} />
-                </li>
-              ))}
-            </ol>
+            <div className="mt-auto">
+              <RoomsActivityFeed
+                activities={activities}
+                label={`Ordered ${roomsChannelDisplayName(channel.name)} messages`}
+              />
+            </div>
           )}
 
           {feed?.page_info.has_more && !feedInvalidated ? (

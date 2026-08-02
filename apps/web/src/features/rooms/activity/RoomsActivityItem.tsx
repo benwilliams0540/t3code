@@ -12,10 +12,14 @@ import {
   SmileIcon,
   UnplugIcon,
 } from "lucide-react";
+import { useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import { cn } from "~/lib/utils";
 
 import { resolveRoomsInternalHref } from "../shell/internalHref";
+import type { RoomsActivityRow } from "./grouping";
 import { principalPresentation, type RoomsProjectedActivity } from "./projection";
 
 const cardCopy = {
@@ -34,6 +38,22 @@ function formatTime(value: string): string {
   return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(
     new Date(value),
   );
+}
+
+export function formatRoomsActivityDay(value: string, now: Date = new Date()): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown date";
+  const startOfDay = (input: Date) =>
+    new Date(input.getFullYear(), input.getMonth(), input.getDate()).getTime();
+  const dayDelta = Math.round((startOfDay(now) - startOfDay(date)) / 86_400_000);
+  if (dayDelta === 0) return "Today";
+  if (dayDelta === 1) return "Yesterday";
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+    ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+  }).format(date);
 }
 
 function principalClasses(tone: ReturnType<typeof principalPresentation>["tone"]): string {
@@ -102,10 +122,48 @@ function AttributionFacts({ activity }: { readonly activity: RoomsProjectedActiv
   );
 }
 
+/**
+ * Durable provenance stays in the DOM for every item, but only the record register keeps it on the
+ * reading surface. Conversation rows fold it behind a disclosure so a channel reads as speech
+ * without discarding the ledger facts that make it trustworthy.
+ */
+function ActivityProvenance({ activity }: { readonly activity: RoomsProjectedActivity }) {
+  const { attribution, item } = activity;
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      {/* Absolute so a collapsed row contributes no height: a grouped block must read as one paragraph. */}
+      <button
+        aria-expanded={open}
+        className="absolute top-1 right-2 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/70 opacity-0 transition-opacity group-hover/row:opacity-100 hover:text-muted-foreground focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-ring"
+        onClick={() => setOpen((value) => !value)}
+        type="button"
+      >
+        seq {item.source_event.seq} · details
+      </button>
+      <div
+        className={cn(
+          "mt-1.5 grid gap-0.5 rounded-lg border border-border/60 bg-muted/25 p-2.5 font-mono text-[10px] text-muted-foreground",
+          open ? "" : "hidden",
+        )}
+        data-rooms-activity-provenance=""
+      >
+        <span>event {item.source_event.event_id}</span>
+        <span>
+          {item.source_event.type} · schema {item.source_event.schema} · seq {item.source_event.seq}
+        </span>
+        <span>writer {attribution.writer.id}</span>
+        {attribution.actor ? <span>actor {attribution.actor.id}</span> : null}
+        <span>attribution {attribution.mode}</span>
+      </div>
+    </>
+  );
+}
+
 function ActivityDetails({ activity }: { readonly activity: RoomsProjectedActivity }) {
   switch (activity.cardKind) {
     case "message":
-      return <p className="mt-2 text-sm leading-6 text-foreground">{activity.bodyMarkdown}</p>;
+      return <ActivityMarkdown className="mt-2" markdown={activity.bodyMarkdown} />;
     case "reaction":
       return (
         <p className="mt-2 text-sm text-foreground">
@@ -192,6 +250,32 @@ function ActivityDetails({ activity }: { readonly activity: RoomsProjectedActivi
   }
 }
 
+function ActivityMarkdown({
+  className,
+  markdown,
+}: {
+  readonly className?: string;
+  readonly markdown: string | null;
+}) {
+  if (markdown === null) return null;
+  return (
+    <div
+      className={cn(
+        "prose prose-sm max-w-none text-foreground dark:prose-invert",
+        "prose-p:my-1 prose-pre:my-2 prose-ul:my-1.5 prose-ol:my-1.5",
+        "[&_p:first-child]:mt-0 [&_p:last-child]:mb-0",
+        className,
+      )}
+    >
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
+    </div>
+  );
+}
+
+/**
+ * The record and excerpt registers: a bordered card that keeps the durable facts visible, because
+ * governance and lifecycle items are read as records rather than as speech.
+ */
 export function RoomsActivityItem({ activity }: { readonly activity: RoomsProjectedActivity }) {
   const copy = cardCopy[activity.cardKind];
   const Icon = copy.icon;
@@ -236,5 +320,108 @@ export function RoomsActivityItem({ activity }: { readonly activity: RoomsProjec
         </footer>
       </div>
     </article>
+  );
+}
+
+/**
+ * The conversation register: speaker-grouped, unbordered, and anchored on what was said. Provenance
+ * remains one disclosure away.
+ */
+export function RoomsConversationActivity({
+  activity,
+  showHeader,
+}: {
+  readonly activity: RoomsProjectedActivity;
+  readonly showHeader: boolean;
+}) {
+  const copy = cardCopy[activity.cardKind];
+  const writer = activity.attribution.writer;
+  const writerPresentation = principalPresentation(writer);
+  const isReaction = activity.cardKind === "reaction";
+  return (
+    <article
+      aria-label={`${copy.label} written by ${writer.display_name}, source sequence ${activity.item.source_event.seq}`}
+      className={cn(
+        "group/row relative flex gap-3 rounded-lg px-2 py-px hover:bg-muted/25",
+        showHeader ? "mt-3 first:mt-0" : "",
+      )}
+      data-rooms-activity-kind={activity.cardKind}
+      data-rooms-activity-register="conversation"
+      data-rooms-attribution-mode={activity.attribution.mode}
+      data-rooms-grouped={showHeader ? undefined : ""}
+      data-source-seq={activity.item.source_event.seq}
+    >
+      {showHeader ? (
+        <PrincipalMark activity={activity} />
+      ) : (
+        <time
+          className="w-9 shrink-0 pt-1 pr-1 text-right text-[10px] leading-4 text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-100"
+          dateTime={activity.item.occurred_at}
+        >
+          {formatTime(activity.item.occurred_at)}
+        </time>
+      )}
+      <div className="min-w-0 flex-1">
+        {showHeader ? (
+          <header className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+            <span className="font-semibold text-foreground">{writer.display_name}</span>
+            {writerPresentation.tone === "human" ? null : (
+              <span
+                className={cn(
+                  "rounded-full border px-1.5 py-px text-[9px] font-semibold uppercase",
+                  principalClasses(writerPresentation.tone),
+                )}
+              >
+                {writerPresentation.label}
+              </span>
+            )}
+            <time
+              className="text-[11px] text-muted-foreground"
+              dateTime={activity.item.occurred_at}
+            >
+              {formatTime(activity.item.occurred_at)}
+            </time>
+          </header>
+        ) : null}
+        {isReaction ? (
+          <p className="text-sm text-foreground">
+            <span className="mr-2 rounded-full border border-border bg-muted/45 px-2.5 py-1">
+              {activity.emoji}
+            </span>
+            {activity.item.summary}
+          </p>
+        ) : (
+          <ActivityMarkdown markdown={activity.bodyMarkdown ?? activity.item.summary} />
+        )}
+        <ActivityProvenance activity={activity} />
+      </div>
+    </article>
+  );
+}
+
+export function RoomsActivityDaySeparator({ isoDate }: { readonly isoDate: string }) {
+  return (
+    <div className="my-4 flex items-center gap-3" data-rooms-activity-day="">
+      <span className="h-px flex-1 bg-border" />
+      <time
+        className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+        dateTime={isoDate}
+      >
+        {formatRoomsActivityDay(isoDate)}
+      </time>
+      <span className="h-px flex-1 bg-border" />
+    </div>
+  );
+}
+
+export function RoomsActivityRowView({ row }: { readonly row: RoomsActivityRow }) {
+  if (row.kind === "day") return <RoomsActivityDaySeparator isoDate={row.isoDate} />;
+  if (row.register === "conversation") {
+    return <RoomsConversationActivity activity={row.activity} showHeader={row.showHeader} />;
+  }
+  return (
+    <div className="my-3">
+      <RoomsActivityItem activity={row.activity} />
+    </div>
   );
 }

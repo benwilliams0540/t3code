@@ -99,7 +99,26 @@ describe("Rooms Local channel feed", () => {
     expect(humanMarkup).toContain("<strong>Hello</strong>");
     expect(humanMarkup).toContain(workspace.principal.display_name);
     expect(humanMarkup).toContain(workspace.principal.id);
-    expect(unknownMarkup).toContain("Unsupported channel event");
-    expect(unknownMarkup).toContain("channel.notice schema 2");
+    expect(unknownMarkup).toContain("Unknown schema retained");
+    expect(unknownMarkup).toContain("channel.notice · schema 2");
+  });
+
+  it("reads a human message in the conversation register and keeps its provenance disclosed", () => {
+    const markup = renderToStaticMarkup(
+      <RoomsLocalFeedItemCard item={firstPage.items[0]!} workspace={workspace} />,
+    );
+    expect(markup).toContain('data-rooms-activity-register="conversation"');
+    expect(markup).toContain("data-rooms-activity-provenance");
+    const provenance = markup.slice(markup.indexOf("data-rooms-activity-provenance"));
+    expect(provenance).toContain(workspace.principal.id);
+    expect(provenance).toContain(String(firstPage.items[0]!.source_event.seq));
+  });
+
+  it("keeps an unsupported event in the record register rather than the conversation", () => {
+    const markup = renderToStaticMarkup(
+      <RoomsLocalFeedItemCard item={unknownItem} workspace={workspace} />,
+    );
+    expect(markup).toContain('data-rooms-activity-kind="unknown"');
+    expect(markup).not.toContain('data-rooms-activity-register="conversation"');
   });
 });
