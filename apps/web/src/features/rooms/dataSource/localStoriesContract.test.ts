@@ -3,26 +3,47 @@ import { describe, expect, it } from "vite-plus/test";
 
 import emptyStoriesDocument from "./fixtures/local-stories-v1-empty.json";
 import storyWithThreadDocument from "./fixtures/local-stories-v1-story-with-thread.json";
+import emptyStoriesV2Document from "./fixtures/local-stories-v2-empty.json";
+import storyAtHumanQaDocument from "./fixtures/local-stories-v2-story-at-human-qa.json";
 import { ROOMS_LOCAL_STORIES_SOURCE } from "../model/source";
 import { RoomsLocalStoriesResponse, RoomsLocalStory } from "./localStoriesContract";
 
 const decodeStories = Schema.decodeUnknownSync(RoomsLocalStoriesResponse);
 const decodeStory = Schema.decodeUnknownSync(RoomsLocalStory);
 
-describe("rooms.local-stories v1 contract fixtures", () => {
-  it("pins the immutable producer and decodes a valid zero-story collection", () => {
+describe("rooms.local-stories v1/v2 contract fixtures", () => {
+  it("retains v1 decoding while pinning the immutable v2 producer", () => {
     const response = decodeStories(emptyStoriesDocument);
     expect(ROOMS_LOCAL_STORIES_SOURCE).toEqual({
-      repositorySha: "918c5b31f510fa065b246d8b9fb13c5505581838",
+      repositorySha: "67b20ef49cb9584af60f6c4e810659b7c77ce286",
       contractId: "rooms.local-stories",
-      contractVersion: 1,
-      schemaUri: "contracts/rooms/local-stories/v1/schema.json",
+      contractVersion: 2,
+      schemaUri: "contracts/rooms/local-stories/v2/schema.json",
     });
     expect(response.stories).toEqual([]);
     expect(response.capabilities).toEqual({
       "work.read": true,
       "work.create": true,
       "work.link_thread": true,
+    });
+  });
+
+  it("decodes the v2 collection and Human QA projection", () => {
+    const response = decodeStories(emptyStoriesV2Document);
+    const story = decodeStory(storyAtHumanQaDocument);
+    expect(response.contract.version).toBe(2);
+    if (response.contract.version !== 2) throw new Error("Expected the v2 fixture.");
+    expect(response.capabilities).toMatchObject({
+      "work.attach_evidence": true,
+      "work.review": true,
+      "work.complete": true,
+    });
+    expect(story).toMatchObject({
+      stage: "human-qa",
+      scope_head_seq: 9,
+      allowed_actions: { attach_evidence: true, review: true, complete: false },
+      gate: { reviewer_allowed: true, completion_ready: false },
+      evidence: [{ kind: "artifact", attached_seq: 8 }],
     });
   });
 

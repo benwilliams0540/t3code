@@ -1,10 +1,14 @@
 import {
   AlertTriangleIcon,
+  CheckCircle2Icon,
   ExternalLinkIcon,
   GitBranchIcon,
+  HistoryIcon,
   LinkIcon,
   PlusIcon,
   RefreshCwIcon,
+  ShieldCheckIcon,
+  UploadIcon,
 } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -26,9 +30,13 @@ import { formatRelativeTimeLabel } from "~/timestampFormat";
 import { useRoomsDataSource } from "../dataSource";
 import { isRoomsLocalClientError } from "../dataSource/localChannelsClient";
 import type {
+  RoomsLocalAttachEvidenceInput,
+  RoomsLocalEvidenceKind,
   RoomsLocalStoriesResponse,
   RoomsLocalStory,
+  RoomsLocalStoryV2,
 } from "../dataSource/localStoriesContract";
+import { isRoomsLocalStoryV2 } from "../dataSource/localStoriesContract";
 import { createLowercaseUuidV7 } from "../dataSource/uuidV7";
 import {
   finishStableRoomsSubmission,
@@ -277,6 +285,407 @@ function RoomsLocalStoryError({ error }: { readonly error: LocalStoryError }) {
   );
 }
 
+export const ROOMS_LOCAL_EVIDENCE_MAX_BYTES = 5 * 1024 * 1024;
+const BASE64_CHUNK_SIZE = 0x8000;
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += BASE64_CHUNK_SIZE) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + BASE64_CHUNK_SIZE));
+  }
+  return btoa(binary);
+}
+
+export async function encodeRoomsLocalEvidenceFile(file: Blob): Promise<{
+  readonly bodyBase64: string;
+  readonly mediaType: string;
+}> {
+  if (file.size === 0) throw new Error("Choose a non-empty evidence file.");
+  if (file.size > ROOMS_LOCAL_EVIDENCE_MAX_BYTES) {
+    throw new Error("Evidence files are limited to 5 MiB.");
+  }
+  return {
+    bodyBase64: bytesToBase64(new Uint8Array(await file.arrayBuffer())),
+    mediaType: file.type || "application/octet-stream",
+  };
+}
+
+export function localStoryCompletionEvidence(story: RoomsLocalStoryV2): readonly string[] {
+  const approvedId = story.gate?.approved_review_id;
+  if (!approvedId) return [];
+  return story.reviews.find((review) => review.id === approvedId)?.evidence ?? [];
+}
+
+export function localStoryStageLabel(stage: string): string {
+  return (
+    {
+      backlog: "Backlog",
+      "in-progress": "In progress",
+      "human-qa": "Human QA",
+      done: "Done",
+    }[stage] ?? stage
+  );
+}
+
+export function RoomsLocalStoryGateStatus({
+  onApprove,
+  pending,
+  story,
+}: {
+  readonly onApprove: () => void;
+  readonly pending: boolean;
+  readonly story: RoomsLocalStoryV2;
+}) {
+  if (!story.gate) return null;
+  return (
+    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <ShieldCheckIcon className="size-4" />
+            Human QA decision
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Requires {story.gate.required_evidence.mode} of{" "}
+            {story.gate.required_evidence.kinds.join(", ")}.
+            {story.gate.approved_review_id
+              ? " Approval is persisted; completion is now a separate action."
+              : " Approval records your durable human decision."}
+          </p>
+        </div>
+        <Button
+          data-rooms-story-review="approved"
+          disabled={pending || !story.allowed_actions.review}
+          onClick={onApprove}
+          size="sm"
+        >
+          <ShieldCheckIcon />
+          {pending
+            ? "Recording…"
+            : story.gate.approved_review_id
+              ? "Human QA approved"
+              : "Approve Human QA"}
+        </Button>
+      </div>
+      {!story.gate.reviewer_allowed && !story.gate.approved_review_id ? (
+        <p className="mt-3 text-xs text-amber-800 dark:text-amber-200">
+          This reviewer or the currently attached evidence does not satisfy the pinned gate.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+interface StoryTransitionPayload {
+  readonly expectedHeadSeq: number;
+  readonly to: string;
+  readonly evidence: readonly string[];
+}
+
+interface StoryReviewPayload {
+  readonly expectedHeadSeq: number;
+  readonly evidence: readonly string[];
+}
+
+function RoomsLocalStoryLifecycle({
+  onUpdated,
+  roomId,
+  story,
+}: {
+  readonly onUpdated: (story: RoomsLocalStory) => void;
+  readonly roomId: string;
+  readonly story: RoomsLocalStoryV2;
+}) {
+  const {
+    attachLocalStoryEvidence,
+    loadLocalStory,
+    reviewLocalStory,
+    transitionLocalStory,
+    uploadLocalCas,
+  } = useRoomsDataSource();
+  const [file, setFile] = useState<File | null>(null);
+  const [kind, setKind] = useState<RoomsLocalEvidenceKind>("artifact");
+  const [note, setNote] = useState("");
+  const [pending, setPending] = useState<string | null>(null);
+  const pendingRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<LocalStoryError | null>(null);
+  const [evidenceCommand, setEvidenceCommand] = useState<StableRoomsCommand<
+    Omit<RoomsLocalAttachEvidenceInput, "requestId">
+  > | null>(null);
+  const [transitionCommand, setTransitionCommand] =
+    useState<StableRoomsCommand<StoryTransitionPayload> | null>(null);
+  const [reviewCommand, setReviewCommand] = useState<StableRoomsCommand<StoryReviewPayload> | null>(
+    null,
+  );
+
+  const recoverStaleStory = async (cause: unknown): Promise<void> => {
+    if (!isRoomsLocalClientError(cause) || cause.code !== "stale_scope_head") return;
+    setEvidenceCommand(null);
+    setTransitionCommand(null);
+    setReviewCommand(null);
+    try {
+      onUpdated(await loadLocalStory(roomId, story.id));
+    } catch {
+      // Keep the original stale-head error visible. The surrounding live-change loop and
+      // explicit Refresh action remain available if this immediate reconciliation also fails.
+    }
+  };
+
+  const attachEvidence = async () => {
+    if ((!file && !evidenceCommand) || !story.allowed_actions.attach_evidence) return;
+    if (!tryStartStableRoomsSubmission(pendingRef)) return;
+    setPending("evidence");
+    setError(null);
+    try {
+      let next = evidenceCommand;
+      if (!next) {
+        const encoded = await encodeRoomsLocalEvidenceFile(file!);
+        const cas = await uploadLocalCas(encoded);
+        next = prepareStableRoomsCommand(
+          null,
+          {
+            expectedHeadSeq: story.scope_head_seq,
+            kind,
+            cas,
+            note: note.trim() === "" ? null : note,
+          },
+          createLowercaseUuidV7,
+        );
+        setEvidenceCommand(next);
+      }
+      const result = await attachLocalStoryEvidence(roomId, story.id, {
+        requestId: next.requestId,
+        ...next.payload,
+      });
+      setEvidenceCommand(null);
+      setFile(null);
+      setNote("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      onUpdated(result.value);
+    } catch (cause) {
+      await recoverStaleStory(cause);
+      setError(
+        localStoryError(cause, "unexpected_evidence_error", "Could not attach the evidence."),
+      );
+    } finally {
+      finishStableRoomsSubmission(pendingRef);
+      setPending(null);
+    }
+  };
+
+  const transition = async (to: string, terminal: boolean) => {
+    if (!tryStartStableRoomsSubmission(pendingRef)) return;
+    const evidence = terminal ? localStoryCompletionEvidence(story) : [];
+    const payload = { expectedHeadSeq: story.scope_head_seq, to, evidence };
+    const next = prepareStableRoomsCommand(transitionCommand, payload, createLowercaseUuidV7);
+    setTransitionCommand(next);
+    setPending(`transition:${to}`);
+    setError(null);
+    try {
+      const result = await transitionLocalStory(roomId, story.id, {
+        requestId: next.requestId,
+        ...next.payload,
+      });
+      setTransitionCommand(null);
+      onUpdated(result.value);
+    } catch (cause) {
+      await recoverStaleStory(cause);
+      setError(
+        localStoryError(cause, "unexpected_transition_error", "Could not change story stage."),
+      );
+    } finally {
+      finishStableRoomsSubmission(pendingRef);
+      setPending(null);
+    }
+  };
+
+  const approveHumanQa = async () => {
+    if (
+      !story.gate ||
+      !story.allowed_actions.review ||
+      !tryStartStableRoomsSubmission(pendingRef)
+    ) {
+      return;
+    }
+    const payload = {
+      expectedHeadSeq: story.scope_head_seq,
+      evidence: story.gate.eligible_evidence,
+    };
+    const next = prepareStableRoomsCommand(reviewCommand, payload, createLowercaseUuidV7);
+    setReviewCommand(next);
+    setPending("review");
+    setError(null);
+    try {
+      const result = await reviewLocalStory(roomId, story.id, {
+        requestId: next.requestId,
+        expectedHeadSeq: next.payload.expectedHeadSeq,
+        decision: "approved",
+        evidence: next.payload.evidence,
+      });
+      setReviewCommand(null);
+      onUpdated(result.value);
+    } catch (cause) {
+      await recoverStaleStory(cause);
+      setError(localStoryError(cause, "unexpected_review_error", "Could not record Human QA."));
+    } finally {
+      finishStableRoomsSubmission(pendingRef);
+      setPending(null);
+    }
+  };
+
+  return (
+    <div className="mt-5 grid gap-4 border-t border-border pt-5" data-rooms-story-lifecycle="v2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-foreground">Persisted workflow</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Room head {story.scope_head_seq} · ledger as of {story.as_of_seq}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {story.allowed_next_transitions.map((candidate) => (
+            <Button
+              data-rooms-story-transition={candidate.to}
+              disabled={pending !== null || !candidate.allowed}
+              key={`${candidate.from}:${candidate.to}`}
+              onClick={() => void transition(candidate.to, candidate.terminal)}
+              size="sm"
+              title={candidate.unavailable_reason ?? undefined}
+              variant={candidate.terminal ? "default" : "outline"}
+            >
+              {candidate.terminal ? <CheckCircle2Icon /> : null}
+              {pending === `transition:${candidate.to}`
+                ? "Saving…"
+                : candidate.terminal
+                  ? "Complete story"
+                  : `Move to ${candidate.label}`}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {story.allowed_actions.attach_evidence || story.evidence.length > 0 ? (
+        <div className="rounded-xl border border-border bg-muted/20 p-4">
+          <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <UploadIcon className="size-4" />
+            Evidence
+          </p>
+          {story.evidence.length > 0 ? (
+            <ul className="mt-3 grid gap-2 text-xs text-muted-foreground">
+              {story.evidence.map((evidence) => (
+                <li
+                  className="rounded-lg border border-border bg-background px-3 py-2"
+                  key={evidence.id}
+                >
+                  <span className="font-medium text-foreground">{evidence.kind}</span>
+                  {evidence.note ? ` · ${evidence.note}` : ""}
+                  <code className="mt-1 block break-all text-[10px]">
+                    sha256:{evidence.cas.hash} · {evidence.cas.bytes} bytes · seq{" "}
+                    {evidence.attached_seq}
+                  </code>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-xs text-muted-foreground">No evidence is attached yet.</p>
+          )}
+          {story.allowed_actions.attach_evidence ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
+              <div className="grid gap-1.5">
+                <Label htmlFor={`rooms-story-evidence-${story.id}`}>Artifact or screenshot</Label>
+                <Input
+                  accept="image/*,.json,.log,.md,.txt,.zip"
+                  disabled={pending !== null}
+                  id={`rooms-story-evidence-${story.id}`}
+                  onChange={(event) => {
+                    const selected = event.target.files?.[0] ?? null;
+                    setFile(selected);
+                    setKind(selected?.type.startsWith("image/") ? "screenshot" : "artifact");
+                    setEvidenceCommand(null);
+                    setError(null);
+                  }}
+                  ref={fileInputRef}
+                  type="file"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor={`rooms-story-evidence-kind-${story.id}`}>Kind</Label>
+                <select
+                  className="h-9 rounded-lg border border-input bg-background px-3 text-sm text-foreground"
+                  disabled={pending !== null}
+                  id={`rooms-story-evidence-kind-${story.id}`}
+                  onChange={(event) => {
+                    setKind(event.target.value as RoomsLocalEvidenceKind);
+                    setEvidenceCommand(null);
+                  }}
+                  value={kind}
+                >
+                  <option value="artifact">Artifact</option>
+                  <option value="screenshot">Screenshot</option>
+                </select>
+              </div>
+              <div className="grid gap-1.5 sm:col-span-2">
+                <Label htmlFor={`rooms-story-evidence-note-${story.id}`}>Note</Label>
+                <Input
+                  disabled={pending !== null}
+                  id={`rooms-story-evidence-note-${story.id}`}
+                  maxLength={1000}
+                  onChange={(event) => {
+                    setNote(event.target.value);
+                    setEvidenceCommand(null);
+                  }}
+                  placeholder="What this bounded file proves"
+                  value={note}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3 sm:col-span-2">
+                <p className="text-xs text-muted-foreground">
+                  Maximum 5 MiB. Bytes are stored in Local CAS.
+                </p>
+                <Button
+                  disabled={pending !== null || (!file && !evidenceCommand)}
+                  onClick={() => void attachEvidence()}
+                  size="sm"
+                >
+                  <UploadIcon />
+                  {pending === "evidence"
+                    ? "Uploading…"
+                    : evidenceCommand
+                      ? "Retry attachment"
+                      : "Attach evidence"}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <RoomsLocalStoryGateStatus
+        onApprove={() => void approveHumanQa()}
+        pending={pending === "review"}
+        story={story}
+      />
+
+      {error ? <RoomsLocalStoryError error={error} /> : null}
+
+      <details className="rounded-xl border border-border bg-muted/10 p-4">
+        <summary className="flex cursor-pointer items-center gap-2 text-sm font-medium text-foreground">
+          <HistoryIcon className="size-4" />
+          Workflow activity ({story.audit.length})
+        </summary>
+        <ol className="mt-3 grid gap-2 text-xs text-muted-foreground">
+          {story.audit.map((entry) => (
+            <li key={entry.source_event.event_id}>
+              <code>#{entry.source_event.seq}</code> {entry.source_event.type} · {entry.actor}
+            </li>
+          ))}
+        </ol>
+      </details>
+    </div>
+  );
+}
+
 function nativeThreadKey(thread: RoomsNativeThreadEntry): string {
   return JSON.stringify([thread.environmentId, thread.projectId, thread.threadId]);
 }
@@ -341,7 +750,7 @@ function RoomsLocalStoryCard({
           <h2 className="mt-1 text-base font-semibold text-foreground">{story.title}</h2>
         </div>
         <span className="rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium text-foreground">
-          {story.stage}
+          {localStoryStageLabel(story.stage)}
         </span>
       </div>
 
@@ -388,6 +797,15 @@ function RoomsLocalStoryCard({
               <RoomsLocalStoryError error={error} />
             </div>
           ) : null}
+        </div>
+      )}
+
+      {isRoomsLocalStoryV2(story) ? (
+        <RoomsLocalStoryLifecycle onUpdated={onUpdated} roomId={roomId} story={story} />
+      ) : (
+        <div className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-800 dark:text-amber-200">
+          This server returned local-stories v1. Upgrade the Local Rails producer to use evidence,
+          Human QA, and completion controls.
         </div>
       )}
     </article>
@@ -437,14 +855,7 @@ export function RoomsLocalStoriesSurface({
     };
   }, [localFeedRefreshGeneration, refresh]);
 
-  const acceptStory = (story: RoomsLocalStory) => {
-    setResponse((current) => {
-      if (!current) return current;
-      const stories = current.stories.some((candidate) => candidate.id === story.id)
-        ? current.stories.map((candidate) => (candidate.id === story.id ? story : candidate))
-        : [...current.stories, story];
-      return { ...current, stories };
-    });
+  const acceptStory = (_story: RoomsLocalStory) => {
     void refresh();
   };
 

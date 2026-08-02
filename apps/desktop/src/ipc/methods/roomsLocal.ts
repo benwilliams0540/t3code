@@ -12,6 +12,8 @@ import * as IpcChannels from "../channels.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
 
 const LOOPBACK_IPV4 = /^127(?:\.\d{1,3}){3}$/;
+const BASE64_BODY = /^[A-Za-z0-9+/]*={0,2}$/;
+const MAX_CAS_BODY_BYTES = 5 * 1024 * 1024;
 
 function isLoopbackHostname(hostname: string): boolean {
   const normalized = hostname.toLowerCase();
@@ -45,18 +47,47 @@ export function resolveRoomsLocalRequestUrl(request: RoomsLocalHttpRequest): URL
     });
   }
 
-  if (!request.path.startsWith("/rooms/")) {
+  if (!request.path.startsWith("/rooms/") && request.path !== "/cas") {
     throw new RoomsLocalHttpRequestError({
-      message: "Rooms Local API requests must stay within /rooms/.",
+      message: "Rooms Local API requests must stay within /rooms/ or the exact /cas route.",
     });
   }
   const target = new URL(request.path, base);
-  if (target.origin !== base.origin || !target.pathname.startsWith("/rooms/")) {
+  const allowedRoomsPath = target.pathname.startsWith("/rooms/");
+  const allowedCasPath = target.pathname === "/cas" && target.search === "";
+  if (target.origin !== base.origin || (!allowedRoomsPath && !allowedCasPath)) {
     throw new RoomsLocalHttpRequestError({
-      message: "Rooms Local API requests cannot leave the configured loopback Rooms namespace.",
+      message: "Rooms Local API requests cannot leave the configured loopback boundary.",
     });
   }
+  if (allowedCasPath && request.method !== "POST") {
+    throw new RoomsLocalHttpRequestError({ message: "Rooms Local CAS only accepts POST." });
+  }
   return target;
+}
+
+export function decodeRoomsLocalRequestBody(request: RoomsLocalHttpRequest): {
+  readonly bytes: Uint8Array;
+  readonly contentType: string;
+} | null {
+  if (request.body === undefined) return null;
+  const contentType = request.contentType ?? "application/json";
+  if (contentType.trim() === "" || /[\r\n]/.test(contentType)) {
+    throw new RoomsLocalHttpRequestError({ message: "Rooms Local Content-Type is invalid." });
+  }
+  if (request.bodyEncoding !== "base64") {
+    return { bytes: new TextEncoder().encode(request.body), contentType };
+  }
+  if (request.path !== "/cas" || request.body.length % 4 !== 0 || !BASE64_BODY.test(request.body)) {
+    throw new RoomsLocalHttpRequestError({ message: "Rooms Local CAS body is not valid base64." });
+  }
+  const bytes = Buffer.from(request.body, "base64");
+  if (bytes.byteLength > MAX_CAS_BODY_BYTES) {
+    throw new RoomsLocalHttpRequestError({
+      message: "Rooms Local CAS uploads are limited to 5 MiB.",
+    });
+  }
+  return { bytes, contentType };
 }
 
 const performRoomsLocalRequest = Effect.fn("desktop.ipc.roomsLocal.performRequest")(function* (
@@ -77,8 +108,22 @@ const performRoomsLocalRequest = Effect.fn("desktop.ipc.roomsLocal.performReques
   // shorter client timeout, so the existing one-shot IPC request can outlive a normal wait.
   let httpRequest =
     request.method === "GET" ? HttpClientRequest.get(target) : HttpClientRequest.post(target);
-  if (request.body !== undefined) {
-    httpRequest = HttpClientRequest.bodyText(httpRequest, request.body, "application/json");
+  const requestBody = yield* Effect.try({
+    try: () => decodeRoomsLocalRequestBody(request),
+    catch: (cause) =>
+      isRoomsLocalHttpRequestError(cause)
+        ? cause
+        : new RoomsLocalHttpRequestError({
+            message: "Rooms Local API request body is invalid.",
+            cause,
+          }),
+  });
+  if (requestBody !== null) {
+    httpRequest = HttpClientRequest.bodyUint8Array(
+      httpRequest,
+      requestBody.bytes,
+      requestBody.contentType,
+    );
   }
   const response = yield* httpClient.execute(httpRequest).pipe(
     Effect.mapError(
@@ -89,7 +134,7 @@ const performRoomsLocalRequest = Effect.fn("desktop.ipc.roomsLocal.performReques
         }),
     ),
   );
-  const body = yield* response.text.pipe(
+  const responseBody = yield* response.text.pipe(
     Effect.mapError(
       (cause) =>
         new RoomsLocalHttpRequestError({
@@ -101,7 +146,7 @@ const performRoomsLocalRequest = Effect.fn("desktop.ipc.roomsLocal.performReques
   return {
     status: response.status,
     headers: response.headers,
-    body,
+    body: responseBody,
   };
 });
 

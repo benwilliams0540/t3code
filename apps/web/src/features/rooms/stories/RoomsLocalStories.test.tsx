@@ -4,16 +4,22 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
 import storyWithThreadDocument from "../dataSource/fixtures/local-stories-v1-story-with-thread.json";
-import { RoomsLocalStory } from "../dataSource/localStoriesContract";
+import storyAtHumanQaDocument from "../dataSource/fixtures/local-stories-v2-story-at-human-qa.json";
+import { RoomsLocalStory, RoomsLocalStoryV2 } from "../dataSource/localStoriesContract";
 import type { RoomsNativeThreadEntry } from "../threads/roomsNativeThreads";
 import {
   localStoryNativeThreadTarget,
+  localStoryCompletionEvidence,
+  localStoryStageLabel,
+  encodeRoomsLocalEvidenceFile,
   resolveLocalStoryNativeThread,
   RoomsLocalLinkedThreadStatus,
+  RoomsLocalStoryGateStatus,
   RoomsLocalStoriesEmptyState,
 } from "./RoomsLocalStories";
 
 const story = Schema.decodeUnknownSync(RoomsLocalStory)(storyWithThreadDocument);
+const humanQaStory = Schema.decodeUnknownSync(RoomsLocalStoryV2)(storyAtHumanQaDocument);
 const matchingThread: RoomsNativeThreadEntry = {
   environmentId: EnvironmentId.make("environment-local"),
   projectId: ProjectId.make("project-rooms"),
@@ -77,5 +83,55 @@ describe("Rooms Local Stories surface", () => {
     expect(markup).toContain("Linked thread unavailable or stale");
     expect(markup).toContain("thread-composer-shortcuts");
     expect(markup).not.toContain("Open thread");
+  });
+
+  it("renders the explicit persisted Human QA action from the v2 gate", () => {
+    const markup = renderToStaticMarkup(
+      <RoomsLocalStoryGateStatus
+        onApprove={() => undefined}
+        pending={false}
+        story={humanQaStory}
+      />,
+    );
+    expect(markup).toContain("Human QA decision");
+    expect(markup).toContain("Approve Human QA");
+    expect(markup).toContain("Approval records your durable human decision");
+    expect(markup).not.toContain("Request changes");
+    expect(localStoryStageLabel("human-qa")).toBe("Human QA");
+  });
+
+  it("binds terminal completion to the exact approved review evidence", () => {
+    expect(localStoryCompletionEvidence(humanQaStory)).toEqual([]);
+    const evidence = [humanQaStory.evidence[0]!.id];
+    const approved = {
+      ...humanQaStory,
+      gate: { ...humanQaStory.gate!, approved_review_id: "019fb900-1000-7000-8000-000000000026" },
+      reviews: [
+        {
+          id: "019fb900-1000-7000-8000-000000000026",
+          story_id: humanQaStory.id,
+          stage: "human-qa",
+          decision: "approved" as const,
+          evidence,
+          reviewed_by: humanQaStory.created_by,
+          reviewed_at: "2026-08-02T00:00:00.000Z",
+          reviewed_seq: 10,
+          source_event: {
+            seq: 10,
+            event_id: "019fb900-1000-7000-8000-000000000026",
+            type: "task.reviewed" as const,
+            schema: 1,
+          },
+        },
+      ],
+    };
+    expect(localStoryCompletionEvidence(approved)).toEqual(evidence);
+  });
+
+  it("encodes one bounded evidence artifact exactly and rejects empty bytes", async () => {
+    await expect(
+      encodeRoomsLocalEvidenceFile(new Blob(["M4 artifact"], { type: "text/plain" })),
+    ).resolves.toEqual({ bodyBase64: "TTQgYXJ0aWZhY3Q=", mediaType: "text/plain" });
+    await expect(encodeRoomsLocalEvidenceFile(new Blob([]))).rejects.toThrow("non-empty");
   });
 });

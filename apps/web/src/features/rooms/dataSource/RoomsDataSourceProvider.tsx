@@ -40,10 +40,16 @@ import type {
   RoomsLocalWorkspace,
 } from "./localChannelsContract";
 import type {
+  RoomsLocalAttachEvidenceInput,
+  RoomsLocalCasTuple,
   RoomsLocalCreateStoryInput,
   RoomsLocalLinkStoryThreadInput,
+  RoomsLocalReviewStoryInput,
   RoomsLocalStoriesResponse,
   RoomsLocalStory,
+  RoomsLocalStoryV2,
+  RoomsLocalTransitionStoryInput,
+  RoomsLocalUploadCasInput,
 } from "./localStoriesContract";
 import {
   EMPTY_ROOMS_SELECTED_ROOM_BY_SOURCE,
@@ -91,6 +97,7 @@ interface RoomsDataSourceContextValue {
     input: RoomsLocalCreateMessageInput,
   ) => Promise<RoomsLocalCommandResult<RoomsLocalHumanMessage>>;
   readonly loadLocalStories: (roomId: string) => Promise<RoomsLocalStoriesResponse>;
+  readonly loadLocalStory: (roomId: string, storyId: string) => Promise<RoomsLocalStory>;
   readonly createLocalStory: (
     roomId: string,
     input: RoomsLocalCreateStoryInput,
@@ -100,6 +107,22 @@ interface RoomsDataSourceContextValue {
     storyId: string,
     input: RoomsLocalLinkStoryThreadInput,
   ) => Promise<RoomsLocalCommandResult<RoomsLocalStory>>;
+  readonly uploadLocalCas: (input: RoomsLocalUploadCasInput) => Promise<RoomsLocalCasTuple>;
+  readonly attachLocalStoryEvidence: (
+    roomId: string,
+    storyId: string,
+    input: RoomsLocalAttachEvidenceInput,
+  ) => Promise<RoomsLocalCommandResult<RoomsLocalStoryV2>>;
+  readonly transitionLocalStory: (
+    roomId: string,
+    storyId: string,
+    input: RoomsLocalTransitionStoryInput,
+  ) => Promise<RoomsLocalCommandResult<RoomsLocalStoryV2>>;
+  readonly reviewLocalStory: (
+    roomId: string,
+    storyId: string,
+    input: RoomsLocalReviewStoryInput,
+  ) => Promise<RoomsLocalCommandResult<RoomsLocalStoryV2>>;
   readonly selectRoom: (room: RoomsSourceRoom) => void;
   readonly setLocalConfig: (
     value:
@@ -321,6 +344,11 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
 
   const loadLocalStories = useCallback((roomId: string) => client.getStories(roomId), [client]);
 
+  const loadLocalStory = useCallback(
+    (roomId: string, storyId: string) => client.getStory(roomId, storyId),
+    [client],
+  );
+
   const createLocalStory = useCallback(
     (roomId: string, input: RoomsLocalCreateStoryInput) => client.createStory(roomId, input),
     [client],
@@ -329,6 +357,29 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
   const linkLocalStoryThread = useCallback(
     (roomId: string, storyId: string, input: RoomsLocalLinkStoryThreadInput) =>
       client.linkStoryThread(roomId, storyId, input),
+    [client],
+  );
+
+  const uploadLocalCas = useCallback(
+    (input: RoomsLocalUploadCasInput) => client.uploadCas(input),
+    [client],
+  );
+
+  const attachLocalStoryEvidence = useCallback(
+    (roomId: string, storyId: string, input: RoomsLocalAttachEvidenceInput) =>
+      client.attachStoryEvidence(roomId, storyId, input),
+    [client],
+  );
+
+  const transitionLocalStory = useCallback(
+    (roomId: string, storyId: string, input: RoomsLocalTransitionStoryInput) =>
+      client.transitionStory(roomId, storyId, input),
+    [client],
+  );
+
+  const reviewLocalStory = useCallback(
+    (roomId: string, storyId: string, input: RoomsLocalReviewStoryInput) =>
+      client.reviewStory(roomId, storyId, input),
     [client],
   );
 
@@ -363,8 +414,13 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       loadLocalFeed,
       sendLocalMessage,
       loadLocalStories,
+      loadLocalStory,
       createLocalStory,
       linkLocalStoryThread,
+      uploadLocalCas,
+      attachLocalStoryEvidence,
+      transitionLocalStory,
+      reviewLocalStory,
       selectRoom,
       setLocalConfig,
       setMode,
@@ -384,8 +440,13 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       selectedRoom,
       sendLocalMessage,
       loadLocalStories,
+      loadLocalStory,
       createLocalStory,
       linkLocalStoryThread,
+      uploadLocalCas,
+      attachLocalStoryEvidence,
+      transitionLocalStory,
+      reviewLocalStory,
       setLocalConfig,
       setMode,
       state,

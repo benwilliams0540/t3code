@@ -963,6 +963,8 @@ export const RoomsLocalHttpRequestSchema = Schema.Struct({
   path: Schema.String,
   method: Schema.Literals(["GET", "POST"]),
   body: Schema.optionalKey(Schema.String),
+  bodyEncoding: Schema.optionalKey(Schema.Literals(["utf8", "base64"])),
+  contentType: Schema.optionalKey(Schema.String),
 });
 export type RoomsLocalHttpRequest = typeof RoomsLocalHttpRequestSchema.Type;
 

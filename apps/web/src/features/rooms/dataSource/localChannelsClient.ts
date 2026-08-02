@@ -17,12 +17,19 @@ import {
   RoomsLocalWorkspace,
 } from "./localChannelsContract";
 import {
+  type RoomsLocalAttachEvidenceInput,
+  RoomsLocalCasTuple,
   type RoomsLocalCreateStoryInput,
   type RoomsLocalLinkStoryThreadInput,
+  type RoomsLocalReviewStoryInput,
   RoomsLocalStoriesResponse,
   type RoomsLocalStoriesResponse as RoomsLocalStoriesResponseType,
   RoomsLocalStory,
   type RoomsLocalStory as RoomsLocalStoryType,
+  type RoomsLocalStoryV2,
+  type RoomsLocalTransitionStoryInput,
+  type RoomsLocalUploadCasInput,
+  isRoomsLocalStoryV2,
 } from "./localStoriesContract";
 
 const LOOPBACK_IPV4 = /^127(?:\.\d{1,3}){3}$/;
@@ -129,6 +136,7 @@ export interface RoomsLocalChannelsClient {
     input: RoomsLocalChangeWaitInput,
   ) => Promise<RoomsLocalChangeResponse>;
   readonly getStories: (roomId: string) => Promise<RoomsLocalStoriesResponseType>;
+  readonly getStory: (roomId: string, storyId: string) => Promise<RoomsLocalStoryType>;
   readonly createStory: (
     roomId: string,
     input: RoomsLocalCreateStoryInput,
@@ -138,6 +146,22 @@ export interface RoomsLocalChannelsClient {
     storyId: string,
     input: RoomsLocalLinkStoryThreadInput,
   ) => Promise<RoomsLocalCommandResult<RoomsLocalStoryType>>;
+  readonly uploadCas: (input: RoomsLocalUploadCasInput) => Promise<RoomsLocalCasTuple>;
+  readonly attachStoryEvidence: (
+    roomId: string,
+    storyId: string,
+    input: RoomsLocalAttachEvidenceInput,
+  ) => Promise<RoomsLocalCommandResult<RoomsLocalStoryV2>>;
+  readonly transitionStory: (
+    roomId: string,
+    storyId: string,
+    input: RoomsLocalTransitionStoryInput,
+  ) => Promise<RoomsLocalCommandResult<RoomsLocalStoryV2>>;
+  readonly reviewStory: (
+    roomId: string,
+    storyId: string,
+    input: RoomsLocalReviewStoryInput,
+  ) => Promise<RoomsLocalCommandResult<RoomsLocalStoryV2>>;
 }
 
 const decodeWorkspace = Schema.decodeUnknownSync(RoomsLocalWorkspace);
@@ -149,6 +173,7 @@ const decodeChangeCursorAhead = Schema.decodeUnknownSync(RoomsLocalChangeCursorA
 const decodeError = Schema.decodeUnknownSync(RoomsLocalErrorResponse);
 const decodeStories = Schema.decodeUnknownSync(RoomsLocalStoriesResponse);
 const decodeStory = Schema.decodeUnknownSync(RoomsLocalStory);
+const decodeCasTuple = Schema.decodeUnknownSync(RoomsLocalCasTuple);
 
 function parseJson(response: RoomsLocalHttpResponse): unknown {
   try {
@@ -214,7 +239,7 @@ function decodeSuccess<T>(
       kind: "invalid_response",
       status: response.status,
       code: "contract_decode_failed",
-      message: `The Rooms Local API response does not match ${contractId} v1.`,
+      message: `The Rooms Local API response does not match ${contractId}.`,
       cause,
     });
   }
@@ -228,7 +253,7 @@ function replayed(response: RoomsLocalHttpResponse): boolean {
 
 function validateStory(story: RoomsLocalStoryType, roomId: string, storyId?: string): void {
   const link = story.native_thread;
-  const valid =
+  const commonValid =
     story.room_id === roomId &&
     (storyId === undefined || story.id === storyId) &&
     story.created_seq > 0 &&
@@ -242,7 +267,8 @@ function validateStory(story: RoomsLocalStoryType, roomId: string, storyId?: str
         link.source_event.seq === link.linked_seq &&
         link.source_event.type === "task.thread-linked" &&
         link.source_event.schema === 1));
-  if (!valid) {
+  const v2Valid = !isRoomsLocalStoryV2(story) || validateV2Story(story);
+  if (!commonValid || !v2Valid) {
     throw new RoomsLocalClientError({
       kind: "invalid_response",
       status: 200,
@@ -250,6 +276,49 @@ function validateStory(story: RoomsLocalStoryType, roomId: string, storyId?: str
       message: "The Rooms Local story response contradicts its room, identity, or ledger source.",
     });
   }
+}
+
+function validCasTuple(cas: RoomsLocalCasTuple): boolean {
+  return /^[0-9a-f]{64}$/.test(cas.hash) && cas.bytes >= 0 && cas.media_type.trim() !== "";
+}
+
+function validateV2Story(story: RoomsLocalStoryV2): boolean {
+  const evidenceIds = new Set(story.evidence.map((evidence) => evidence.id));
+  const reviewIds = new Set(story.reviews.map((review) => review.id));
+  return (
+    story.scope_head_seq >= story.created_seq &&
+    story.as_of_seq >= story.scope_head_seq &&
+    story.evidence.every(
+      (evidence) =>
+        evidence.story_id === story.id &&
+        evidence.id === evidence.source_event.event_id &&
+        evidence.attached_seq === evidence.source_event.seq &&
+        evidence.source_event.type === "evidence.attached" &&
+        evidence.source_event.schema === 2 &&
+        validCasTuple(evidence.cas),
+    ) &&
+    story.reviews.every(
+      (review) =>
+        review.story_id === story.id &&
+        review.id === review.source_event.event_id &&
+        review.reviewed_seq === review.source_event.seq &&
+        review.source_event.type === "task.reviewed",
+    ) &&
+    (story.completion === null ||
+      (story.completion.story_id === story.id &&
+        story.completion.completed_seq === story.completion.source_event.seq &&
+        story.completion.source_event.type === "task.completed" &&
+        story.completion.evidence.every((id) => evidenceIds.has(id)))) &&
+    (story.gate === null ||
+      (story.gate.eligible_evidence.every((id) => evidenceIds.has(id)) &&
+        (story.gate.approved_review_id === null ||
+          reviewIds.has(story.gate.approved_review_id)))) &&
+    story.audit.every(
+      (entry, index) =>
+        index === 0 || story.audit[index - 1]!.source_event.seq < entry.source_event.seq,
+    ) &&
+    (story.audit.at(-1)?.source_event.seq ?? 0) <= story.as_of_seq
+  );
 }
 
 function defaultTransport(): RoomsLocalTransport {
@@ -298,6 +367,58 @@ export function createRoomsLocalChannelsClient(
         cause,
       });
     }
+  }
+
+  async function requestRaw(input: {
+    readonly path: string;
+    readonly method: "GET" | "POST";
+    readonly body: string;
+    readonly bodyEncoding: "base64";
+    readonly contentType: string;
+  }): Promise<RoomsLocalHttpResponse> {
+    if (!validation.ok) {
+      throw new RoomsLocalClientError({
+        kind: "invalid_configuration",
+        code: "invalid_local_api_base_url",
+        message: validation.message,
+      });
+    }
+    try {
+      return await transportFactory().request({
+        baseUrl: validation.value,
+        path: input.path,
+        method: input.method,
+        body: input.body,
+        bodyEncoding: input.bodyEncoding,
+        contentType: input.contentType,
+      });
+    } catch (cause) {
+      if (cause instanceof RoomsLocalClientError) throw cause;
+      throw new RoomsLocalClientError({
+        kind: "transport",
+        code: "local_api_unreachable",
+        message: `Could not reach the Rooms Local API at ${validation.value}.`,
+        cause,
+      });
+    }
+  }
+
+  function decodeV2StoryResponse(
+    response: RoomsLocalHttpResponse,
+    roomId: string,
+    storyId: string,
+  ): RoomsLocalStoryV2 {
+    const value = decodeSuccess(response, decodeStory, "rooms.local-stories");
+    validateStory(value, roomId, storyId);
+    if (!isRoomsLocalStoryV2(value)) {
+      throw new RoomsLocalClientError({
+        kind: "invalid_response",
+        status: response.status,
+        code: "story_v2_required",
+        message: "The Rooms Local lifecycle command did not return a version-2 story.",
+      });
+    }
+    return value;
   }
 
   return {
@@ -387,6 +508,18 @@ export function createRoomsLocalChannelsClient(
       result.stories.forEach((story) => validateStory(story, roomId));
       return result;
     },
+    getStory: async (roomId, storyId) => {
+      const value = decodeSuccess(
+        await request(
+          `/rooms/${encodeURIComponent(roomId)}/stories/${encodeURIComponent(storyId)}`,
+          "GET",
+        ),
+        decodeStory,
+        "rooms.local-stories",
+      );
+      validateStory(value, roomId, storyId);
+      return value;
+    },
     createStory: async (roomId, input) => {
       const response = await request(`/rooms/${encodeURIComponent(roomId)}/stories`, "POST", {
         request_id: input.requestId,
@@ -411,6 +544,74 @@ export function createRoomsLocalChannelsClient(
       const value = decodeSuccess(response, decodeStory, "rooms.local-stories");
       validateStory(value, roomId, storyId);
       return { value, replayed: replayed(response) };
+    },
+    uploadCas: async (input) => {
+      const response = await requestRaw({
+        path: "/cas",
+        method: "POST",
+        body: input.bodyBase64,
+        bodyEncoding: "base64",
+        contentType: input.mediaType,
+      });
+      const value = decodeSuccess(response, decodeCasTuple, "Rooms CAS tuple");
+      if (!validCasTuple(value)) {
+        throw new RoomsLocalClientError({
+          kind: "invalid_response",
+          status: response.status,
+          code: "cas_tuple_invariant_failed",
+          message: "The Rooms CAS response does not contain a valid SHA-256 tuple.",
+        });
+      }
+      return value;
+    },
+    attachStoryEvidence: async (roomId, storyId, input) => {
+      const response = await request(
+        `/rooms/${encodeURIComponent(roomId)}/stories/${encodeURIComponent(storyId)}/evidence`,
+        "POST",
+        {
+          request_id: input.requestId,
+          expected_head_seq: input.expectedHeadSeq,
+          kind: input.kind,
+          cas: input.cas,
+          note: input.note,
+        },
+      );
+      return {
+        value: decodeV2StoryResponse(response, roomId, storyId),
+        replayed: replayed(response),
+      };
+    },
+    transitionStory: async (roomId, storyId, input) => {
+      const response = await request(
+        `/rooms/${encodeURIComponent(roomId)}/stories/${encodeURIComponent(storyId)}/transitions`,
+        "POST",
+        {
+          request_id: input.requestId,
+          expected_head_seq: input.expectedHeadSeq,
+          to: input.to,
+          evidence: input.evidence,
+        },
+      );
+      return {
+        value: decodeV2StoryResponse(response, roomId, storyId),
+        replayed: replayed(response),
+      };
+    },
+    reviewStory: async (roomId, storyId, input) => {
+      const response = await request(
+        `/rooms/${encodeURIComponent(roomId)}/stories/${encodeURIComponent(storyId)}/reviews`,
+        "POST",
+        {
+          request_id: input.requestId,
+          expected_head_seq: input.expectedHeadSeq,
+          decision: input.decision,
+          evidence: input.evidence,
+        },
+      );
+      return {
+        value: decodeV2StoryResponse(response, roomId, storyId),
+        replayed: replayed(response),
+      };
     },
   };
 }

@@ -37,8 +37,8 @@ export const ROOMS_LOCAL_CHANGES_SOURCE = {
 } as const;
 
 export const ROOMS_LOCAL_STORIES_SOURCE = {
-  repositorySha: "918c5b31f510fa065b246d8b9fb13c5505581838",
+  repositorySha: "67b20ef49cb9584af60f6c4e810659b7c77ce286",
   contractId: "rooms.local-stories",
-  contractVersion: 1,
-  schemaUri: "contracts/rooms/local-stories/v1/schema.json",
+  contractVersion: 2,
+  schemaUri: "contracts/rooms/local-stories/v2/schema.json",
 } as const;

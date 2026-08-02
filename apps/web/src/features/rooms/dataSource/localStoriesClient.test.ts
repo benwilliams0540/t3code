@@ -2,6 +2,7 @@ import type { RoomsLocalHttpRequest, RoomsLocalHttpResponse } from "@t3tools/con
 import { describe, expect, it } from "vite-plus/test";
 
 import storyWithThreadDocument from "./fixtures/local-stories-v1-story-with-thread.json";
+import storyAtHumanQaDocument from "./fixtures/local-stories-v2-story-at-human-qa.json";
 import { createRoomsLocalChannelsClient, type RoomsLocalTransport } from "./localChannelsClient";
 
 const roomId = storyWithThreadDocument.room_id;
@@ -40,7 +41,7 @@ function queuedTransport(
   };
 }
 
-describe("rooms.local-stories v1 client", () => {
+describe("rooms.local-stories v1/v2 client", () => {
   it("lists one ordered room-scoped story collection", async () => {
     const requests: RoomsLocalHttpRequest[] = [];
     const transport = queuedTransport([response(200, collection)], requests);
@@ -172,5 +173,117 @@ describe("rooms.local-stories v1 client", () => {
         threadId: "thread-other",
       }),
     ).rejects.toMatchObject({ code: "story_thread_conflict", status: 409 });
+  });
+
+  it("loads one v2 detail and uploads exact bounded CAS bytes", async () => {
+    const requests: RoomsLocalHttpRequest[] = [];
+    const cas = {
+      hash: "d".repeat(64),
+      bytes: 11,
+      media_type: "text/plain",
+    };
+    const transport = queuedTransport(
+      [response(200, storyAtHumanQaDocument), response(201, cas)],
+      requests,
+    );
+    const client = createRoomsLocalChannelsClient("http://127.0.0.1:3000", () => transport);
+
+    await expect(client.getStory(roomId, storyAtHumanQaDocument.id)).resolves.toMatchObject({
+      stage: "human-qa",
+      scope_head_seq: 9,
+    });
+    await expect(
+      client.uploadCas({ bodyBase64: "TTQgYXJ0aWZhY3Q=", mediaType: "text/plain" }),
+    ).resolves.toEqual(cas);
+    expect(requests[1]).toEqual({
+      baseUrl: "http://127.0.0.1:3000",
+      path: "/cas",
+      method: "POST",
+      body: "TTQgYXJ0aWZhY3Q=",
+      bodyEncoding: "base64",
+      contentType: "text/plain",
+    });
+  });
+
+  it("sends exact CAS, head, transition, and Human QA decision fields", async () => {
+    const requests: RoomsLocalHttpRequest[] = [];
+    const nextStory = { ...storyAtHumanQaDocument, scope_head_seq: 10, as_of_seq: 10 };
+    const transport = queuedTransport(
+      [response(201, nextStory), response(201, nextStory), response(201, nextStory)],
+      requests,
+    );
+    const client = createRoomsLocalChannelsClient("http://127.0.0.1:3000", () => transport);
+    const evidenceId = storyAtHumanQaDocument.evidence[0]!.id;
+    const requestId = "019fb900-1000-7000-8000-000000000031";
+
+    await client.attachStoryEvidence(roomId, storyAtHumanQaDocument.id, {
+      requestId,
+      expectedHeadSeq: 9,
+      kind: "artifact",
+      cas: storyAtHumanQaDocument.evidence[0]!.cas,
+      note: "Focused artifact",
+    });
+    await client.transitionStory(roomId, storyAtHumanQaDocument.id, {
+      requestId,
+      expectedHeadSeq: 9,
+      to: "done",
+      evidence: [evidenceId],
+    });
+    await client.reviewStory(roomId, storyAtHumanQaDocument.id, {
+      requestId,
+      expectedHeadSeq: 9,
+      decision: "approved",
+      evidence: [evidenceId],
+    });
+
+    expect(JSON.parse(requests[0]!.body!)).toEqual({
+      request_id: requestId,
+      expected_head_seq: 9,
+      kind: "artifact",
+      cas: storyAtHumanQaDocument.evidence[0]!.cas,
+      note: "Focused artifact",
+    });
+    expect(JSON.parse(requests[1]!.body!)).toEqual({
+      request_id: requestId,
+      expected_head_seq: 9,
+      to: "done",
+      evidence: [evidenceId],
+    });
+    expect(JSON.parse(requests[2]!.body!)).toEqual({
+      request_id: requestId,
+      expected_head_seq: 9,
+      decision: "approved",
+      evidence: [evidenceId],
+    });
+  });
+
+  it("preserves stale-head and gate errors for precise UI recovery", async () => {
+    const transport = queuedTransport(
+      [
+        response(409, {
+          error: "stale_scope_head",
+          message: "expected scope head seq is stale",
+          details: { current_head_seq: 12 },
+        }),
+        response(403, {
+          error: "gate_principal_type_forbidden",
+          message: "principal type is not allowed at this gate",
+        }),
+      ],
+      [],
+    );
+    const client = createRoomsLocalChannelsClient("http://127.0.0.1:3000", () => transport);
+    const input = {
+      requestId: "019fb900-1000-7000-8000-000000000031",
+      expectedHeadSeq: 9,
+      decision: "approved" as const,
+      evidence: [storyAtHumanQaDocument.evidence[0]!.id],
+    };
+    await expect(
+      client.reviewStory(roomId, storyAtHumanQaDocument.id, input),
+    ).rejects.toMatchObject({ code: "stale_scope_head", status: 409 });
+    await expect(
+      client.reviewStory(roomId, storyAtHumanQaDocument.id, input),
+    ).rejects.toMatchObject({ code: "gate_principal_type_forbidden", status: 403 });
   });
 });

@@ -64,11 +64,20 @@ function createBrowserLocalApi(): LocalApi {
           return window.desktopBridge.requestRoomsLocal(request);
         }
         const target = new URL(request.path, request.baseUrl);
+        const body =
+          request.body === undefined
+            ? undefined
+            : request.bodyEncoding === "base64"
+              ? Uint8Array.from(atob(request.body), (character) => character.charCodeAt(0))
+              : request.body;
         const response = await fetch(target, {
           method: request.method,
-          ...(request.body === undefined
+          ...(body === undefined
             ? {}
-            : { headers: { "content-type": "application/json" }, body: request.body }),
+            : {
+                headers: { "content-type": request.contentType ?? "application/json" },
+                body,
+              }),
         });
         return {
           status: response.status,
