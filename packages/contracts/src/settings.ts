@@ -13,6 +13,26 @@ export const TimestampFormat = Schema.Literals(["locale", "12-hour", "24-hour"])
 export type TimestampFormat = typeof TimestampFormat.Type;
 export const DEFAULT_TIMESTAMP_FORMAT: TimestampFormat = "locale";
 
+/**
+ * When Enter commits a composer rather than inserting a newline.
+ *
+ * - `enter` — Enter always sends; Shift+Enter inserts a newline.
+ * - `modifier_when_multiline` — Enter sends a single-line draft, but once the draft spans lines it
+ *   inserts a newline and only ⌘/Ctrl+Enter sends, so a paragraph cannot be sent by accident.
+ * - `modifier_always` — only ⌘/Ctrl+Enter sends; Enter always inserts a newline.
+ */
+export const ComposerSendShortcut = Schema.Literals([
+  "enter",
+  "modifier_when_multiline",
+  "modifier_always",
+]);
+export type ComposerSendShortcut = typeof ComposerSendShortcut.Type;
+/** Threads keep the historical behavior: Enter has always sent a prompt. */
+export const DEFAULT_THREAD_COMPOSER_SEND_SHORTCUT: ComposerSendShortcut = "enter";
+/** Channels are chat, where a multi-line message is ordinary and easy to send by mistake. */
+export const DEFAULT_CHANNEL_COMPOSER_SEND_SHORTCUT: ComposerSendShortcut =
+  "modifier_when_multiline";
+
 export const SidebarProjectSortOrder = Schema.Literals(["updated_at", "created_at", "manual"]);
 export type SidebarProjectSortOrder = typeof SidebarProjectSortOrder.Type;
 export const DEFAULT_SIDEBAR_PROJECT_SORT_ORDER: SidebarProjectSortOrder = "updated_at";
@@ -102,6 +122,12 @@ export const ClientSettingsSchema = Schema.Struct({
       modelOrder: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
     }),
   ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  channelComposerSendShortcut: ComposerSendShortcut.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_CHANNEL_COMPOSER_SEND_SHORTCUT)),
+  ),
+  threadComposerSendShortcut: ComposerSendShortcut.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_THREAD_COMPOSER_SEND_SHORTCUT)),
+  ),
   roomsLocalApiBaseUrl: TrimmedNonEmptyString.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_ROOMS_LOCAL_API_BASE_URL)),
   ),
@@ -705,6 +731,7 @@ export const ClientSettingsPatch = Schema.Struct({
       }),
     ),
   ),
+  channelComposerSendShortcut: Schema.optionalKey(ComposerSendShortcut),
   roomsLocalApiBaseUrl: Schema.optionalKey(TrimmedNonEmptyString),
   sidebarAutoSettleAfterDays: Schema.optionalKey(Schema.NullOr(SidebarAutoSettleAfterDays)),
   sidebarProjectGroupingMode: Schema.optionalKey(SidebarProjectGroupingMode),
@@ -717,6 +744,7 @@ export const ClientSettingsPatch = Schema.Struct({
   sidebarV2Enabled: Schema.optionalKey(Schema.Boolean),
   sidebarV2ConfiguredByUser: Schema.optionalKey(Schema.Boolean),
   timestampFormat: Schema.optionalKey(TimestampFormat),
+  threadComposerSendShortcut: Schema.optionalKey(ComposerSendShortcut),
   wordWrap: Schema.optionalKey(Schema.Boolean),
 });
 export type ClientSettingsPatch = typeof ClientSettingsPatch.Type;

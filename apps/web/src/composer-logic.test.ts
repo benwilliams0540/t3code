@@ -13,16 +13,70 @@ import {
 import { INLINE_TERMINAL_CONTEXT_PLACEHOLDER } from "./lib/terminalContext";
 
 describe("shouldSubmitComposerOnEnter", () => {
-  it("submits plain Enter on desktop", () => {
-    expect(shouldSubmitComposerOnEnter({ isMobileViewport: false, shiftKey: false })).toBe(true);
+  const keyboard = (
+    overrides: Partial<Parameters<typeof shouldSubmitComposerOnEnter>[0]> = {},
+  ) => ({
+    ctrlKey: false,
+    draft: "hello",
+    isComposing: false,
+    isMobileViewport: false,
+    keyCode: 13,
+    metaKey: false,
+    shiftKey: false,
+    shortcut: "enter" as const,
+    ...overrides,
   });
 
-  it("inserts a newline for plain Enter on mobile", () => {
-    expect(shouldSubmitComposerOnEnter({ isMobileViewport: true, shiftKey: false })).toBe(false);
+  it("implements Enter and Shift+Enter for the enter policy", () => {
+    expect(shouldSubmitComposerOnEnter(keyboard())).toBe(true);
+    expect(shouldSubmitComposerOnEnter(keyboard({ shiftKey: true }))).toBe(false);
   });
 
-  it("inserts a newline for Shift+Enter", () => {
-    expect(shouldSubmitComposerOnEnter({ isMobileViewport: false, shiftKey: true })).toBe(false);
+  it("uses actual newline content for modifier-when-multiline", () => {
+    expect(shouldSubmitComposerOnEnter(keyboard({ shortcut: "modifier_when_multiline" }))).toBe(
+      true,
+    );
+    expect(
+      shouldSubmitComposerOnEnter(
+        keyboard({ draft: "visually wrapped but no newline", shortcut: "modifier_when_multiline" }),
+      ),
+    ).toBe(true);
+    expect(
+      shouldSubmitComposerOnEnter(
+        keyboard({ draft: "first\nsecond", shortcut: "modifier_when_multiline" }),
+      ),
+    ).toBe(false);
+  });
+
+  it.each([
+    { modifier: "Command", metaKey: true, ctrlKey: false },
+    { modifier: "Control", metaKey: false, ctrlKey: true },
+  ])("submits every policy with $modifier+Enter", ({ ctrlKey, metaKey }) => {
+    for (const shortcut of ["enter", "modifier_when_multiline", "modifier_always"] as const) {
+      expect(
+        shouldSubmitComposerOnEnter(
+          keyboard({ ctrlKey, draft: "first\nsecond", metaKey, shortcut }),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it("requires a modifier for the modifier-always policy", () => {
+    expect(shouldSubmitComposerOnEnter(keyboard({ shortcut: "modifier_always" }))).toBe(false);
+  });
+
+  it("suppresses Enter during IME composition, including keyCode 229 fallback", () => {
+    expect(shouldSubmitComposerOnEnter(keyboard({ isComposing: true, metaKey: true }))).toBe(false);
+    expect(shouldSubmitComposerOnEnter(keyboard({ keyCode: 229, ctrlKey: true }))).toBe(false);
+  });
+
+  it("keeps plain Enter as a newline on responsive mobile while allowing an explicit modifier", () => {
+    expect(shouldSubmitComposerOnEnter(keyboard({ isMobileViewport: true }))).toBe(false);
+    expect(
+      shouldSubmitComposerOnEnter(
+        keyboard({ isMobileViewport: true, shortcut: "modifier_always", metaKey: true }),
+      ),
+    ).toBe(true);
   });
 });
 

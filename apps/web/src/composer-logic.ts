@@ -1,3 +1,5 @@
+import type { ComposerSendShortcut } from "@t3tools/contracts/settings";
+
 import { splitPromptIntoComposerSegments } from "./composer-editor-mentions";
 import { INLINE_TERMINAL_CONTEXT_PLACEHOLDER } from "./lib/terminalContext";
 
@@ -12,10 +14,28 @@ export interface ComposerTrigger {
 }
 
 export function shouldSubmitComposerOnEnter(input: {
+  ctrlKey: boolean;
+  draft: string;
+  isComposing: boolean;
   isMobileViewport: boolean;
+  keyCode: number;
+  metaKey: boolean;
   shiftKey: boolean;
+  shortcut: ComposerSendShortcut;
 }): boolean {
-  return !input.isMobileViewport && !input.shiftKey;
+  if (input.isComposing || input.keyCode === 229 || input.shiftKey) return false;
+
+  const hasSendModifier = input.metaKey || input.ctrlKey;
+  if (input.isMobileViewport && !hasSendModifier) return false;
+
+  switch (input.shortcut) {
+    case "enter":
+      return true;
+    case "modifier_when_multiline":
+      return hasSendModifier || !input.draft.includes("\n");
+    case "modifier_always":
+      return hasSendModifier;
+  }
 }
 
 const isInlineTokenSegment = (

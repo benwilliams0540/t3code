@@ -14,6 +14,7 @@ import * as DesktopClientSettings from "./DesktopClientSettings.ts";
 
 const clientSettings: ClientSettings = {
   autoOpenPlanSidebar: false,
+  channelComposerSendShortcut: "modifier_when_multiline",
   confirmThreadArchive: true,
   confirmThreadDelete: false,
   dismissedProviderUpdateNotificationKeys: [],
@@ -34,6 +35,7 @@ const clientSettings: ClientSettings = {
   sidebarV2Enabled: false,
   sidebarV2ConfiguredByUser: false,
   timestampFormat: "24-hour",
+  threadComposerSendShortcut: "enter",
   wordWrap: true,
 };
 
@@ -154,6 +156,8 @@ describe("DesktopClientSettings", () => {
         assert.isTrue(Option.isSome(persisted));
         if (Option.isSome(persisted)) {
           assert.equal(persisted.value.timestampFormat, "24-hour");
+          assert.equal(persisted.value.channelComposerSendShortcut, "modifier_when_multiline");
+          assert.equal(persisted.value.threadComposerSendShortcut, "enter");
         }
       }),
     ),

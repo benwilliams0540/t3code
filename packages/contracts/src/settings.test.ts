@@ -5,8 +5,10 @@ import { ProviderInstanceId } from "./providerInstance.ts";
 import {
   ClientSettingsSchema,
   ClientSettingsPatch,
+  DEFAULT_CHANNEL_COMPOSER_SEND_SHORTCUT,
   DEFAULT_ROOMS_LOCAL_API_BASE_URL,
   DEFAULT_SERVER_SETTINGS,
+  DEFAULT_THREAD_COMPOSER_SEND_SHORTCUT,
   ServerSettings,
   ServerSettingsPatch,
 } from "./settings.ts";
@@ -31,6 +33,38 @@ describe("ClientSettings word wrap", () => {
     expect(decoded.wordWrap).toBe(true);
     expect(decoded).not.toHaveProperty("chatWordWrap");
     expect(decoded).not.toHaveProperty("diffWordWrap");
+  });
+});
+
+describe("ClientSettings composer send shortcuts", () => {
+  it("decodes legacy settings with independent channel and thread defaults", () => {
+    const settings = decodeClientSettings({ timestampFormat: "24-hour" });
+
+    expect(settings.channelComposerSendShortcut).toBe(DEFAULT_CHANNEL_COMPOSER_SEND_SHORTCUT);
+    expect(settings.threadComposerSendShortcut).toBe(DEFAULT_THREAD_COMPOSER_SEND_SHORTCUT);
+  });
+
+  it.each(["enter", "modifier_when_multiline", "modifier_always"] as const)(
+    "accepts %s independently in client patches",
+    (shortcut) => {
+      expect(
+        decodeClientSettingsPatch({ channelComposerSendShortcut: shortcut })
+          .channelComposerSendShortcut,
+      ).toBe(shortcut);
+      expect(
+        decodeClientSettingsPatch({ threadComposerSendShortcut: shortcut })
+          .threadComposerSendShortcut,
+      ).toBe(shortcut);
+    },
+  );
+
+  it("rejects unsupported shortcut values", () => {
+    expect(() =>
+      decodeClientSettingsPatch({ channelComposerSendShortcut: "shift_enter" }),
+    ).toThrow();
+    expect(() =>
+      decodeClientSettingsPatch({ threadComposerSendShortcut: "shift_enter" }),
+    ).toThrow();
   });
 });
 

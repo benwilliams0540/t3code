@@ -1,5 +1,8 @@
 import * as Schema from "effect/Schema";
-import { DEFAULT_ROOMS_LOCAL_API_BASE_URL } from "@t3tools/contracts/settings";
+import {
+  type ComposerSendShortcut,
+  DEFAULT_ROOMS_LOCAL_API_BASE_URL,
+} from "@t3tools/contracts/settings";
 import { useEffect, useState } from "react";
 
 import { useClientSettings, useUpdateClientSettings } from "../../hooks/useSettings";
@@ -34,6 +37,56 @@ import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsL
 const AUTO_SETTLE_MIN_DAYS = 1;
 const AUTO_SETTLE_MAX_DAYS = 90;
 const AUTO_SETTLE_DEFAULT_DAYS = 3;
+
+const COMPOSER_SEND_SHORTCUT_OPTIONS = [
+  ["enter", "Enter", "Enter sends; Shift+Enter inserts a newline."],
+  [
+    "modifier_when_multiline",
+    "Modifier for multiline",
+    "Enter sends one line. After a newline, use ⌘/Ctrl+Enter.",
+  ],
+  ["modifier_always", "Always use modifier", "Only ⌘/Ctrl+Enter sends."],
+] as const satisfies readonly (readonly [ComposerSendShortcut, string, string])[];
+
+export function composerShortcutPatch(target: "channel" | "thread", value: ComposerSendShortcut) {
+  return target === "channel"
+    ? { channelComposerSendShortcut: value }
+    : { threadComposerSendShortcut: value };
+}
+
+function ComposerSendShortcutControl({
+  label,
+  onChange,
+  value,
+}: {
+  readonly label: string;
+  readonly onChange: (value: ComposerSendShortcut) => void;
+  readonly value: ComposerSendShortcut;
+}) {
+  return (
+    <RadioGroup
+      aria-label={label}
+      className="grid gap-2 py-3 lg:grid-cols-3"
+      onValueChange={(nextValue) => onChange(nextValue as ComposerSendShortcut)}
+      value={value}
+    >
+      {COMPOSER_SEND_SHORTCUT_OPTIONS.map(([shortcut, title, description]) => (
+        <label
+          className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border bg-background px-3 py-3 has-[[data-checked]]:border-primary has-[[data-checked]]:ring-1 has-[[data-checked]]:ring-primary/30"
+          key={shortcut}
+        >
+          <Radio className="mt-0.5" value={shortcut} />
+          <span className="min-w-0">
+            <span className="block text-sm font-medium text-foreground">{title}</span>
+            <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+              {description}
+            </span>
+          </span>
+        </label>
+      ))}
+    </RadioGroup>
+  );
+}
 
 function AutoSettleDaysInput({
   value,
@@ -136,6 +189,12 @@ export function BetaSettingsPanel() {
     (settings) => settings.sidebarAutoSettleAfterDays,
   );
   const roomsLocalApiBaseUrl = useClientSettings((settings) => settings.roomsLocalApiBaseUrl);
+  const channelComposerSendShortcut = useClientSettings(
+    (settings) => settings.channelComposerSendShortcut,
+  );
+  const threadComposerSendShortcut = useClientSettings(
+    (settings) => settings.threadComposerSendShortcut,
+  );
   const updateSettings = useUpdateClientSettings();
 
   return (
@@ -213,6 +272,26 @@ export function BetaSettingsPanel() {
             ) : null}
           </>
         ) : null}
+        <SettingsRow
+          title="Channel send shortcut"
+          description="Choose when Enter sends messages in Local Rooms channels."
+        >
+          <ComposerSendShortcutControl
+            label="Channel send shortcut"
+            onChange={(value) => updateSettings(composerShortcutPatch("channel", value))}
+            value={channelComposerSendShortcut}
+          />
+        </SettingsRow>
+        <SettingsRow
+          title="Thread send shortcut"
+          description="Choose when Enter sends prompts through the native T3 composer."
+        >
+          <ComposerSendShortcutControl
+            label="Thread send shortcut"
+            onChange={(value) => updateSettings(composerShortcutPatch("thread", value))}
+            value={threadComposerSendShortcut}
+          />
+        </SettingsRow>
         <SettingsRow
           title="Rooms content"
           description="Sample is the certified demonstration workspace. Local connects to the development-only t3rooms service and keeps native T3 projects and threads."

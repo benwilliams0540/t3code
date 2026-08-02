@@ -6,7 +6,11 @@ import {
 import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
 import { describe, expect, it } from "vite-plus/test";
 
-import { mergeEnvironmentSettings, resolveEnvironmentIdentificationMode } from "./useSettings";
+import {
+  applyClientSettingsPatch,
+  mergeEnvironmentSettings,
+  resolveEnvironmentIdentificationMode,
+} from "./useSettings";
 
 describe("resolveEnvironmentIdentificationMode", () => {
   it("keeps identification hidden until client settings hydrate", () => {
@@ -16,6 +20,24 @@ describe("resolveEnvironmentIdentificationMode", () => {
     expect(resolveEnvironmentIdentificationMode({ mode: "pill", settingsHydrated: true })).toBe(
       "pill",
     );
+  });
+});
+
+describe("applyClientSettingsPatch", () => {
+  it("persists channel and thread composer shortcuts independently", () => {
+    const channelUpdated = applyClientSettingsPatch(DEFAULT_CLIENT_SETTINGS, {
+      channelComposerSendShortcut: "modifier_always",
+    });
+    expect(channelUpdated.channelComposerSendShortcut).toBe("modifier_always");
+    expect(channelUpdated.threadComposerSendShortcut).toBe(
+      DEFAULT_CLIENT_SETTINGS.threadComposerSendShortcut,
+    );
+
+    const threadUpdated = applyClientSettingsPatch(channelUpdated, {
+      threadComposerSendShortcut: "modifier_when_multiline",
+    });
+    expect(threadUpdated.channelComposerSendShortcut).toBe("modifier_always");
+    expect(threadUpdated.threadComposerSendShortcut).toBe("modifier_when_multiline");
   });
 });
 

@@ -1896,7 +1896,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     }
     if (
       key === "Enter" &&
-      shouldSubmitComposerOnEnter({ isMobileViewport, shiftKey: event.shiftKey })
+      shouldSubmitComposerOnEnter({
+        ctrlKey: event.ctrlKey,
+        draft: promptRef.current,
+        isComposing: event.isComposing,
+        isMobileViewport,
+        keyCode: event.keyCode,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        shortcut: settings.threadComposerSendShortcut,
+      })
     ) {
       submitComposer();
       return true;

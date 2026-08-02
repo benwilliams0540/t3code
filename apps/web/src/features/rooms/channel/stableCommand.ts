@@ -3,6 +3,14 @@ export interface StableRoomsCommand<T> {
   readonly payload: T;
 }
 
+export function canSubmitStableRoomsCommand(input: {
+  readonly authorized: boolean;
+  readonly isPending: boolean;
+  readonly payload: string;
+}): boolean {
+  return input.authorized && !input.isPending && input.payload.trim() !== "";
+}
+
 export function tryStartStableRoomsSubmission(pending: { current: boolean }): boolean {
   if (pending.current) return false;
   pending.current = true;

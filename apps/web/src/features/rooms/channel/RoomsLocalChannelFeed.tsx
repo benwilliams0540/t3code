@@ -3,6 +3,9 @@ import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } fro
 
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
+import { shouldSubmitComposerOnEnter } from "~/composer-logic";
+import { useClientSettings } from "~/hooks/useSettings";
+import { useMediaQuery } from "~/hooks/useMediaQuery";
 
 import { RoomsActivityFeed, useRoomsFeedAutoScroll } from "../activity/RoomsActivityFeed";
 import { RoomsActivityRowView } from "../activity/RoomsActivityItem";
@@ -22,6 +25,7 @@ import type {
 } from "../dataSource/localChannelsContract";
 import { createLowercaseUuidV7 } from "../dataSource/uuidV7";
 import {
+  canSubmitStableRoomsCommand,
   finishStableRoomsSubmission,
   prepareStableRoomsCommand,
   tryStartStableRoomsSubmission,
@@ -99,6 +103,10 @@ function ChannelComposer({
   readonly roomId: string;
 }) {
   const { sendLocalMessage } = useRoomsDataSource();
+  const channelComposerSendShortcut = useClientSettings(
+    (settings) => settings.channelComposerSendShortcut,
+  );
+  const isMobileViewport = useMediaQuery("max-sm");
   const [draft, setDraft] = useState("");
   const [command, setCommand] = useState<StableRoomsCommand<string> | null>(null);
   const [pending, setPending] = useState(false);
@@ -107,7 +115,16 @@ function ChannelComposer({
 
   const submit = async (event?: FormEvent) => {
     event?.preventDefault();
-    if (!canSend || draft.trim() === "" || !tryStartStableRoomsSubmission(pendingRef)) return;
+    if (
+      !canSubmitStableRoomsCommand({
+        authorized: canSend,
+        isPending: pendingRef.current,
+        payload: draft,
+      }) ||
+      !tryStartStableRoomsSubmission(pendingRef)
+    ) {
+      return;
+    }
     const next = prepareStableRoomsCommand(command, draft, createLowercaseUuidV7);
     setCommand(next);
     setPending(true);
@@ -148,7 +165,19 @@ function ChannelComposer({
           setError(null);
         }}
         onKeyDown={(event) => {
-          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+          if (
+            event.key === "Enter" &&
+            shouldSubmitComposerOnEnter({
+              ctrlKey: event.ctrlKey,
+              draft,
+              isComposing: event.nativeEvent.isComposing,
+              isMobileViewport,
+              keyCode: event.nativeEvent.keyCode,
+              metaKey: event.metaKey,
+              shiftKey: event.shiftKey,
+              shortcut: channelComposerSendShortcut,
+            })
+          ) {
             event.preventDefault();
             void submit();
           }
@@ -158,7 +187,11 @@ function ChannelComposer({
       />
       <div className="mt-2 flex items-center gap-3">
         <p className="min-w-0 flex-1 text-xs text-muted-foreground">
-          Markdown supported · ⌘ Enter to send
+          Markdown supported ·{" "}
+          {channelComposerSendShortcut === "modifier_always" ||
+          (channelComposerSendShortcut === "modifier_when_multiline" && draft.includes("\n"))
+            ? "⌘/Ctrl Enter to send"
+            : "Enter to send · Shift Enter for newline"}
         </p>
         <Button disabled={pending || !canSend || draft.trim() === ""} size="sm" type="submit">
           <SendIcon aria-hidden />
