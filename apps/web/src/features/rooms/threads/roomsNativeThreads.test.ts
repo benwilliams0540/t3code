@@ -2,7 +2,7 @@ import type {
   EnvironmentProject,
   EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/shell";
-import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { roomsWorkspaceFixture } from "../fixtures";
@@ -29,6 +29,7 @@ function thread(
     title: `Native ${id}`,
     archivedAt: options.archivedAt ?? null,
     updatedAt: options.updatedAt ?? "2026-07-31T12:00:00.000Z",
+    modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
   } as EnvironmentThreadShell;
 }
 
@@ -91,6 +92,7 @@ describe("Rooms native T3 thread entries", () => {
     );
     expect(byId.get(ThreadId.make("thread-approval"))?.status).toBe("approval");
     expect(byId.get(ThreadId.make("thread-ready"))?.status).toBe("ready");
+    expect(byId.get(ThreadId.make("thread-ready"))?.providerInstanceId).toBe("codex");
   });
 
   it("rejects fake or unresolved thread identities unless their actual shell project is bound", () => {

@@ -10,6 +10,7 @@ import {
 import { RoomsLocalWorkspace } from "../dataSource/localChannelsContract";
 import { roomsProjectNavigationItems } from "./RoomsWorkspaceNavigation";
 import { RoomsLocalUnavailableSurface } from "./RoomsLocalWorkspaceSurface";
+import { RoomsLocalStoriesEmptyState } from "../stories/RoomsLocalStories";
 
 const decodeWorkspace = Schema.decodeUnknownSync(RoomsLocalWorkspace);
 
@@ -29,7 +30,6 @@ describe("Rooms Local source isolation", () => {
     const localState = resolveLocalRoomsDataSourceState(workspace, config);
     const surfaces = [
       { kind: "project", projectSection: "vision" },
-      { kind: "project", projectSection: "stories" },
       { kind: "project", projectSection: "evidence" },
       { kind: "project", projectSection: "audit-decisions" },
       { kind: "present" },
@@ -40,10 +40,12 @@ describe("Rooms Local source isolation", () => {
       markup: surfaces.map((surface) =>
         renderToStaticMarkup(<RoomsLocalUnavailableSurface surface={surface} />),
       ),
+      storiesMarkup: renderToStaticMarkup(<RoomsLocalStoriesEmptyState />),
     });
 
     expect(output).toContain("Local workspace");
     expect(output).toContain("No vision revisions yet.");
+    expect(output).toContain("No Local stories yet");
     for (const marker of SAMPLE_ONLY_MARKERS) expect(output).not.toContain(marker);
   });
 });

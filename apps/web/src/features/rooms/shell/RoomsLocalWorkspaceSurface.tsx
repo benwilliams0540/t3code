@@ -16,6 +16,7 @@ import type { RoomsLocalWorkspace } from "../dataSource/localChannelsContract";
 import { RoomsProjectBindingMenu, RoomsThreadsSurface } from "../threads/RoomsThreadNavigation";
 import { useRoomProjectBindings } from "../threads/roomProjectBindings";
 import { selectRoomsNativeThreadEntries } from "../threads/roomsNativeThreads";
+import { RoomsLocalStoriesSurface } from "../stories/RoomsLocalStories";
 import type { RoomsWorkspaceSurface } from "./navigation";
 import type { RoomsWorkspaceNavigate } from "./RoomsWorkspaceNavigation";
 
@@ -36,9 +37,6 @@ export function localUnavailableSurfaceCopy(surface: LocalUnavailableSurface): {
   }
   if (surface.projectSection === "vision") {
     return { title: "Vision", description: "No vision revisions yet." };
-  }
-  if (surface.projectSection === "stories") {
-    return { title: "Stories", description: "No stories yet." };
   }
   if (surface.projectSection === "evidence") {
     return { title: "Evidence", description: "No evidence yet." };
@@ -188,6 +186,9 @@ export function RoomsLocalWorkspaceSurfaceView({
   }
   if (surface.kind === "threads") {
     return <RoomsThreadsSurface navigate={navigate} room={room} sourceMode="local" />;
+  }
+  if (surface.kind === "project" && surface.projectSection === "stories") {
+    return <RoomsLocalStoriesSurface key={room.id} navigate={navigate} roomId={room.id} />;
   }
   return <RoomsLocalUnavailableSurface surface={surface} />;
 }

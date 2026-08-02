@@ -41,6 +41,7 @@ describe("Rooms native thread navigation", () => {
           updatedAt: "2026-08-01T13:30:00.000Z",
           status: "ready",
           workingStartedAt: null,
+          providerInstanceId: "codex",
         }}
       />,
     );
@@ -61,6 +62,7 @@ describe("Rooms native thread navigation", () => {
       projectTitle: "t3rooms",
       updatedAt: "2026-08-01T13:30:00.000Z",
       workingStartedAt: null,
+      providerInstanceId: "codex",
     } as const;
 
     const working = renderToStaticMarkup(

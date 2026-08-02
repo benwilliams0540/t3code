@@ -1,0 +1,14 @@
+{
+  "contract": {
+    "id": "rooms.local-stories",
+    "version": 1,
+    "schema_uri": "contracts/rooms/local-stories/v1/schema.json"
+  },
+  "room_id": "room:019fb900-1000-7000-8000-000000000001",
+  "capabilities": {
+    "work.read": true,
+    "work.create": true,
+    "work.link_thread": true
+  },
+  "stories": []
+}

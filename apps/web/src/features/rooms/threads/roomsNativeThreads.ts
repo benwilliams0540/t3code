@@ -21,6 +21,7 @@ export interface RoomsNativeThreadEntry {
   /** Same reading sidebar v2 gives a thread, so a row means the same thing in both. */
   readonly status: SidebarV2Status;
   readonly workingStartedAt: string | null;
+  readonly providerInstanceId: string;
 }
 
 function threadProjectKey(thread: EnvironmentThreadShell): string {
@@ -64,6 +65,8 @@ export function selectRoomsNativeThreadEntries(
               updatedAt: thread.updatedAt,
               status: resolveSidebarV2Status(thread),
               workingStartedAt: resolveWorkingStartedAt(thread),
+              providerInstanceId:
+                thread.session?.providerInstanceId ?? thread.modelSelection.instanceId,
             },
           ]
         : [];

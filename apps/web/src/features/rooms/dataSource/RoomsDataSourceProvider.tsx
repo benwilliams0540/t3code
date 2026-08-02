@@ -39,6 +39,12 @@ import type {
   RoomsLocalHumanMessage,
   RoomsLocalWorkspace,
 } from "./localChannelsContract";
+import type {
+  RoomsLocalCreateStoryInput,
+  RoomsLocalLinkStoryThreadInput,
+  RoomsLocalStoriesResponse,
+  RoomsLocalStory,
+} from "./localStoriesContract";
 import {
   EMPTY_ROOMS_SELECTED_ROOM_BY_SOURCE,
   type RoomsDataSourceMode,
@@ -84,6 +90,16 @@ interface RoomsDataSourceContextValue {
     channelId: string,
     input: RoomsLocalCreateMessageInput,
   ) => Promise<RoomsLocalCommandResult<RoomsLocalHumanMessage>>;
+  readonly loadLocalStories: (roomId: string) => Promise<RoomsLocalStoriesResponse>;
+  readonly createLocalStory: (
+    roomId: string,
+    input: RoomsLocalCreateStoryInput,
+  ) => Promise<RoomsLocalCommandResult<RoomsLocalStory>>;
+  readonly linkLocalStoryThread: (
+    roomId: string,
+    storyId: string,
+    input: RoomsLocalLinkStoryThreadInput,
+  ) => Promise<RoomsLocalCommandResult<RoomsLocalStory>>;
   readonly selectRoom: (room: RoomsSourceRoom) => void;
   readonly setLocalConfig: (
     value:
@@ -303,6 +319,19 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
     [client],
   );
 
+  const loadLocalStories = useCallback((roomId: string) => client.getStories(roomId), [client]);
+
+  const createLocalStory = useCallback(
+    (roomId: string, input: RoomsLocalCreateStoryInput) => client.createStory(roomId, input),
+    [client],
+  );
+
+  const linkLocalStoryThread = useCallback(
+    (roomId: string, storyId: string, input: RoomsLocalLinkStoryThreadInput) =>
+      client.linkStoryThread(roomId, storyId, input),
+    [client],
+  );
+
   const setMode = useCallback(
     (nextMode: RoomsDataSourceMode) => setPersistedMode(nextMode),
     [setPersistedMode],
@@ -333,6 +362,9 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       createLocalChannel,
       loadLocalFeed,
       sendLocalMessage,
+      loadLocalStories,
+      createLocalStory,
+      linkLocalStoryThread,
       selectRoom,
       setLocalConfig,
       setMode,
@@ -351,6 +383,9 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       selectedBySource,
       selectedRoom,
       sendLocalMessage,
+      loadLocalStories,
+      createLocalStory,
+      linkLocalStoryThread,
       setLocalConfig,
       setMode,
       state,

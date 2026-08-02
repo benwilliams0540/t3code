@@ -35,3 +35,10 @@ export const ROOMS_LOCAL_CHANGES_SOURCE = {
   contractVersion: 1,
   schemaUri: "contracts/rooms/local-changes/v1/schema.json",
 } as const;
+
+export const ROOMS_LOCAL_STORIES_SOURCE = {
+  repositorySha: "918c5b31f510fa065b246d8b9fb13c5505581838",
+  contractId: "rooms.local-stories",
+  contractVersion: 1,
+  schemaUri: "contracts/rooms/local-stories/v1/schema.json",
+} as const;
