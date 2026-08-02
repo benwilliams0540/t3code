@@ -516,6 +516,51 @@ export function sortSettledThreadsForSidebarV2<
   );
 }
 
+export interface SidebarV2StatusPresentation {
+  readonly label: string;
+  readonly icon: "working" | null;
+  readonly className: string;
+}
+
+/** The shared reading of an in-flight thread. Hues follow the system-wide
+    convention set by sidebar v1 and the mobile Live Activity/widgets (amber
+    approval, indigo input, sky working), so a thread reads the same wherever it
+    surfaces — sidebar v2, Rooms, anywhere else that grows a thread list.
+    `ready` has no presentation: resting threads are deliberately unlabeled. */
+export function sidebarV2StatusPresentation(
+  status: SidebarV2Status,
+): SidebarV2StatusPresentation | null {
+  switch (status) {
+    case "working":
+      return {
+        label: "Working",
+        icon: "working",
+        className:
+          "animate-sidebar-working-text text-sky-600 motion-reduce:animate-none dark:text-sky-400",
+      };
+    case "approval":
+      return {
+        label: "Approval",
+        icon: null,
+        className: "text-amber-700 dark:text-amber-300",
+      };
+    case "input":
+      return {
+        label: "Input",
+        icon: null,
+        className: "text-indigo-600 dark:text-indigo-300",
+      };
+    case "failed":
+      return {
+        label: "Failed",
+        icon: null,
+        className: "text-red-700 dark:text-red-300",
+      };
+    case "ready":
+      return null;
+  }
+}
+
 /** The timestamp a working thread's elapsed label counts from: the running
     turn's start (request time until adoption), falling back to the session's
     last transition when the turn projection lags behind. Malformed

@@ -5,6 +5,12 @@ import type {
 } from "@t3tools/client-runtime/state/shell";
 import type { ScopedProjectRef } from "@t3tools/contracts";
 
+import {
+  resolveSidebarV2Status,
+  resolveWorkingStartedAt,
+  type SidebarV2Status,
+} from "~/components/Sidebar.logic";
+
 export interface RoomsNativeThreadEntry {
   readonly environmentId: EnvironmentThreadShell["environmentId"];
   readonly projectId: EnvironmentThreadShell["projectId"];
@@ -12,6 +18,9 @@ export interface RoomsNativeThreadEntry {
   readonly title: string;
   readonly projectTitle: string;
   readonly updatedAt: string;
+  /** Same reading sidebar v2 gives a thread, so a row means the same thing in both. */
+  readonly status: SidebarV2Status;
+  readonly workingStartedAt: string | null;
 }
 
 function threadProjectKey(thread: EnvironmentThreadShell): string {
@@ -53,6 +62,8 @@ export function selectRoomsNativeThreadEntries(
               title: thread.title,
               projectTitle: project.title,
               updatedAt: thread.updatedAt,
+              status: resolveSidebarV2Status(thread),
+              workingStartedAt: resolveWorkingStartedAt(thread),
             },
           ]
         : [];

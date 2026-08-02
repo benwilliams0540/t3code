@@ -39,6 +39,8 @@ describe("Rooms native thread navigation", () => {
           title,
           projectTitle: "t3rooms",
           updatedAt: "2026-08-01T13:30:00.000Z",
+          status: "ready",
+          workingStartedAt: null,
         }}
       />,
     );
@@ -48,5 +50,38 @@ describe("Rooms native thread navigation", () => {
     expect(markup).toContain("overflow-hidden");
     expect(markup).toContain("truncate");
     expect(markup).not.toContain("break-words");
+  });
+
+  it("labels a working thread and leaves a resting one unlabeled", () => {
+    const base = {
+      environmentId: EnvironmentId.make("environment-local"),
+      projectId: ProjectId.make("project-rooms"),
+      threadId: ThreadId.make("thread-status"),
+      title: "Status thread",
+      projectTitle: "t3rooms",
+      updatedAt: "2026-08-01T13:30:00.000Z",
+      workingStartedAt: null,
+    } as const;
+
+    const working = renderToStaticMarkup(
+      <RoomsNativeThreadNavItem
+        active={false}
+        navigate={() => undefined}
+        projectTitle="t3rooms"
+        thread={{ ...base, status: "working", workingStartedAt: "2026-08-01T13:29:00.000Z" }}
+      />,
+    );
+    const ready = renderToStaticMarkup(
+      <RoomsNativeThreadNavItem
+        active={false}
+        navigate={() => undefined}
+        projectTitle="t3rooms"
+        thread={{ ...base, status: "ready" }}
+      />,
+    );
+
+    expect(working).toContain('data-rooms-thread-status="working"');
+    expect(working).toContain("Working");
+    expect(ready).not.toContain("data-rooms-thread-status");
   });
 });

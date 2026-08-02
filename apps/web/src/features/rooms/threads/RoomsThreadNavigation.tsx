@@ -1,6 +1,7 @@
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import {
+  CircleDashedIcon,
   FolderGit2Icon,
   FolderPlusIcon,
   MessageSquareTextIcon,
@@ -10,6 +11,8 @@ import {
 } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 
+import { sidebarV2StatusPresentation } from "~/components/Sidebar.logic";
+import { WorkingDuration } from "~/components/ThreadStatusIndicators";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -29,7 +32,7 @@ import type { RoomsDataSourceMode, RoomsSourceRoom } from "../dataSource";
 import type { RoomsWorkspaceNavigate } from "../shell/RoomsWorkspaceNavigation";
 import type { RoomsWorkspaceSurface } from "../shell/navigation";
 import { type PersistedRoomsProjectRef, useRoomProjectBindings } from "./roomProjectBindings";
-import { selectRoomsNativeThreadEntries } from "./roomsNativeThreads";
+import { selectRoomsNativeThreadEntries, type RoomsNativeThreadEntry } from "./roomsNativeThreads";
 
 function projectRef(project: EnvironmentProject): PersistedRoomsProjectRef {
   return { environmentId: project.environmentId, projectId: project.id };
@@ -191,6 +194,34 @@ function NewThreadControl({
   );
 }
 
+/**
+ * The same status reading sidebar v2 shows, so "is this thread doing work right now" does not
+ * depend on which sidebar you happen to be in.
+ */
+export function RoomsThreadStatus({ thread }: { readonly thread: RoomsNativeThreadEntry }) {
+  const presentation = sidebarV2StatusPresentation(thread.status);
+  if (!presentation) return null;
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 text-[10px] font-medium",
+        presentation.className,
+      )}
+      data-rooms-thread-status={thread.status}
+    >
+      {presentation.icon === "working" ? (
+        <CircleDashedIcon aria-hidden className="size-3 shrink-0" />
+      ) : null}
+      <span role="status">{presentation.label}</span>
+      {thread.status === "working" ? (
+        <span aria-hidden>
+          <WorkingDuration startedAt={thread.workingStartedAt} />
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 export function RoomsNativeThreadNavItem({
   active,
   navigate,
@@ -200,7 +231,7 @@ export function RoomsNativeThreadNavItem({
   readonly active: boolean;
   readonly navigate: RoomsWorkspaceNavigate;
   readonly projectTitle: string;
-  readonly thread: ReturnType<typeof selectRoomsNativeThreadEntries>[number];
+  readonly thread: RoomsNativeThreadEntry;
 }) {
   return (
     <button
@@ -222,6 +253,7 @@ export function RoomsNativeThreadNavItem({
     >
       <MessageSquareTextIcon aria-hidden className="size-3.5 shrink-0" />
       <span className="min-w-0 flex-1 truncate">{thread.title}</span>
+      <RoomsThreadStatus thread={thread} />
     </button>
   );
 }
@@ -376,6 +408,7 @@ export function RoomsThreadsSurface({
               <span className="min-w-0 flex-1 truncate font-medium text-foreground">
                 {thread.title}
               </span>
+              <RoomsThreadStatus thread={thread} />
               <span className="text-xs text-muted-foreground">
                 {formatRelativeTimeLabel(thread.updatedAt)}
               </span>

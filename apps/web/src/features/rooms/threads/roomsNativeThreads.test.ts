@@ -57,6 +57,42 @@ describe("Rooms native T3 thread entries", () => {
     expect(entries.map((entry) => entry.threadId)).toEqual(["thread-current"]);
   });
 
+  it("carries the sidebar v2 status so a Rooms row reads the same as a v2 row", () => {
+    const working = {
+      ...thread("thread-working"),
+      hasPendingApprovals: false,
+      hasPendingUserInput: false,
+      session: { status: "running", updatedAt: "2026-07-31T12:00:30.000Z" },
+      latestTurn: {
+        completedAt: null,
+        startedAt: "2026-07-31T12:00:05.000Z",
+        requestedAt: "2026-07-31T12:00:00.000Z",
+      },
+    } as unknown as EnvironmentThreadShell;
+    const awaitingApproval = {
+      ...thread("thread-approval"),
+      hasPendingApprovals: true,
+      hasPendingUserInput: false,
+      session: { status: "running", updatedAt: "2026-07-31T12:00:30.000Z" },
+    } as unknown as EnvironmentThreadShell;
+    const resting = {
+      ...thread("thread-ready"),
+      hasPendingApprovals: false,
+      hasPendingUserInput: false,
+      session: null,
+    } as unknown as EnvironmentThreadShell;
+
+    const entries = selectRoomsNativeThreadEntries([working, awaitingApproval, resting], [project]);
+    const byId = new Map(entries.map((entry) => [entry.threadId, entry]));
+
+    expect(byId.get(ThreadId.make("thread-working"))?.status).toBe("working");
+    expect(byId.get(ThreadId.make("thread-working"))?.workingStartedAt).toBe(
+      "2026-07-31T12:00:05.000Z",
+    );
+    expect(byId.get(ThreadId.make("thread-approval"))?.status).toBe("approval");
+    expect(byId.get(ThreadId.make("thread-ready"))?.status).toBe("ready");
+  });
+
   it("rejects fake or unresolved thread identities unless their actual shell project is bound", () => {
     const actualThread = thread("thread-native");
 
