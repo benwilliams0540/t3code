@@ -127,6 +127,9 @@ function createTransport(input: {
   readonly server: ServerHandler;
   readonly token?: string;
   readonly sockets?: FakeWebSocket[];
+  readonly requestTimeoutMs?: number;
+  readonly waitRequestGraceMs?: number;
+  readonly now?: number;
 }): OpenClawGatewayTransport {
   const socketFactory: WebSocketFactory = (url) => {
     const socket = new FakeWebSocket(url, input.server);
@@ -140,9 +143,21 @@ function createTransport(input: {
     agentId: "rooms",
     socketFactory,
     clientVersion: "test-1",
-    now: () => Date.parse("2026-08-02T00:00:02.000Z"),
+    ...(input.requestTimeoutMs === undefined ? {} : { requestTimeoutMs: input.requestTimeoutMs }),
+    ...(input.waitRequestGraceMs === undefined
+      ? {}
+      : { waitRequestGraceMs: input.waitRequestGraceMs }),
+    now: () => input.now ?? Date.parse("2026-08-02T00:00:02.000Z"),
   });
 }
+
+const expiredInvocation = buildResidentAgentInvocation({
+  binding,
+  event: source,
+  candidates: [],
+  createdAt: "2026-08-02T00:00:01.000Z",
+  deadline: "2026-08-02T00:00:02.000Z",
+});
 
 describe("OpenClaw Gateway RPC transport", () => {
   it("uses protocol v4 agent/wait/history and returns one bounded Markdown reply", async () => {
@@ -256,6 +271,199 @@ describe("OpenClaw Gateway RPC transport", () => {
     expect(methods).toEqual(["connect", "agent.wait", "chat.history"]);
   });
 
+  it("replaces remote-controlled error fields with connector-owned mappings", async () => {
+    const secret = "sentinel-gateway-secret";
+    const anotherSecret = "another-secret-shaped-value";
+    const unknownRemoteCode = `${secret}:${anotherSecret}:${"x".repeat(2_000)}`;
+    const unknown = createTransport({
+      token: secret,
+      server: (frame, socket) => {
+        if (frame.method === "connect") socket.emit(hello(frame.id!));
+        else if (frame.method === "agent") {
+          socket.emit({
+            type: "res",
+            id: frame.id,
+            ok: false,
+            error: {
+              code: unknownRemoteCode,
+              message: unknownRemoteCode,
+              retryable: true,
+              details: { code: unknownRemoteCode },
+            },
+          });
+        }
+      },
+    });
+    const unknownError = await unknown
+      .invoke(invocation, { onAccepted: () => {} })
+      .catch((error: unknown) => error);
+    expect(unknownError).toMatchObject({
+      code: "gateway_request_rejected",
+      message: "OpenClaw Gateway rejected the request.",
+      retryable: false,
+    });
+    expect(String(unknownError)).not.toContain(secret);
+    expect(JSON.stringify(unknownError)).not.toContain(secret);
+    expect(JSON.stringify(unknownError)).not.toContain(anotherSecret);
+
+    for (const [detailCode, expectedCode] of [
+      ["AUTH_TOKEN_MISMATCH", "gateway_authentication_failed"],
+      ["AUTH_SCOPE_MISMATCH", "gateway_scope_required"],
+    ] as const) {
+      const recognized = createTransport({
+        server: (frame, socket) => {
+          if (frame.method === "connect") {
+            socket.emit({
+              type: "res",
+              id: frame.id,
+              ok: false,
+              error: {
+                code: "INVALID_REQUEST",
+                message: secret,
+                retryable: true,
+                details: { code: detailCode, diagnostic: secret },
+              },
+            });
+          }
+        },
+      });
+      const recognizedError = await recognized
+        .invoke(invocation, { onAccepted: () => {} })
+        .catch((error: unknown) => error);
+      expect(recognizedError).toMatchObject({ code: expectedCode, retryable: false });
+      expect(String(recognizedError)).not.toContain(secret);
+      expect(JSON.stringify(recognizedError)).not.toContain(secret);
+    }
+  });
+
+  it("aborts exactly once when the local agent.wait timer expires", async () => {
+    const methods: string[] = [];
+    const transport = createTransport({
+      waitRequestGraceMs: 0,
+      server: (frame, socket) => {
+        methods.push(frame.method!);
+        if (frame.method === "connect") socket.emit(hello(frame.id!));
+        else if (frame.method === "agent") {
+          socket.emit({
+            type: "res",
+            id: frame.id,
+            ok: true,
+            payload: { runId: "run-local-timeout", status: "accepted" },
+          });
+        } else if (frame.method === "sessions.abort") {
+          socket.emit({
+            type: "res",
+            id: frame.id,
+            ok: true,
+            payload: { ok: true, abortedRunId: "run-local-timeout" },
+          });
+        }
+      },
+    });
+    const error = await transport
+      .invoke(expiredInvocation, { onAccepted: () => {} })
+      .catch((caught: unknown) => caught);
+    expect(error).toMatchObject({
+      kind: "timed_out",
+      code: "gateway_request_timeout",
+    });
+    expect(methods).toEqual(["connect", "agent", "agent.wait", "sessions.abort"]);
+  });
+
+  it("does not abort when the local request timer expires before acceptance", async () => {
+    const methods: string[] = [];
+    const transport = createTransport({
+      requestTimeoutMs: 0,
+      server: (frame, socket) => {
+        methods.push(frame.method!);
+        if (frame.method === "connect") socket.emit(hello(frame.id!));
+      },
+    });
+    const error = await transport
+      .invoke(invocation, { onAccepted: () => {} })
+      .catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ kind: "timed_out", code: "gateway_request_timeout" });
+    expect(methods).toEqual(["connect", "agent"]);
+  });
+
+  it("keeps the local timeout when best-effort abort fails", async () => {
+    const methods: string[] = [];
+    const transport = createTransport({
+      waitRequestGraceMs: 0,
+      server: (frame, socket) => {
+        methods.push(frame.method!);
+        if (frame.method === "connect") socket.emit(hello(frame.id!));
+        else if (frame.method === "agent") {
+          socket.emit({
+            type: "res",
+            id: frame.id,
+            ok: true,
+            payload: { runId: "run-abort-fails", status: "accepted" },
+          });
+        } else if (frame.method === "sessions.abort") {
+          socket.emit({
+            type: "res",
+            id: frame.id,
+            ok: false,
+            error: { code: "UNAVAILABLE", message: "abort unavailable", retryable: true },
+          });
+        }
+      },
+    });
+    const error = await transport
+      .invoke(expiredInvocation, { onAccepted: () => {} })
+      .catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ kind: "timed_out", code: "gateway_request_timeout" });
+    expect(methods.filter((method) => method === "sessions.abort")).toHaveLength(1);
+  });
+
+  it("aborts exactly once on cancellation", async () => {
+    const methods: string[] = [];
+    const controller = new AbortController();
+    const transport = createTransport({
+      server: (frame, socket) => {
+        methods.push(frame.method!);
+        if (frame.method === "connect") socket.emit(hello(frame.id!));
+        else if (frame.method === "agent") {
+          socket.emit({
+            type: "res",
+            id: frame.id,
+            ok: true,
+            payload: { runId: "run-cancelled", status: "accepted" },
+          });
+        } else if (frame.method === "agent.wait") {
+          controller.abort();
+        } else if (frame.method === "sessions.abort") {
+          socket.emit({ type: "res", id: frame.id, ok: true, payload: { ok: true } });
+        }
+      },
+    });
+    const error = await transport
+      .invoke(invocation, { signal: controller.signal, onAccepted: () => {} })
+      .catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ kind: "cancelled", code: "invocation_cancelled" });
+    expect(methods.filter((method) => method === "sessions.abort")).toHaveLength(1);
+  });
+
+  it("applies the same local-timeout abort rule when resuming without another agent request", async () => {
+    const methods: string[] = [];
+    const transport = createTransport({
+      waitRequestGraceMs: 0,
+      server: (frame, socket) => {
+        methods.push(frame.method!);
+        if (frame.method === "connect") socket.emit(hello(frame.id!));
+        else if (frame.method === "sessions.abort") {
+          socket.emit({ type: "res", id: frame.id, ok: true, payload: { ok: true } });
+        }
+      },
+    });
+    const error = await transport
+      .resume(expiredInvocation, "run-resume-timeout")
+      .catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ kind: "timed_out", code: "gateway_request_timeout" });
+    expect(methods).toEqual(["connect", "agent.wait", "sessions.abort"]);
+  });
+
   it("maps Gateway timeout and aborts the accepted run", async () => {
     const methods: string[] = [];
     const transport = createTransport({
@@ -289,6 +497,7 @@ describe("OpenClaw Gateway RPC transport", () => {
     const result = await transport.invoke(invocation, { onAccepted: () => {} });
     expect(result).toMatchObject({ status: "timed_out", failure: { code: "agent_timed_out" } });
     expect(methods).toEqual(["connect", "agent", "agent.wait", "sessions.abort"]);
+    expect(methods.filter((method) => method === "sessions.abort")).toHaveLength(1);
   });
 
   it("rejects remote or credential-bearing Gateway URLs before creating a socket", () => {

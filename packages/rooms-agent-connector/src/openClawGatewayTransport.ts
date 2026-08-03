@@ -18,6 +18,13 @@ const MAX_GATEWAY_FRAME_BYTES = 1_048_576;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const REQUIRED_METHODS = ["agent", "agent.wait", "chat.history", "sessions.abort"] as const;
+const AUTHENTICATION_ERROR_DETAIL_CODES = new Set([
+  "AUTH_REQUIRED",
+  "AUTH_UNAUTHORIZED",
+  "AUTH_TOKEN_MISSING",
+  "AUTH_TOKEN_MISMATCH",
+  "AUTH_TOKEN_NOT_CONFIGURED",
+]);
 
 interface SocketEventLike {
   readonly data?: unknown;
@@ -46,6 +53,7 @@ interface ResponseFrame {
   readonly error?: {
     readonly code?: unknown;
     readonly retryable?: unknown;
+    readonly details?: unknown;
   };
 }
 
@@ -79,19 +87,46 @@ function validateOpaqueId(value: string, label: string): string {
 }
 
 function safeGatewayError(frame: ResponseFrame): GatewayTransportError {
-  const code =
-    isObject(frame.error) && typeof frame.error.code === "string"
-      ? frame.error.code.slice(0, 128)
-      : "gateway_request_rejected";
-  const retryable = isObject(frame.error) && frame.error.retryable === true;
-  const authFailure = code.toLowerCase().includes("auth") || code.toLowerCase().includes("scope");
+  const remoteCode = isObject(frame.error) ? frame.error.code : undefined;
+  const details = isObject(frame.error) && isObject(frame.error.details) ? frame.error.details : {};
+  const detailCode = details.code;
+  if (detailCode === "AUTH_SCOPE_MISMATCH") {
+    return new GatewayTransportError({
+      kind: "failed",
+      code: "gateway_scope_required",
+      safeMessage: "OpenClaw Gateway scope validation failed.",
+      retryable: false,
+    });
+  }
+  if (typeof detailCode === "string" && AUTHENTICATION_ERROR_DETAIL_CODES.has(detailCode)) {
+    return new GatewayTransportError({
+      kind: "failed",
+      code: "gateway_authentication_failed",
+      safeMessage: "OpenClaw Gateway authentication failed.",
+      retryable: false,
+    });
+  }
+  if (remoteCode === "UNAVAILABLE") {
+    return new GatewayTransportError({
+      kind: "unavailable",
+      code: "gateway_unavailable",
+      safeMessage: "OpenClaw Gateway is unavailable.",
+      retryable: true,
+    });
+  }
+  if (remoteCode === "AGENT_TIMEOUT") {
+    return new GatewayTransportError({
+      kind: "timed_out",
+      code: "agent_timed_out",
+      safeMessage: "OpenClaw did not finish before the invocation deadline.",
+      retryable: false,
+    });
+  }
   return new GatewayTransportError({
-    kind: authFailure ? "failed" : retryable ? "unavailable" : "failed",
-    code,
-    safeMessage: authFailure
-      ? "OpenClaw Gateway authentication or scope validation failed."
-      : "OpenClaw Gateway rejected the request.",
-    retryable: authFailure ? false : retryable,
+    kind: "failed",
+    code: "gateway_request_rejected",
+    safeMessage: "OpenClaw Gateway rejected the request.",
+    retryable: false,
   });
 }
 
@@ -661,6 +696,7 @@ export class OpenClawGatewayTransport implements ResidentAgentGatewayTransport {
   readonly #platform: string;
   readonly #connectTimeoutMs: number;
   readonly #requestTimeoutMs: number;
+  readonly #waitRequestGraceMs: number;
   readonly #now: () => number;
 
   constructor(input: {
@@ -673,6 +709,7 @@ export class OpenClawGatewayTransport implements ResidentAgentGatewayTransport {
     readonly platform?: string;
     readonly connectTimeoutMs?: number;
     readonly requestTimeoutMs?: number;
+    readonly waitRequestGraceMs?: number;
     readonly now?: () => number;
   }) {
     this.#url = validateLoopbackGatewayUrl(input.url);
@@ -685,6 +722,15 @@ export class OpenClawGatewayTransport implements ResidentAgentGatewayTransport {
     this.#platform = validateOpaqueId(input.platform ?? "node", "Gateway client platform");
     this.#connectTimeoutMs = input.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
     this.#requestTimeoutMs = input.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    this.#waitRequestGraceMs = input.waitRequestGraceMs ?? 1_000;
+    if (!Number.isSafeInteger(this.#waitRequestGraceMs) || this.#waitRequestGraceMs < 0) {
+      throw new GatewayTransportError({
+        kind: "failed",
+        code: "invalid_gateway_target",
+        safeMessage: "Gateway wait grace must be a non-negative integer.",
+        retryable: false,
+      });
+    }
     this.#now = input.now ?? (() => Date.now());
   }
 
@@ -844,10 +890,13 @@ export class OpenClawGatewayTransport implements ResidentAgentGatewayTransport {
         wait = await connection.request(
           "agent.wait",
           { runId, timeoutMs },
-          { timeoutMs: timeoutMs + 1_000, ...(signal ? { signal } : {}) },
+          { timeoutMs: timeoutMs + this.#waitRequestGraceMs, ...(signal ? { signal } : {}) },
         );
       } catch (error) {
-        if (error instanceof GatewayTransportError && error.kind === "cancelled") {
+        if (
+          error instanceof GatewayTransportError &&
+          (error.kind === "cancelled" || error.kind === "timed_out")
+        ) {
           await this.#bestEffortAbort(connection, runId);
         }
         throw error;

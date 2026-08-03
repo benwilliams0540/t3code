@@ -330,6 +330,7 @@ export function buildResidentAgentInvocation(input: {
     connector: {
       id: input.binding.connectorId,
       version: input.binding.connectorVersion,
+      configVersion: input.binding.configVersion,
       target: {
         hostId: input.binding.openClawHostId,
         agentId: input.binding.openClawAgentId,

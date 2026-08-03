@@ -25,6 +25,46 @@ import { SqliteInvocationStore } from "./sqliteInvocationStore.ts";
 const DEFAULT_INVOCATION_TIMEOUT_MS = 120_000;
 const DEFAULT_CLAIM_LEASE_MS = 150_000;
 
+const CONNECTOR_OWNED_TRANSPORT_ERROR_CODES = new Set([
+  "agent_reply_missing",
+  "agent_reply_too_large",
+  "agent_run_failed",
+  "agent_timed_out",
+  "gateway_acceptance_invalid",
+  "gateway_acceptance_not_persisted",
+  "gateway_authentication_failed",
+  "gateway_binary_frame_rejected",
+  "gateway_challenge_invalid",
+  "gateway_closed",
+  "gateway_connect_timeout",
+  "gateway_connection_closed",
+  "gateway_credential_unavailable",
+  "gateway_duplicate_challenge",
+  "gateway_event_before_auth",
+  "gateway_features_missing",
+  "gateway_frame_too_large",
+  "gateway_handshake_failed",
+  "gateway_invalid_frame",
+  "gateway_invalid_json",
+  "gateway_invalid_response",
+  "gateway_method_unavailable",
+  "gateway_policy_invalid",
+  "gateway_protocol_mismatch",
+  "gateway_request_rejected",
+  "gateway_request_timeout",
+  "gateway_request_too_large",
+  "gateway_response_id_mismatch",
+  "gateway_scope_required",
+  "gateway_send_failed",
+  "gateway_socket_error",
+  "gateway_target_mismatch",
+  "gateway_unavailable",
+  "gateway_wait_invalid",
+  "invalid_gateway_target",
+  "invalid_gateway_url",
+  "invocation_cancelled",
+]);
+
 function iso(ms: number): string {
   return new Date(ms).toISOString();
 }
@@ -41,10 +81,70 @@ function failureFromTransport(error: GatewayTransportError): {
         : error.kind === "unavailable"
           ? "unavailable"
           : "failed";
+  if (CONNECTOR_OWNED_TRANSPORT_ERROR_CODES.has(error.code)) {
+    return {
+      status,
+      failure: { code: error.code, safeMessage: error.message, retryable: error.retryable },
+    };
+  }
+  if (status === "timed_out") {
+    return {
+      status,
+      failure: {
+        code: "agent_timed_out",
+        safeMessage: "OpenClaw did not finish before the invocation deadline.",
+        retryable: false,
+      },
+    };
+  }
+  if (status === "cancelled") {
+    return {
+      status,
+      failure: {
+        code: "invocation_cancelled",
+        safeMessage: "Resident-agent invocation was cancelled.",
+        retryable: false,
+      },
+    };
+  }
+  if (status === "unavailable") {
+    return {
+      status,
+      failure: {
+        code: "gateway_unavailable",
+        safeMessage: "OpenClaw Gateway is unavailable.",
+        retryable: true,
+      },
+    };
+  }
   return {
     status,
-    failure: { code: error.code, safeMessage: error.message, retryable: error.retryable },
+    failure: {
+      code: "gateway_transport_failed",
+      safeMessage: "The OpenClaw Gateway request failed.",
+      retryable: false,
+    },
   };
+}
+
+function failureFromOutcome(outcome: GatewayRunOutcome): ResidentAgentFailure | undefined {
+  if (!outcome.failure) return undefined;
+  const kind =
+    outcome.status === "timed_out"
+      ? "timed_out"
+      : outcome.status === "cancelled"
+        ? "cancelled"
+        : outcome.status === "unavailable"
+          ? "unavailable"
+          : "failed";
+  return failureFromTransport(
+    new GatewayTransportError({
+      kind,
+      code: outcome.failure.code,
+      safeMessage: outcome.failure.safeMessage,
+      retryable: outcome.failure.retryable,
+    }),
+  ).failure;
 }
 
 export class RoomsResidentAgentConnector {
@@ -228,19 +328,7 @@ export class RoomsResidentAgentConnector {
                 iso(this.#now()),
               ),
           });
-      const currentBinding = this.#store.getBinding(record.invocation.connector.id);
-      const effectiveOutcome: GatewayRunOutcome =
-        currentBinding?.enabled === true
-          ? outcome
-          : {
-              status: "cancelled",
-              failure: {
-                code: "connector_disabled",
-                safeMessage: "The room connector was disabled before reply delivery.",
-                retryable: false,
-              },
-            };
-      const result = this.#resultFromOutcome(record, effectiveOutcome);
+      const result = this.#resultFromOutcome(record, outcome);
       const completed = this.#store.completeInvocation(
         record.invocation.invocationId,
         claimToken,
@@ -269,6 +357,7 @@ export class RoomsResidentAgentConnector {
   }
 
   #resultFromOutcome(record: InvocationRecord, outcome: GatewayRunOutcome): ResidentAgentResult {
+    const failure = failureFromOutcome(outcome);
     return {
       contract: {
         id: RESIDENT_AGENT_RESULT_CONTRACT,
@@ -277,7 +366,7 @@ export class RoomsResidentAgentConnector {
       invocationId: record.invocation.invocationId,
       status: outcome.status,
       ...(outcome.replyMarkdown === undefined ? {} : { replyMarkdown: outcome.replyMarkdown }),
-      ...(outcome.failure === undefined ? {} : { failure: outcome.failure }),
+      ...(failure === undefined ? {} : { failure }),
       completedAt: iso(this.#now()),
       adapter: {
         connectorId: record.invocation.connector.id,
