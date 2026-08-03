@@ -5,6 +5,7 @@ import {
   assertIsoInstant,
   assertNonEmptyString,
   ConnectorContractError,
+  isRecord,
   parseResidentAgentResult,
   RESIDENT_AGENT_CAPABILITIES,
   type ConnectorBinding,
@@ -66,8 +67,20 @@ function mapState(value: string): InvocationState {
 }
 
 function mapInvocationRow(row: InvocationRow): InvocationRecord {
+  const storedInvocation: unknown = JSON.parse(row.envelope_json);
+  if (
+    !isRecord(storedInvocation) ||
+    !isRecord(storedInvocation.connector) ||
+    !Number.isSafeInteger(storedInvocation.connector.configVersion) ||
+    Number(storedInvocation.connector.configVersion) < 1
+  ) {
+    throw new ConnectorContractError(
+      "corrupt_store",
+      "Stored invocation is missing its configuration epoch.",
+    );
+  }
   return {
-    invocation: JSON.parse(row.envelope_json) as ResidentAgentInvocation,
+    invocation: storedInvocation as unknown as ResidentAgentInvocation,
     state: mapState(row.state),
     attempt: row.attempt,
     claimToken: row.claim_token,
@@ -104,7 +117,12 @@ export class SqliteInvocationStore {
     this.#database.exec(
       "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;",
     );
-    this.#migrate();
+    try {
+      this.#migrate();
+    } catch (error) {
+      this.#database.close();
+      throw error;
+    }
   }
 
   close(): void {
@@ -112,6 +130,34 @@ export class SqliteInvocationStore {
   }
 
   #migrate(): void {
+    const schemaVersion = Number(
+      (
+        this.#database.prepare("PRAGMA user_version").get() as {
+          readonly user_version: number;
+        }
+      ).user_version,
+    );
+    const existingTableCount = Number(
+      (
+        this.#database
+          .prepare(
+            "SELECT COUNT(*) AS count FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+          )
+          .get() as { readonly count: number }
+      ).count,
+    );
+    if (schemaVersion === 0 && existingTableCount > 0) {
+      throw new ConnectorContractError(
+        "unsupported_store_schema",
+        "Unversioned connector state predates configuration-epoch binding and must not be reused.",
+      );
+    }
+    if (schemaVersion !== 0 && schemaVersion !== 1) {
+      throw new ConnectorContractError(
+        "unsupported_store_schema",
+        "Connector state uses an unsupported schema version.",
+      );
+    }
     this.#database.exec(`
       CREATE TABLE IF NOT EXISTS connector_bindings (
         connector_id TEXT PRIMARY KEY,
@@ -184,6 +230,8 @@ export class SqliteInvocationStore {
         FOREIGN KEY (connector_id, room_id, channel_id)
           REFERENCES connector_bindings(connector_id, room_id, channel_id)
       );
+
+      PRAGMA user_version = 1;
     `);
   }
 
@@ -349,17 +397,7 @@ export class SqliteInvocationStore {
       invocation.connector.id,
       invocation.sourceMention.sourceMessageId,
     );
-    const binding = this.getBinding(invocation.connector.id);
-    if (
-      invocation.invocationId !== expectedInvocationId ||
-      !binding ||
-      invocation.connector.version !== binding.connectorVersion ||
-      invocation.connector.target.hostId !== binding.openClawHostId ||
-      invocation.connector.target.agentId !== binding.openClawAgentId ||
-      invocation.roomId !== binding.roomId ||
-      invocation.channelId !== binding.channelId ||
-      canonicalJson(invocation.capabilities) !== canonicalJson(RESIDENT_AGENT_CAPABILITIES)
-    ) {
+    if (invocation.invocationId !== expectedInvocationId) {
       throw new ConnectorContractError(
         "invocation_binding_mismatch",
         "Invocation does not match its trusted connector binding.",
@@ -368,6 +406,23 @@ export class SqliteInvocationStore {
     const envelopeJson = canonicalJson(invocation);
     const envelopeHash = sha256Hex(envelopeJson);
     return this.#transaction(() => {
+      const binding = this.getBinding(invocation.connector.id);
+      if (
+        !binding ||
+        !binding.enabled ||
+        invocation.connector.version !== binding.connectorVersion ||
+        invocation.connector.configVersion !== binding.configVersion ||
+        invocation.connector.target.hostId !== binding.openClawHostId ||
+        invocation.connector.target.agentId !== binding.openClawAgentId ||
+        invocation.roomId !== binding.roomId ||
+        invocation.channelId !== binding.channelId ||
+        canonicalJson(invocation.capabilities) !== canonicalJson(RESIDENT_AGENT_CAPABILITIES)
+      ) {
+        throw new ConnectorContractError(
+          "invocation_binding_mismatch",
+          "Invocation does not match its enabled trusted connector configuration epoch.",
+        );
+      }
       const existing = this.getInvocation(invocation.invocationId);
       if (existing) {
         if (
@@ -509,19 +564,44 @@ export class SqliteInvocationStore {
         "Result invocation ID does not match.",
       );
     }
-    const parsed = parseResidentAgentResult(result);
-    const state: InvocationState =
-      parsed.status === "completed"
-        ? "succeeded"
-        : parsed.status === "unavailable"
-          ? "unavailable"
-          : "failed";
-    const resultJson = canonicalJson(parsed);
-    const resultHash = sha256Hex(resultJson);
+    const requestedResult = parseResidentAgentResult(result);
     return this.#transaction(() => {
       const existing = this.getInvocation(invocationId);
       if (!existing)
         throw new ConnectorContractError("invocation_not_found", "Invocation was not found.");
+      const binding = this.getBinding(existing.invocation.connector.id);
+      const parsed: ResidentAgentResult =
+        binding?.enabled === true &&
+        binding.configVersion === existing.invocation.connector.configVersion
+          ? requestedResult
+          : {
+              contract: requestedResult.contract,
+              invocationId: requestedResult.invocationId,
+              status: "cancelled",
+              failure:
+                binding?.enabled === true
+                  ? {
+                      code: "connector_configuration_changed",
+                      safeMessage:
+                        "The room connector configuration changed before reply delivery.",
+                      retryable: false,
+                    }
+                  : {
+                      code: "connector_disabled",
+                      safeMessage: "The room connector was disabled before reply delivery.",
+                      retryable: false,
+                    },
+              completedAt: requestedResult.completedAt,
+              adapter: requestedResult.adapter,
+            };
+      const state: InvocationState =
+        parsed.status === "completed"
+          ? "succeeded"
+          : parsed.status === "unavailable"
+            ? "unavailable"
+            : "failed";
+      const resultJson = canonicalJson(parsed);
+      const resultHash = sha256Hex(resultJson);
       if (existing.result) {
         if (sha256Hex(canonicalJson(existing.result)) !== resultHash) {
           throw new ConnectorContractError(
@@ -574,6 +654,12 @@ export class SqliteInvocationStore {
         throw new ConnectorContractError(
           "connector_disabled",
           "A disabled connector cannot record a reply receipt.",
+        );
+      }
+      if (binding.configVersion !== invocation.invocation.connector.configVersion) {
+        throw new ConnectorContractError(
+          "connector_configuration_changed",
+          "A reply from an earlier connector configuration cannot receive a receipt.",
         );
       }
       const receiptBase: Omit<DeliveryReceipt, "replayed"> = {

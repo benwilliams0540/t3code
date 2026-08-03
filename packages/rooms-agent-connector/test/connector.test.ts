@@ -2,6 +2,7 @@
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
+import * as NodeSqlite from "node:sqlite";
 
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -17,6 +18,7 @@ import {
   type InboundChannelEvent,
 } from "../src/contracts.ts";
 import { deriveInvocationId } from "../src/invocationId.ts";
+import { GatewayTransportError } from "../src/gatewayTransport.ts";
 import { SqliteInvocationStore } from "../src/sqliteInvocationStore.ts";
 import { FakeGatewayTransport } from "./fakeGatewayTransport.ts";
 
@@ -401,6 +403,177 @@ describe("Rooms resident-agent connector", () => {
       }),
     ).toThrow("Only a succeeded reply");
     store.close();
+  });
+
+  it("permanently revokes an in-flight configuration epoch across disable and re-enable", async () => {
+    const store = new SqliteInvocationStore(databasePath());
+    store.provisionBinding(binding());
+    const transport = new FakeGatewayTransport();
+    let releaseRun: (() => void) | undefined;
+    let markPaused: (() => void) | undefined;
+    const paused = new Promise<void>((resolve) => {
+      markPaused = resolve;
+    });
+    transport.invokeHook = async () => {
+      markPaused?.();
+      await new Promise<void>((resolve) => {
+        releaseRun = resolve;
+      });
+    };
+    const resident = connector({ store, transport });
+    const staleRun = resident.handleInbound({ event: event(), context: [] });
+    await paused;
+
+    const disabled = store.setEnabled(binding().connectorId, false, 1);
+    expect(disabled).toMatchObject({ enabled: false, configVersion: 2 });
+    const reenabled = store.setEnabled(binding().connectorId, true, 2);
+    expect(reenabled).toMatchObject({ enabled: true, configVersion: 3 });
+    releaseRun?.();
+
+    await expect(staleRun).resolves.toMatchObject({
+      kind: "completed",
+      result: {
+        status: "cancelled",
+        failure: { code: "connector_configuration_changed" },
+      },
+    });
+    const staleInvocation = store.getInvocation(
+      deriveInvocationId(binding().connectorId, event().sourceMessageId),
+    );
+    expect(staleInvocation?.invocation.connector.configVersion).toBe(1);
+    expect(() =>
+      store.recordDeliveryReceipt({
+        invocationId: staleInvocation!.invocation.invocationId,
+        replyMessageId: "message:stale-reply",
+        occurredAt: "2026-08-02T00:00:01.000Z",
+      }),
+    ).toThrow("Only a succeeded reply");
+
+    transport.invokeHook = undefined;
+    const laterEvent = event({
+      sourceMessageId: "message:101",
+      sourceSequence: 101,
+      traceId: "trace:101",
+    });
+    const currentRun = await resident.handleInbound({ event: laterEvent, context: [] });
+    expect(currentRun).toMatchObject({ kind: "completed", result: { status: "completed" } });
+    const currentInvocationId = deriveInvocationId(
+      binding().connectorId,
+      laterEvent.sourceMessageId,
+    );
+    expect(store.getInvocation(currentInvocationId)?.invocation.connector.configVersion).toBe(3);
+    expect(
+      store.recordDeliveryReceipt({
+        invocationId: currentInvocationId,
+        replyMessageId: "message:reply-101",
+        occurredAt: "2026-08-02T00:00:02.000Z",
+      }),
+    ).toMatchObject({ replayed: false, inReplyToSourceId: "message:101" });
+    store.close();
+  });
+
+  it("rejects receipt creation when configuration changes after successful settlement", async () => {
+    const store = new SqliteInvocationStore(databasePath());
+    store.provisionBinding(binding());
+    const outcome = await connector({
+      store,
+      transport: new FakeGatewayTransport(),
+    }).handleInbound({ event: event(), context: [] });
+    expect(outcome).toMatchObject({ kind: "completed", result: { status: "completed" } });
+    expect(store.setEnabled(binding().connectorId, true, 1)).toMatchObject({
+      enabled: true,
+      configVersion: 2,
+    });
+    expect(() =>
+      store.recordDeliveryReceipt({
+        invocationId: deriveInvocationId(binding().connectorId, event().sourceMessageId),
+        replyMessageId: "message:stale-after-success",
+        occurredAt: "2026-08-02T00:00:01.000Z",
+      }),
+    ).toThrow("earlier connector configuration");
+    store.close();
+  });
+
+  it("scrubs untrusted transport errors before durable result storage", async () => {
+    const filename = databasePath();
+    const secret = "sentinel-gateway-secret another-secret-shaped-value";
+    const store = new SqliteInvocationStore(filename);
+    store.provisionBinding(binding());
+    const transport = new FakeGatewayTransport();
+    transport.nextError = new GatewayTransportError({
+      kind: "failed",
+      code: `${secret}-${"x".repeat(2_000)}`,
+      safeMessage: secret,
+      retryable: true,
+    });
+    const outcome = await connector({ store, transport }).handleInbound({
+      event: event(),
+      context: [],
+    });
+    expect(outcome).toMatchObject({
+      kind: "completed",
+      result: {
+        status: "failed",
+        failure: {
+          code: "gateway_transport_failed",
+          safeMessage: "The OpenClaw Gateway request failed.",
+          retryable: false,
+        },
+      },
+    });
+    expect(canonicalJson(outcome)).not.toContain(secret);
+    store.close();
+
+    const reopened = new SqliteInvocationStore(filename);
+    const invocationId = deriveInvocationId(binding().connectorId, event().sourceMessageId);
+    expect(canonicalJson(reopened.getInvocation(invocationId))).not.toContain(secret);
+    expect(() =>
+      reopened.recordDeliveryReceipt({
+        invocationId,
+        replyMessageId: "message:must-not-exist",
+        occurredAt: "2026-08-02T00:00:01.000Z",
+      }),
+    ).toThrow("Only a succeeded reply");
+    reopened.close();
+    expect(NodeFS.readFileSync(filename).includes(Buffer.from(secret))).toBe(false);
+  });
+
+  it("persists the connector timeout result without a reply", async () => {
+    const store = new SqliteInvocationStore(databasePath());
+    store.provisionBinding(binding());
+    const transport = new FakeGatewayTransport();
+    transport.nextError = new GatewayTransportError({
+      kind: "timed_out",
+      code: "gateway_request_timeout",
+      safeMessage: "OpenClaw Gateway request timed out.",
+      retryable: false,
+    });
+    const outcome = await connector({ store, transport }).handleInbound({
+      event: event(),
+      context: [],
+    });
+    expect(outcome).toMatchObject({
+      kind: "completed",
+      result: {
+        status: "timed_out",
+        failure: { code: "gateway_request_timeout", retryable: false },
+      },
+    });
+    expect(
+      store.getInvocation(deriveInvocationId(binding().connectorId, event().sourceMessageId))
+        ?.result,
+    ).toMatchObject({ status: "timed_out", failure: { code: "gateway_request_timeout" } });
+    store.close();
+  });
+
+  it("fails closed on the prior unversioned SQLite candidate", () => {
+    const filename = databasePath();
+    const legacy = new NodeSqlite.DatabaseSync(filename);
+    legacy.exec("CREATE TABLE connector_bindings (connector_id TEXT PRIMARY KEY)");
+    legacy.close();
+    expect(() => new SqliteInvocationStore(filename)).toThrow(
+      "predates configuration-epoch binding",
+    );
   });
 
   it("rejects forged actor fields and replays only an identical delivery receipt", async () => {

@@ -15,6 +15,7 @@ export class FakeGatewayTransport implements ResidentAgentGatewayTransport {
   }> = [];
   healthResult: GatewayHealth = { available: true, version: "fake-1" };
   nextOutcome: GatewayRunOutcome = { status: "completed", replyMarkdown: "Fake reply." };
+  nextError: Error | undefined;
   invokeHook: (() => void | Promise<void>) | undefined;
 
   async health(): Promise<GatewayHealth> {
@@ -28,6 +29,7 @@ export class FakeGatewayTransport implements ResidentAgentGatewayTransport {
     this.invocations.push(invocation);
     await options.onAccepted(`run-${invocation.invocationId}`);
     await this.invokeHook?.();
+    if (this.nextError) throw this.nextError;
     return this.nextOutcome;
   }
 
@@ -37,6 +39,7 @@ export class FakeGatewayTransport implements ResidentAgentGatewayTransport {
     _options?: GatewayResumeOptions,
   ): Promise<GatewayRunOutcome> {
     this.resumed.push({ invocation, runId });
+    if (this.nextError) throw this.nextError;
     return this.nextOutcome;
   }
 }

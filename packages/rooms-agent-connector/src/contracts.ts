@@ -97,6 +97,7 @@ export interface ResidentAgentInvocation {
   readonly connector: {
     readonly id: string;
     readonly version: number;
+    readonly configVersion: number;
     readonly target: {
       readonly hostId: string;
       readonly agentId: string;
