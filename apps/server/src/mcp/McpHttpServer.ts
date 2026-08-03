@@ -8,6 +8,7 @@ import * as Stream from "effect/Stream";
 import type * as Types from "effect/Types";
 import { McpSchema, McpServer, Tool } from "effect/unstable/ai";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
+import { layerFromEnv as RoomsAgentClientLive } from "@t3tools/rooms-agent-api";
 
 import packageJson from "../../package.json" with { type: "json" };
 import * as McpInvocationContext from "./McpInvocationContext.ts";
@@ -22,6 +23,8 @@ import {
   PreviewSnapshotToolkit,
   PreviewStandardToolkit,
 } from "./toolkits/preview/tools.ts";
+import { RoomsAgentToolkitHandlersLive } from "./toolkits/rooms/handlers.ts";
+import { RoomsAgentToolkit } from "./toolkits/rooms/tools.ts";
 
 const unauthorized = HttpServerResponse.jsonUnsafe(
   {
@@ -216,10 +219,17 @@ export const PreviewToolkitRegistrationLive = Layer.mergeAll(
   PreviewSnapshotRegistrationLive,
 );
 
+export const RoomsAgentToolkitRegistrationLive = McpServer.toolkit(RoomsAgentToolkit).pipe(
+  Layer.provide(RoomsAgentToolkitHandlersLive),
+);
+
 const McpTransportLive = McpServer.layerHttp({
   name: "T3 Code",
   version: packageJson.version,
   path: "/mcp",
 }).pipe(Layer.provide(McpAuthMiddlewareLive));
 
-export const layer = PreviewToolkitRegistrationLive.pipe(Layer.provideMerge(McpTransportLive));
+export const layer = Layer.merge(
+  PreviewToolkitRegistrationLive,
+  RoomsAgentToolkitRegistrationLive,
+).pipe(Layer.provideMerge(McpTransportLive), Layer.provide(RoomsAgentClientLive));
