@@ -86,6 +86,35 @@ function createBrowserLocalApi(): LocalApi {
         };
       },
     },
+    roomsHuman: {
+      request: async (request) => {
+        if (window.desktopBridge?.requestRoomsHuman) {
+          return window.desktopBridge.requestRoomsHuman(request);
+        }
+        const target = new URL(request.path, request.baseUrl);
+        const body =
+          request.body === undefined
+            ? undefined
+            : request.bodyEncoding === "base64"
+              ? Uint8Array.from(atob(request.body), (character) => character.charCodeAt(0))
+              : request.body;
+        const response = await fetch(target, {
+          method: request.method,
+          headers: {
+            authorization: `Bearer ${request.bearer}`,
+            ...(body === undefined
+              ? {}
+              : { "content-type": request.contentType ?? "application/json" }),
+          },
+          ...(body === undefined ? {} : { body }),
+        });
+        return {
+          status: response.status,
+          headers: Object.fromEntries(response.headers.entries()),
+          body: await response.text(),
+        };
+      },
+    },
   };
 }
 

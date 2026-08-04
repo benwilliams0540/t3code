@@ -1,6 +1,7 @@
 import type { RoomsActivityPrincipal, RoomsProjectedActivity } from "../activity/projection";
 import type { RoomsPrincipalId } from "../model/workspace";
-import type { RoomsLocalFeedItem, RoomsLocalWorkspace } from "../dataSource/localChannelsContract";
+import type { RoomsLocalFeedItem } from "../dataSource/localChannelsContract";
+import type { RoomsInteractiveWorkspace } from "../dataSource/humanSharedContract";
 
 function principalId(id: string): RoomsPrincipalId | null {
   if (id.startsWith("h:") || id.startsWith("a:") || id.startsWith("m:")) {
@@ -15,15 +16,21 @@ function principalId(id: string): RoomsPrincipalId | null {
  * attributed to the reader.
  */
 export function resolveRoomsLocalPrincipal(
-  workspace: RoomsLocalWorkspace,
+  workspace: RoomsInteractiveWorkspace,
   id: string,
 ): RoomsActivityPrincipal {
   const known = principalId(id);
-  if (known !== null && id === workspace.principal.id) {
+  const declared =
+    "principals" in workspace
+      ? workspace.principals.find((principal) => principal.id === id)
+      : id === workspace.principal.id
+        ? workspace.principal
+        : null;
+  if (known !== null && declared) {
     return {
       id: known,
-      type: workspace.principal.type,
-      display_name: workspace.principal.display_name,
+      type: declared.type,
+      display_name: declared.display_name ?? id,
     };
   }
   return { id, type: "unresolved", display_name: id };
@@ -35,7 +42,7 @@ export function resolveRoomsLocalPrincipal(
  * server already narrows them to `unknown_schema`, which stays visible in the record register.
  */
 export function projectRoomsLocalActivityItem(
-  workspace: RoomsLocalWorkspace,
+  workspace: RoomsInteractiveWorkspace,
   item: RoomsLocalFeedItem,
 ): RoomsProjectedActivity {
   return {
@@ -75,7 +82,7 @@ export function projectRoomsLocalActivityItem(
 }
 
 export function projectRoomsLocalActivityItems(
-  workspace: RoomsLocalWorkspace,
+  workspace: RoomsInteractiveWorkspace,
   items: readonly RoomsLocalFeedItem[],
 ): readonly RoomsProjectedActivity[] {
   return items.map((item) => projectRoomsLocalActivityItem(workspace, item));

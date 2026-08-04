@@ -6,8 +6,10 @@ import { reconcileLocalWorkspaceConfig, resolveLocalRoomsDataSourceState } from 
 import { RoomsLocalWorkspace } from "./localChannelsContract";
 import {
   findSourceRoomBySlug,
+  isRoomsHumanStateCurrent,
   RoomsDataSourceMode,
   RoomsLocalWorkspaceConfig,
+  RoomsSelectedRoomBySource,
   resolveSelectedSourceRoom,
 } from "./model";
 import { roomsRoutePath } from "../shell/navigation";
@@ -16,6 +18,7 @@ import { roomsSampleDataSource } from "./sample";
 const decodeRoomsDataSourceMode = Schema.decodeUnknownSync(RoomsDataSourceMode);
 const decodeRoomsLocalWorkspaceConfig = Schema.decodeUnknownSync(RoomsLocalWorkspaceConfig);
 const decodeWorkspace = Schema.decodeUnknownSync(RoomsLocalWorkspace);
+const decodeSelectedRooms = Schema.decodeUnknownSync(RoomsSelectedRoomBySource);
 const workspace = decodeWorkspace(zeroWorkspaceDocument);
 
 describe("Rooms data source boundary", () => {
@@ -52,7 +55,7 @@ describe("Rooms data source boundary", () => {
     const config = reconcileLocalWorkspaceConfig(null, workspace);
     const localState = resolveLocalRoomsDataSourceState(workspace, config);
     const secondSample = roomsSampleDataSource.rooms[1]!;
-    const selected = { sample: secondSample.id, local: workspace.room.id };
+    const selected = { sample: secondSample.id, local: workspace.room.id, shared: null };
 
     expect(resolveSelectedSourceRoom(roomsSampleDataSource, selected, null)?.id).toBe(
       secondSample.id,
@@ -63,6 +66,47 @@ describe("Rooms data source boundary", () => {
     );
   });
 
+  it("preserves a pre-M6B Sample and Local selection with no shared authority", () => {
+    expect(decodeSelectedRooms({ sample: "sample-room", local: "local-room" })).toEqual({
+      sample: "sample-room",
+      local: "local-room",
+      shared: null,
+    });
+  });
+
+  it("strips human credentials from the only persisted shared-room selection", () => {
+    const persisted = decodeSelectedRooms({
+      sample: null,
+      local: null,
+      shared: "room:0198f7e2-1234-789a-8abc-123456789abc",
+      bearer: "never-persist-bearer",
+      bootstrapToken: "never-persist-bootstrap",
+      inviteToken: "never-persist-invite",
+    });
+
+    expect(persisted).toEqual({
+      sample: null,
+      local: null,
+      shared: "room:0198f7e2-1234-789a-8abc-123456789abc",
+    });
+    expect(JSON.stringify(persisted)).not.toContain("never-persist");
+  });
+
+  it("invalidates cached shared state across account generations and account IDs", () => {
+    const cached = {
+      mode: "shared",
+      status: "ready",
+      rooms: [],
+      session: {} as never,
+      workspace: {} as never,
+      authenticationGeneration: 7,
+      accountId: "account-a",
+    } as const;
+    expect(isRoomsHumanStateCurrent(cached, { generation: 7, accountId: "account-a" })).toBe(true);
+    expect(isRoomsHumanStateCurrent(cached, { generation: 8, accountId: "account-b" })).toBe(false);
+    expect(isRoomsHumanStateCurrent(cached, { generation: 7, accountId: "account-b" })).toBe(false);
+  });
+
   it("recovers stale shell selection and direct routes from the server room identity", () => {
     const config = reconcileLocalWorkspaceConfig(null, workspace);
     const localState = resolveLocalRoomsDataSourceState(workspace, config);
@@ -70,7 +114,7 @@ describe("Rooms data source boundary", () => {
     expect(
       resolveSelectedSourceRoom(
         localState,
-        { sample: null, local: "room:local:stale-shell-id" },
+        { sample: null, local: "room:local:stale-shell-id", shared: null },
         null,
       )?.id,
     ).toBe(workspace.room.id);
@@ -112,9 +156,10 @@ describe("Rooms data source boundary", () => {
     expect(resolveLocalRoomsDataSourceState(populated, config).channelState).toBe("populated");
   });
 
-  it("accepts only the two versioned source mode values", () => {
+  it("accepts the three versioned source mode values", () => {
     expect(decodeRoomsDataSourceMode("sample")).toBe("sample");
     expect(decodeRoomsDataSourceMode("local")).toBe("local");
+    expect(decodeRoomsDataSourceMode("shared")).toBe("shared");
     expect(() => decodeRoomsDataSourceMode("fixture")).toThrow();
   });
 });

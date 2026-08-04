@@ -8,8 +8,15 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 
+import {
+  readRoomsAuthenticationSnapshot,
+  readRoomsClerkToken,
+  subscribeRoomsAuthentication,
+} from "~/cloud/roomsAuth";
+import { resolveCloudPublicConfig } from "~/cloud/publicConfig";
 import { useClientSettings } from "~/hooks/useSettings";
 import { getLocalStorageItem, useLocalStorage } from "~/hooks/useLocalStorage";
 
@@ -25,6 +32,15 @@ import {
   RoomsLocalClientError,
   type RoomsLocalCommandResult,
 } from "./localChannelsClient";
+import { createRoomsHumanClient } from "./humanSharedClient";
+import type {
+  RoomsHumanInviteInspection,
+  RoomsHumanInviteIssuance,
+  RoomsHumanMembershipRedemption,
+  RoomsHumanRole,
+  RoomsHumanStoriesResponse,
+  RoomsHumanWorkspace,
+} from "./humanSharedContract";
 import {
   RoomsLocalChangeLoop,
   type RoomsLocalChangeInvalidation,
@@ -56,6 +72,8 @@ import {
   type RoomsDataSourceMode,
   RoomsDataSourceMode as RoomsDataSourceModeSchema,
   type RoomsDataSourceState,
+  type RoomsHumanSourceFailure,
+  type RoomsHumanSourceReady,
   type RoomsLocalSourceFailure,
   type RoomsLocalSourceReady,
   type RoomsLocalWorkspaceConfig,
@@ -66,11 +84,14 @@ import {
   ROOMS_DATA_SOURCE_STORAGE_KEY,
   ROOMS_LOCAL_WORKSPACE_STORAGE_KEY,
   ROOMS_SELECTED_ROOM_BY_SOURCE_STORAGE_KEY,
+  isRoomsHumanStateCurrent,
   resolveSelectedSourceRoom,
 } from "./model";
 import { roomsSampleDataSource } from "./sample";
 
 type RoomsLocalSourceState = RoomsLocalSourceReady | RoomsLocalSourceFailure;
+type RoomsHumanSourceState = RoomsHumanSourceReady | RoomsHumanSourceFailure;
+type RoomsInteractiveStoriesResponse = RoomsLocalStoriesResponse | RoomsHumanStoriesResponse;
 
 interface RoomsDataSourceContextValue {
   readonly mode: RoomsDataSourceMode;
@@ -83,6 +104,23 @@ interface RoomsDataSourceContextValue {
   readonly localFeedRefreshGeneration: number;
   readonly localLiveUpdatesStatus: RoomsLocalLiveUpdatesStatus;
   readonly retryLocalWorkspace: () => Promise<RoomsLocalWorkspace | null>;
+  readonly retryHumanSession: () => Promise<RoomsHumanWorkspace | null>;
+  readonly redeemHumanBootstrap: (
+    bootstrapToken: string,
+  ) => Promise<RoomsHumanMembershipRedemption>;
+  readonly inspectHumanInvite: (
+    roomId: string,
+    inviteToken: string,
+  ) => Promise<RoomsHumanInviteInspection>;
+  readonly redeemHumanInvite: (
+    roomId: string,
+    inviteToken: string,
+  ) => Promise<RoomsHumanMembershipRedemption>;
+  readonly createHumanInvite: (
+    roomId: string,
+    role: RoomsHumanRole,
+    requestId: string,
+  ) => Promise<RoomsLocalCommandResult<RoomsHumanInviteIssuance>>;
   readonly createLocalChannel: (
     input: RoomsLocalCreateChannelInput,
   ) => Promise<RoomsLocalCommandResult<RoomsLocalChannel>>;
@@ -96,7 +134,7 @@ interface RoomsDataSourceContextValue {
     channelId: string,
     input: RoomsLocalCreateMessageInput,
   ) => Promise<RoomsLocalCommandResult<RoomsLocalHumanMessage>>;
-  readonly loadLocalStories: (roomId: string) => Promise<RoomsLocalStoriesResponse>;
+  readonly loadLocalStories: (roomId: string) => Promise<RoomsInteractiveStoriesResponse>;
   readonly loadLocalStory: (roomId: string, storyId: string) => Promise<RoomsLocalStory>;
   readonly createLocalStory: (
     roomId: string,
@@ -148,12 +186,51 @@ function readLegacySampleRoomId(): string | null {
 function sourceNotReadyError(): RoomsLocalClientError {
   return new RoomsLocalClientError({
     kind: "transport",
-    code: "local_source_not_ready",
-    message: "The Rooms Local workspace is not ready.",
+    code: "rooms_source_not_ready",
+    message: "The active Rooms workspace is not ready for this account.",
   });
 }
 
+function humanFailure(
+  status: RoomsHumanSourceFailure["status"],
+  error: unknown = null,
+  invitation: RoomsHumanInviteInspection | null = null,
+): RoomsHumanSourceFailure {
+  const known = error instanceof RoomsLocalClientError ? error : null;
+  return {
+    mode: "shared",
+    status,
+    rooms: [],
+    invitation,
+    authenticationGeneration: readRoomsAuthenticationSnapshot().generation,
+    error:
+      known === null
+        ? null
+        : { code: known.code, message: known.message, httpStatus: known.status },
+  };
+}
+
+function humanFailureFor(error: unknown): RoomsHumanSourceFailure {
+  if (!(error instanceof RoomsLocalClientError)) return humanFailure("error");
+  if (error.status === 401) {
+    return humanFailure(
+      error.code.includes("expired") ? "expired" : "authorization-failure",
+      error,
+    );
+  }
+  if (error.status === 403) return humanFailure("authorization-failure", error);
+  if (error.kind === "invalid_configuration") return humanFailure("invalid-configuration", error);
+  return humanFailure("error", error);
+}
+
 export function RoomsDataSourceProvider({ children }: { readonly children: ReactNode }) {
+  const authentication = useSyncExternalStore(
+    subscribeRoomsAuthentication,
+    readRoomsAuthenticationSnapshot,
+    readRoomsAuthenticationSnapshot,
+  );
+  const humanPublicConfig = resolveCloudPublicConfig();
+  const humanApiBaseUrl = humanPublicConfig.roomsApiUrl ?? "";
   const [mode, setPersistedMode] = useLocalStorage(
     ROOMS_DATA_SOURCE_STORAGE_KEY,
     "sample" as const,
@@ -171,9 +248,21 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
   );
   const localApiBaseUrl = useClientSettings((settings) => settings.roomsLocalApiBaseUrl);
   const client = useMemo(() => createRoomsLocalChannelsClient(localApiBaseUrl), [localApiBaseUrl]);
+  const humanClientForGeneration = useCallback(
+    (generation: number) =>
+      createRoomsHumanClient(humanApiBaseUrl, () => readRoomsClerkToken(generation)),
+    [humanApiBaseUrl],
+  );
+  const humanClientForGenerationRef = useRef(humanClientForGeneration);
+  useEffect(() => {
+    humanClientForGenerationRef.current = humanClientForGeneration;
+  }, [humanClientForGeneration]);
   const clientRef = useRef(client);
   const [localState, setLocalState] = useState<RoomsLocalSourceState>(
     connectingLocalRoomsDataSourceState,
+  );
+  const [humanState, setHumanState] = useState<RoomsHumanSourceState>(() =>
+    humanFailure("authenticating"),
   );
   const [localFeedSync, setLocalFeedSync] = useState({
     invalidationGeneration: 0,
@@ -181,10 +270,14 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
   });
   const [localLiveUpdatesStatus, setLocalLiveUpdatesStatus] =
     useState<RoomsLocalLiveUpdatesStatus>("connected");
+  const [humanLiveUpdatesStatus, setHumanLiveUpdatesStatus] =
+    useState<RoomsLocalLiveUpdatesStatus>("connected");
   const localConfigRef = useRef(localConfig);
   const localStateRef = useRef(localState);
+  const humanStateRef = useRef(humanState);
   const loadGenerationRef = useRef(0);
   const feedInvalidationGenerationRef = useRef(0);
+  const humanLoadGenerationRef = useRef(0);
   useEffect(() => {
     clientRef.current = client;
   }, [client]);
@@ -194,6 +287,9 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
   useEffect(() => {
     localStateRef.current = localState;
   }, [localState]);
+  useEffect(() => {
+    humanStateRef.current = humanState;
+  }, [humanState]);
 
   const commitWorkspace = useCallback(
     (workspace: RoomsLocalWorkspace): RoomsLocalSourceReady => {
@@ -246,6 +342,135 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
     loadWorkspaceRef.current = loadWorkspace;
   }, [loadWorkspace]);
 
+  const loadHumanSession = useCallback(
+    async (
+      preferredRoomId: string | null = null,
+      preserveReadyState = false,
+    ): Promise<RoomsHumanWorkspace | null> => {
+      const generation = ++humanLoadGenerationRef.current;
+      const authGeneration = authentication.generation;
+      if (
+        !humanPublicConfig.clerkPublishableKey ||
+        !humanPublicConfig.roomsApiUrl ||
+        !humanPublicConfig.roomsClerkJwtTemplate
+      ) {
+        const next = humanFailure("invalid-configuration");
+        humanStateRef.current = next;
+        setHumanState(next);
+        return null;
+      }
+      if (authentication.status === "authenticating") {
+        const next = humanFailure("authenticating");
+        humanStateRef.current = next;
+        setHumanState(next);
+        return null;
+      }
+      if (authentication.status !== "signed-in") {
+        const next = humanFailure("signed-out");
+        humanStateRef.current = next;
+        setHumanState(next);
+        return null;
+      }
+      if (!preserveReadyState) {
+        const pending = humanFailure("authenticating");
+        humanStateRef.current = pending;
+        setHumanState(pending);
+      }
+      try {
+        const requestClient = humanClientForGeneration(authGeneration);
+        const session = await requestClient.getSession();
+        if (
+          generation !== humanLoadGenerationRef.current ||
+          readRoomsAuthenticationSnapshot().generation !== authGeneration
+        ) {
+          return null;
+        }
+        if (session.status === "authenticated_nonmember" || session.rooms.length === 0) {
+          const next = humanFailure("authenticated-nonmember");
+          humanStateRef.current = next;
+          setHumanState(next);
+          return null;
+        }
+        const requestedRoom =
+          session.rooms.find((room) => room.id === preferredRoomId) ?? session.rooms[0]!;
+        const workspace = await requestClient.getWorkspace(requestedRoom.id);
+        if (
+          generation !== humanLoadGenerationRef.current ||
+          readRoomsAuthenticationSnapshot().generation !== authGeneration
+        ) {
+          return null;
+        }
+        const rooms: readonly RoomsSourceRoom[] = session.rooms.map((room) => ({
+          sourceMode: "shared",
+          id: room.id,
+          slug: room.slug,
+          name: room.name,
+          locality: "shared",
+          membershipRole: room.role,
+          unreadCount: null,
+        }));
+        const ready: RoomsHumanSourceReady = {
+          mode: "shared",
+          status: "ready",
+          rooms,
+          session,
+          workspace,
+          authenticationGeneration: authGeneration,
+          accountId: authentication.accountId,
+        };
+        humanStateRef.current = ready;
+        setHumanState(ready);
+        setSelectedBySource((current) =>
+          current.shared === workspace.room.id
+            ? current
+            : { ...current, shared: workspace.room.id },
+        );
+        return workspace;
+      } catch (error) {
+        if (
+          generation !== humanLoadGenerationRef.current ||
+          readRoomsAuthenticationSnapshot().generation !== authGeneration
+        ) {
+          return null;
+        }
+        if (preserveReadyState && humanStateRef.current.status === "ready") return null;
+        const next = humanFailureFor(error);
+        humanStateRef.current = next;
+        setHumanState(next);
+        return null;
+      }
+    },
+    [
+      authentication,
+      humanClientForGeneration,
+      humanPublicConfig.clerkPublishableKey,
+      humanPublicConfig.roomsApiUrl,
+      humanPublicConfig.roomsClerkJwtTemplate,
+      setSelectedBySource,
+    ],
+  );
+  const loadHumanSessionRef = useRef(loadHumanSession);
+  useEffect(() => {
+    loadHumanSessionRef.current = loadHumanSession;
+  }, [loadHumanSession]);
+
+  useEffect(() => {
+    humanLoadGenerationRef.current += 1;
+    setSelectedBySource((current) =>
+      current.shared === null ? current : { ...current, shared: null },
+    );
+    const cleared =
+      authentication.status === "signed-out"
+        ? humanFailure("signed-out")
+        : humanFailure("authenticating");
+    humanStateRef.current = cleared;
+    setHumanState(cleared);
+    if (mode === "shared") void loadHumanSessionRef.current(null);
+    return () => {
+      humanLoadGenerationRef.current += 1;
+    };
+  }, [authentication.generation, mode, setSelectedBySource]);
+
   useEffect(() => {
     if (mode !== "local") return;
     void loadWorkspaceRef.current(true);
@@ -281,6 +506,27 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
   useEffect(() => {
     refreshAfterLocalChangeRef.current = refreshAfterLocalChange;
   }, [refreshAfterLocalChange]);
+  const refreshAfterHumanChange = useCallback(
+    async (invalidation: RoomsLocalChangeInvalidation): Promise<void> => {
+      const invalidationGeneration = ++feedInvalidationGenerationRef.current;
+      setLocalFeedSync((current) => ({
+        invalidationGeneration,
+        refreshGeneration: current.refreshGeneration,
+      }));
+      const workspace = await loadHumanSession(invalidation.roomId, true);
+      if (!workspace) throw sourceNotReadyError();
+      setLocalFeedSync((current) =>
+        current.invalidationGeneration === invalidationGeneration
+          ? { ...current, refreshGeneration: invalidationGeneration }
+          : current,
+      );
+    },
+    [loadHumanSession],
+  );
+  const refreshAfterHumanChangeRef = useRef(refreshAfterHumanChange);
+  useEffect(() => {
+    refreshAfterHumanChangeRef.current = refreshAfterHumanChange;
+  }, [refreshAfterHumanChange]);
   const localChangeLoopRef = useRef<RoomsLocalChangeLoop | null>(null);
   if (localChangeLoopRef.current === null) {
     localChangeLoopRef.current = new RoomsLocalChangeLoop({
@@ -302,18 +548,127 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
     loop.start(activeLocalRoomId);
     return () => loop.stop();
   }, [activeLocalRoomId, localApiBaseUrl]);
+  const humanChangeLoopRef = useRef<RoomsLocalChangeLoop | null>(null);
+  if (humanChangeLoopRef.current === null) {
+    humanChangeLoopRef.current = new RoomsLocalChangeLoop({
+      client: {
+        waitForChanges: (roomId, input) => {
+          const current = humanStateRef.current;
+          if (current.status !== "ready") throw sourceNotReadyError();
+          return humanClientForGenerationRef
+            .current(current.authenticationGeneration)
+            .waitForChanges(roomId, input);
+        },
+      },
+      onInvalidate: (invalidation) => refreshAfterHumanChangeRef.current(invalidation),
+      onStatusChange: setHumanLiveUpdatesStatus,
+    });
+  }
+  const activeHumanRoomId =
+    mode === "shared" &&
+    humanState.status === "ready" &&
+    humanState.authenticationGeneration === authentication.generation &&
+    authentication.status === "signed-in" &&
+    humanState.accountId === authentication.accountId
+      ? humanState.workspace.room.id
+      : null;
+  useEffect(() => {
+    const loop = humanChangeLoopRef.current!;
+    if (!activeHumanRoomId) {
+      loop.stop();
+      return;
+    }
+    loop.start(activeHumanRoomId);
+    return () => loop.stop();
+  }, [activeHumanRoomId, authentication.generation, humanApiBaseUrl]);
 
   const legacySampleRoomId = useMemo(readLegacySampleRoomId, []);
-  const state = mode === "sample" ? roomsSampleDataSource : localState;
+  const visibleHumanState: RoomsHumanSourceState = isRoomsHumanStateCurrent(humanState, {
+    generation: authentication.generation,
+    accountId: authentication.status === "signed-in" ? authentication.accountId : null,
+  })
+    ? humanState
+    : humanFailure(authentication.status === "signed-out" ? "signed-out" : "authenticating");
+  const state =
+    mode === "sample" ? roomsSampleDataSource : mode === "local" ? localState : visibleHumanState;
   const selectedRoom = useMemo(
     () => resolveSelectedSourceRoom(state, selectedBySource, legacySampleRoomId),
     [legacySampleRoomId, selectedBySource, state],
   );
 
   const retryLocalWorkspace = useCallback(() => loadWorkspace(true), [loadWorkspace]);
+  const retryHumanSession = useCallback(
+    () => loadHumanSession(selectedBySource.shared),
+    [loadHumanSession, selectedBySource.shared],
+  );
+
+  const currentHumanAccessClient = useCallback(() => {
+    const current = readRoomsAuthenticationSnapshot();
+    if (current.status !== "signed-in") throw sourceNotReadyError();
+    return humanClientForGeneration(current.generation);
+  }, [humanClientForGeneration]);
+
+  const currentHumanReadyClient = useCallback(
+    (roomId?: string) => {
+      const state = humanStateRef.current;
+      const authentication = readRoomsAuthenticationSnapshot();
+      if (
+        state.status !== "ready" ||
+        authentication.status !== "signed-in" ||
+        authentication.generation !== state.authenticationGeneration ||
+        authentication.accountId !== state.accountId
+      ) {
+        throw sourceNotReadyError();
+      }
+      if (roomId !== undefined && roomId !== state.workspace.room.id) throw sourceNotReadyError();
+      return { client: humanClientForGeneration(state.authenticationGeneration), state };
+    },
+    [humanClientForGeneration],
+  );
+
+  const redeemHumanBootstrap = useCallback(
+    async (bootstrapToken: string) => {
+      const result = await currentHumanAccessClient().redeemBootstrap(bootstrapToken);
+      await loadHumanSession(result.room.id);
+      return result;
+    },
+    [currentHumanAccessClient, loadHumanSession],
+  );
+
+  const inspectHumanInvite = useCallback(
+    async (roomId: string, inviteToken: string) => {
+      const invitation = await currentHumanAccessClient().inspectInvite(roomId, inviteToken);
+      const invited = humanFailure("invited", null, invitation);
+      humanStateRef.current = invited;
+      setHumanState(invited);
+      return invitation;
+    },
+    [currentHumanAccessClient],
+  );
+
+  const redeemHumanInvite = useCallback(
+    async (roomId: string, inviteToken: string) => {
+      const result = await currentHumanAccessClient().redeemInvite(roomId, inviteToken);
+      await loadHumanSession(result.room.id);
+      return result;
+    },
+    [currentHumanAccessClient, loadHumanSession],
+  );
+
+  const createHumanInvite = useCallback(
+    (roomId: string, role: RoomsHumanRole, requestId: string) =>
+      currentHumanReadyClient(roomId).client.createInvite(roomId, { role, requestId }),
+    [currentHumanReadyClient],
+  );
 
   const createLocalChannel = useCallback(
     async (input: RoomsLocalCreateChannelInput) => {
+      if (mode === "shared") {
+        const current = currentHumanReadyClient();
+        const result = await current.client.createChannel(current.state.workspace.room.id, input);
+        await loadHumanSession(current.state.workspace.room.id, true);
+        return result;
+      }
       const current = localStateRef.current;
       if (current.status !== "ready") throw sourceNotReadyError();
       const result = await client.createChannel(current.workspace.room.id, input);
@@ -327,60 +682,88 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       }
       return result;
     },
-    [client, loadWorkspace],
+    [client, currentHumanReadyClient, loadHumanSession, loadWorkspace, mode],
   );
 
   const loadLocalFeed = useCallback(
     (roomId: string, channelId: string, input?: RoomsLocalFeedPageInput) =>
-      client.getFeed(roomId, channelId, input),
-    [client],
+      mode === "shared"
+        ? currentHumanReadyClient(roomId).client.getFeed(roomId, channelId, input)
+        : client.getFeed(roomId, channelId, input),
+    [client, currentHumanReadyClient, mode],
   );
 
   const sendLocalMessage = useCallback(
     (roomId: string, channelId: string, input: RoomsLocalCreateMessageInput) =>
-      client.createMessage(roomId, channelId, input),
-    [client],
+      mode === "shared"
+        ? currentHumanReadyClient(roomId).client.createMessage(roomId, channelId, input)
+        : client.createMessage(roomId, channelId, input),
+    [client, currentHumanReadyClient, mode],
   );
 
-  const loadLocalStories = useCallback((roomId: string) => client.getStories(roomId), [client]);
+  const loadLocalStories = useCallback(
+    (roomId: string) =>
+      mode === "shared"
+        ? currentHumanReadyClient(roomId).client.getStories(roomId)
+        : client.getStories(roomId),
+    [client, currentHumanReadyClient, mode],
+  );
 
   const loadLocalStory = useCallback(
-    (roomId: string, storyId: string) => client.getStory(roomId, storyId),
-    [client],
+    (roomId: string, storyId: string) =>
+      mode === "shared"
+        ? currentHumanReadyClient(roomId).client.getStory(roomId, storyId)
+        : client.getStory(roomId, storyId),
+    [client, currentHumanReadyClient, mode],
   );
 
   const createLocalStory = useCallback(
-    (roomId: string, input: RoomsLocalCreateStoryInput) => client.createStory(roomId, input),
-    [client],
+    (roomId: string, input: RoomsLocalCreateStoryInput) =>
+      mode === "shared"
+        ? currentHumanReadyClient(roomId).client.createStory(roomId, input)
+        : client.createStory(roomId, input),
+    [client, currentHumanReadyClient, mode],
   );
 
   const linkLocalStoryThread = useCallback(
     (roomId: string, storyId: string, input: RoomsLocalLinkStoryThreadInput) =>
-      client.linkStoryThread(roomId, storyId, input),
-    [client],
+      mode === "shared"
+        ? currentHumanReadyClient(roomId).client.linkStoryThread(roomId, storyId, input)
+        : client.linkStoryThread(roomId, storyId, input),
+    [client, currentHumanReadyClient, mode],
   );
 
   const uploadLocalCas = useCallback(
-    (input: RoomsLocalUploadCasInput) => client.uploadCas(input),
-    [client],
+    (input: RoomsLocalUploadCasInput) => {
+      if (mode !== "shared") return client.uploadCas(input);
+      const current = currentHumanReadyClient();
+      return current.client.uploadCas(current.state.workspace.room.id, input);
+    },
+    [client, currentHumanReadyClient, mode],
   );
 
   const attachLocalStoryEvidence = useCallback(
     (roomId: string, storyId: string, input: RoomsLocalAttachEvidenceInput) =>
-      client.attachStoryEvidence(roomId, storyId, input),
-    [client],
+      mode === "shared"
+        ? currentHumanReadyClient(roomId).client.attachStoryEvidence(roomId, storyId, input)
+        : client.attachStoryEvidence(roomId, storyId, input),
+    [client, currentHumanReadyClient, mode],
   );
 
   const transitionLocalStory = useCallback(
     (roomId: string, storyId: string, input: RoomsLocalTransitionStoryInput) =>
-      client.transitionStory(roomId, storyId, input),
-    [client],
+      mode === "shared"
+        ? currentHumanReadyClient(roomId).client.transitionStory(roomId, storyId, input)
+        : client.transitionStory(roomId, storyId, input),
+    [client, currentHumanReadyClient, mode],
   );
 
   const reviewLocalStory = useCallback(
     (roomId: string, storyId: string, input: RoomsLocalReviewStoryInput) =>
-      client.reviewStory(roomId, storyId, input),
-    [client],
+      mode === "shared"
+        ? currentHumanReadyClient(roomId).client.reviewStory(roomId, storyId, input)
+        : client.reviewStory(roomId, storyId, input),
+    [client, currentHumanReadyClient, mode],
   );
 
   const setMode = useCallback(
@@ -394,8 +777,9 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
         return;
       }
       setSelectedBySource((current) => ({ ...current, [mode]: room.id }));
+      if (mode === "shared") void loadHumanSession(room.id);
     },
-    [mode, setSelectedBySource, state.rooms],
+    [loadHumanSession, mode, setSelectedBySource, state.rooms],
   );
 
   const value = useMemo<RoomsDataSourceContextValue>(
@@ -408,8 +792,13 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       localApiBaseUrl,
       localFeedInvalidationGeneration: localFeedSync.invalidationGeneration,
       localFeedRefreshGeneration: localFeedSync.refreshGeneration,
-      localLiveUpdatesStatus,
+      localLiveUpdatesStatus: mode === "shared" ? humanLiveUpdatesStatus : localLiveUpdatesStatus,
       retryLocalWorkspace,
+      retryHumanSession,
+      redeemHumanBootstrap,
+      inspectHumanInvite,
+      redeemHumanInvite,
+      createHumanInvite,
       createLocalChannel,
       loadLocalFeed,
       sendLocalMessage,
@@ -433,8 +822,14 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       localFeedSync.invalidationGeneration,
       localFeedSync.refreshGeneration,
       localLiveUpdatesStatus,
+      humanLiveUpdatesStatus,
       mode,
       retryLocalWorkspace,
+      retryHumanSession,
+      redeemHumanBootstrap,
+      inspectHumanInvite,
+      redeemHumanInvite,
+      createHumanInvite,
       selectRoom,
       selectedBySource,
       selectedRoom,

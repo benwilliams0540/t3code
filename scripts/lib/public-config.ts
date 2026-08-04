@@ -9,6 +9,8 @@ export interface T3CodePublicConfig {
   readonly clerkJwtTemplate: string | undefined;
   readonly clerkCliOAuthClientId: string | undefined;
   readonly relayUrl: string | undefined;
+  readonly roomsApiUrl: string | undefined;
+  readonly roomsClerkJwtTemplate: string | undefined;
   readonly mobileOtlpTracesUrl: string | undefined;
   readonly mobileOtlpTracesDataset: string | undefined;
   readonly mobileOtlpTracesToken: string | undefined;
@@ -62,6 +64,18 @@ export function loadRepoEnv({
       ? {
           T3CODE_RELAY_URL: config.relayUrl,
           VITE_T3CODE_RELAY_URL: config.relayUrl,
+        }
+      : {}),
+    ...(config.roomsApiUrl
+      ? {
+          T3CODE_ROOMS_API_URL: config.roomsApiUrl,
+          VITE_ROOMS_API_URL: config.roomsApiUrl,
+        }
+      : {}),
+    ...(config.roomsClerkJwtTemplate
+      ? {
+          T3CODE_ROOMS_CLERK_JWT_TEMPLATE: config.roomsClerkJwtTemplate,
+          VITE_ROOMS_CLERK_JWT_TEMPLATE: config.roomsClerkJwtTemplate,
         }
       : {}),
     ...(config.mobileOtlpTracesUrl
@@ -123,6 +137,12 @@ export function resolvePublicConfig(...sources: readonly Environment[]): T3CodeP
       "VITE_CLERK_CLI_OAUTH_CLIENT_ID",
     ),
     relayUrl: firstNonEmpty(sources, "T3CODE_RELAY_URL", "VITE_T3CODE_RELAY_URL"),
+    roomsApiUrl: firstNonEmpty(sources, "T3CODE_ROOMS_API_URL", "VITE_ROOMS_API_URL"),
+    roomsClerkJwtTemplate: firstNonEmpty(
+      sources,
+      "T3CODE_ROOMS_CLERK_JWT_TEMPLATE",
+      "VITE_ROOMS_CLERK_JWT_TEMPLATE",
+    ),
     mobileOtlpTracesUrl: firstNonEmpty(
       sources,
       "T3CODE_MOBILE_OTLP_TRACES_URL",

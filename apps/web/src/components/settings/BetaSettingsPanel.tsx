@@ -12,6 +12,7 @@ import { useRoomsDataSource, type RoomsDataSourceMode } from "../../features/roo
 import { buildRoomsDiagnostics } from "../../features/rooms/dataSource/diagnostics";
 import { resetRoomsBetaSettings } from "../../features/rooms/dataSource/reset";
 import { validateRoomsLocalApiBaseUrl } from "../../features/rooms/dataSource/localChannelsClient";
+import { resolveCloudPublicConfig } from "../../cloud/publicConfig";
 import { ROOMS_LAST_ROUTE_STORAGE_KEY } from "../../features/rooms/shell/navigation";
 import {
   ROOMS_PROJECT_BINDINGS_STORAGE_KEY,
@@ -168,6 +169,7 @@ function RoomsLocalApiBaseUrlInput({
 }
 
 export function BetaSettingsPanel() {
+  const humanRoomsConfig = resolveCloudPublicConfig();
   const [sidebarVariant, setSidebarVariant] = useAppSidebarVariantSelection();
   const { localConfig, mode, selectedBySource, selectedRoom, setMode, state } =
     useRoomsDataSource();
@@ -294,11 +296,11 @@ export function BetaSettingsPanel() {
         </SettingsRow>
         <SettingsRow
           title="Rooms content"
-          description="Sample is the certified demonstration workspace. Local connects to the development-only t3rooms service and keeps native T3 projects and threads."
+          description="Sample is certified demonstration data. Local is the development-only fallback. Shared uses T3 Connect and server-backed human membership."
         >
           <RadioGroup
             aria-label="Rooms content"
-            className="grid gap-2 py-3 sm:grid-cols-2"
+            className="grid gap-2 py-3 sm:grid-cols-3"
             onValueChange={(value) => setMode(value as RoomsDataSourceMode)}
             value={mode}
           >
@@ -306,6 +308,7 @@ export function BetaSettingsPanel() {
               [
                 ["sample", "Sample workspace", "Certified Rooms data for evaluation."],
                 ["local", "Local workspace", "Actual local T3 projects and threads only."],
+                ["shared", "Shared Rooms", "Authenticated multiplayer through T3 Connect."],
               ] as const
             ).map(([value, title, description]) => (
               <label
@@ -322,6 +325,21 @@ export function BetaSettingsPanel() {
               </label>
             ))}
           </RadioGroup>
+        </SettingsRow>
+        <SettingsRow
+          title="Shared Rooms"
+          description="Build-time, non-secret status for the dedicated Rooms Clerk template and supervised loopback transport. Credentials are requested just in time and are never stored here."
+        >
+          <div className="grid gap-1 py-3 text-xs text-muted-foreground">
+            <p>
+              T3 Connect: {humanRoomsConfig.clerkPublishableKey ? "configured" : "not configured"}
+            </p>
+            <p>
+              Rooms JWT template:{" "}
+              {humanRoomsConfig.roomsClerkJwtTemplate ? "configured" : "not configured"}
+            </p>
+            <p>Rooms loopback API: {humanRoomsConfig.roomsApiUrl ?? "not configured"}</p>
+          </div>
         </SettingsRow>
         <SettingsRow
           title="Local Rooms API"

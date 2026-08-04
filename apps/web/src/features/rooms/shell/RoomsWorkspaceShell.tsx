@@ -29,6 +29,7 @@ import {
   type RoomsWorkspaceSurface,
 } from "./navigation";
 import { localSourceStateCopy } from "./localSourceStateCopy";
+import { RoomsHumanAccessPanel } from "./RoomsHumanAccessPanel";
 import { RoomsWorkspaceNavigation, type RoomsWorkspaceNavigate } from "./RoomsWorkspaceNavigation";
 import {
   resolveRoomsSidebarMaximumWidth,
@@ -325,6 +326,13 @@ export function RoomsWorkspaceShell({
   }
 
   if (state.status !== "ready") {
+    if (state.mode === "shared") {
+      return (
+        <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground">
+          <RoomsHumanAccessPanel state={state} />
+        </SidebarInset>
+      );
+    }
     const copy = localSourceStateCopy(state);
     return (
       <RoomsSourceStatePanel
@@ -347,11 +355,11 @@ export function RoomsWorkspaceShell({
     const declaredRoom = state.fixture.rooms.find((candidate) => candidate.id === room.id);
     return declaredRoom ? workspaceForDeclaredRoom(state.fixture, declaredRoom.id) : null;
   })();
-  const localWorkspace = state.mode === "local" ? state.workspace : null;
+  const localWorkspace = state.mode === "sample" ? null : state.workspace;
   const surfaceOwnsScrolling =
     surface.kind === "native-thread" ||
     surface.kind === "native-draft" ||
-    (state.mode === "local" && surface.kind === "channel");
+    (state.mode !== "sample" && surface.kind === "channel");
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground">
       <RoomsBreadcrumbBar
@@ -460,6 +468,13 @@ export function RoomsWorkspaceLanding() {
   }, [navigate, selectedRoom, sidebarVariant]);
 
   if (state.status !== "ready") {
+    if (state.mode === "shared") {
+      return (
+        <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground">
+          <RoomsHumanAccessPanel state={state} />
+        </SidebarInset>
+      );
+    }
     const copy = localSourceStateCopy(state);
     return (
       <RoomsSourceStatePanel

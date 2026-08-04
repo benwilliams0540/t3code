@@ -22,7 +22,7 @@ describe("Rooms diagnostics", () => {
     const diagnostics = buildRoomsDiagnostics({
       mode: "local",
       state: resolveLocalRoomsDataSourceState(workspace, localConfig),
-      selectedBySource: { sample: null, local: localConfig.roomId },
+      selectedBySource: { sample: null, local: localConfig.roomId, shared: null },
       selectedRoomId: localConfig.roomId,
       localConfig,
       sampleBindings: {},

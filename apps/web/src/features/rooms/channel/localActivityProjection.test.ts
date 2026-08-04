@@ -8,6 +8,7 @@ import {
   RoomsLocalFeedItem,
   RoomsLocalWorkspace,
 } from "../dataSource/localChannelsContract";
+import type { RoomsHumanWorkspace } from "../dataSource/humanSharedContract";
 import { isRoomsFeedFollowing } from "../activity/RoomsActivityFeed";
 import { roomsActivityRegister } from "../activity/projection";
 import {
@@ -92,5 +93,53 @@ describe("Rooms Local activity projection", () => {
     expect(isRoomsFeedFollowing({ scrollTop: 100, scrollHeight: 1000, clientHeight: 100 })).toBe(
       false,
     );
+  });
+});
+
+describe("shared human principal projection", () => {
+  it("renders two distinct directory names and leaves an unknown writer unresolved", () => {
+    const humanWorkspace = {
+      ...workspace,
+      contract: {
+        id: "rooms.human-shared",
+        version: 1,
+        schema_uri: "contracts/rooms/human-shared/v1/schema.json",
+      },
+      room: { ...workspace.room, locality: "shared", role: "admin" },
+      principal: { ...workspace.principal, role: "admin" },
+      principals: [
+        { ...workspace.principal, display_name: "Human A", role: "admin" },
+        {
+          id: "h:019fb9f0-2000-7000-8000-000000000002",
+          type: "human",
+          display_name: "Human B",
+          role: "operator",
+        },
+      ],
+      capabilities: {
+        ...workspace.capabilities,
+        "work.read": true,
+        "work.create": true,
+        "work.link_thread": true,
+        "work.attach_evidence": true,
+        "work.review": true,
+        "work.complete": true,
+        "membership.manage": true,
+        "role.manage": true,
+      },
+    } satisfies RoomsHumanWorkspace;
+
+    expect(
+      resolveRoomsLocalPrincipal(humanWorkspace, humanWorkspace.principals[0]!.id),
+    ).toMatchObject({ display_name: "Human A" });
+    expect(
+      resolveRoomsLocalPrincipal(humanWorkspace, humanWorkspace.principals[1]!.id),
+    ).toMatchObject({
+      display_name: "Human B",
+      id: humanWorkspace.principals[1]!.id,
+    });
+    expect(
+      resolveRoomsLocalPrincipal(humanWorkspace, "h:019fb9f0-2000-7000-8000-000000000099"),
+    ).toMatchObject({ type: "unresolved" });
   });
 });

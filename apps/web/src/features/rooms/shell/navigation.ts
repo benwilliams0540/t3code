@@ -68,6 +68,7 @@ export function roomsSurfaceSourceLabel(
   sourceMode: RoomsDataSourceMode,
 ): string {
   if (sourceMode === "local") return "Local T3 only";
+  if (sourceMode === "shared") return "Shared Rooms";
   return surface.kind === "native-thread" || surface.kind === "native-draft"
     ? "Local T3 thread"
     : surface.kind === "threads"

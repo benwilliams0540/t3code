@@ -1,4 +1,4 @@
-import { isRoomsLocalClientError, type RoomsLocalChannelsClient } from "./localChannelsClient";
+import { isRoomsLocalClientError } from "./localChannelsClient";
 
 export const ROOMS_LOCAL_CHANGE_WAIT_TIMEOUT_MS = 25_000;
 export const ROOMS_LOCAL_CHANGE_RETRY_INITIAL_MS = 500;
@@ -14,7 +14,15 @@ export interface RoomsLocalChangeInvalidation {
 }
 
 export interface RoomsLocalChangeLoopOptions {
-  readonly client: Pick<RoomsLocalChannelsClient, "waitForChanges">;
+  readonly client: {
+    readonly waitForChanges: (
+      roomId: string,
+      input: { readonly afterSeq: number; readonly timeoutMs?: number | undefined },
+    ) => Promise<{
+      readonly changed: boolean;
+      readonly head_seq: number;
+    }>;
+  };
   readonly onInvalidate: (invalidation: RoomsLocalChangeInvalidation) => Promise<void>;
   readonly onStatusChange: (status: RoomsLocalLiveUpdatesStatus) => void;
   readonly scheduleRetry?: ((callback: () => void, delayMs: number) => () => void) | undefined;

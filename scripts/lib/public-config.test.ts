@@ -27,6 +27,10 @@ describe("loadRepoEnv", () => {
     expect(env.EXPO_PUBLIC_CLERK_JWT_TEMPLATE).toBeUndefined();
     expect(env.T3CODE_RELAY_URL).toBeUndefined();
     expect(env.VITE_T3CODE_RELAY_URL).toBeUndefined();
+    expect(env.T3CODE_ROOMS_API_URL).toBeUndefined();
+    expect(env.VITE_ROOMS_API_URL).toBeUndefined();
+    expect(env.T3CODE_ROOMS_CLERK_JWT_TEMPLATE).toBeUndefined();
+    expect(env.VITE_ROOMS_CLERK_JWT_TEMPLATE).toBeUndefined();
     expect(env.T3CODE_MOBILE_OTLP_TRACES_URL).toBeUndefined();
     expect(env.T3CODE_MOBILE_OTLP_TRACES_DATASET).toBeUndefined();
     expect(env.T3CODE_MOBILE_OTLP_TRACES_TOKEN).toBeUndefined();
@@ -94,12 +98,31 @@ describe("loadRepoEnv", () => {
       clerkJwtTemplate: "template_legacy",
       clerkCliOAuthClientId: "oauth_canonical",
       relayUrl: "https://legacy.example.test",
+      roomsApiUrl: undefined,
+      roomsClerkJwtTemplate: undefined,
       mobileOtlpTracesUrl: "https://api.axiom.co/v1/traces",
       mobileOtlpTracesDataset: "mobile-traces",
       mobileOtlpTracesToken: "mobile-token",
       relayClientOtlpTracesUrl: undefined,
       relayClientOtlpTracesDataset: undefined,
       relayClientOtlpTracesToken: undefined,
+    });
+  });
+
+  it("projects canonical shared Rooms values only to web build aliases", () => {
+    expect(
+      loadRepoEnv({
+        baseEnv: {
+          T3CODE_ROOMS_API_URL: "http://127.0.0.1:33102",
+          T3CODE_ROOMS_CLERK_JWT_TEMPLATE: "t3-rooms",
+        },
+        repoRoot: makeTemporaryDirectory(),
+      }),
+    ).toEqual({
+      T3CODE_ROOMS_API_URL: "http://127.0.0.1:33102",
+      VITE_ROOMS_API_URL: "http://127.0.0.1:33102",
+      T3CODE_ROOMS_CLERK_JWT_TEMPLATE: "t3-rooms",
+      VITE_ROOMS_CLERK_JWT_TEMPLATE: "t3-rooms",
     });
   });
 

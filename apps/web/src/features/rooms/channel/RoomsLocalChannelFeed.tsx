@@ -21,8 +21,8 @@ import type {
   RoomsLocalChannel,
   RoomsLocalFeed,
   RoomsLocalFeedItem,
-  RoomsLocalWorkspace,
 } from "../dataSource/localChannelsContract";
+import type { RoomsInteractiveWorkspace } from "../dataSource/humanSharedContract";
 import { createLowercaseUuidV7 } from "../dataSource/uuidV7";
 import {
   canSubmitStableRoomsCommand,
@@ -75,7 +75,7 @@ export function RoomsLocalFeedItemCard({
   workspace,
 }: {
   item: RoomsLocalFeedItem;
-  workspace: RoomsLocalWorkspace;
+  workspace: RoomsInteractiveWorkspace;
 }) {
   const activity = projectRoomsLocalActivityItem(workspace, item);
   return (
@@ -200,7 +200,7 @@ function ChannelComposer({
       </div>
       {!canSend ? (
         <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
-          This Local principal does not have message.create capability.
+          This principal does not have message.create capability.
         </p>
       ) : null}
       {error ? (
@@ -221,7 +221,7 @@ export function RoomsLocalChannelFeed({
   workspace,
 }: {
   readonly channel: RoomsLocalChannel;
-  readonly workspace: RoomsLocalWorkspace;
+  readonly workspace: RoomsInteractiveWorkspace;
 }) {
   const { loadLocalFeed, localFeedInvalidationGeneration, localFeedRefreshGeneration } =
     useRoomsDataSource();
@@ -409,7 +409,7 @@ export function RoomsLocalChannelSurface({
   workspace,
 }: {
   readonly channelSlug: string;
-  readonly workspace: RoomsLocalWorkspace;
+  readonly workspace: RoomsInteractiveWorkspace;
 }) {
   const channel = workspace.channels.find((candidate) => candidate.slug === channelSlug);
   const { retryLocalWorkspace } = useRoomsDataSource();
@@ -423,7 +423,7 @@ export function RoomsLocalChannelSurface({
           />
           <h1 className="mt-4 text-lg font-semibold text-foreground">Channel access unavailable</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            This Local principal does not have channel.read capability.
+            This principal does not have channel.read capability.
           </p>
           <code className="mt-2 block text-[10px] text-muted-foreground">capability_denied</code>
         </div>

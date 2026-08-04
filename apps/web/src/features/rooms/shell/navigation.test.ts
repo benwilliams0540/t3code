@@ -62,6 +62,7 @@ describe("Rooms shell navigation", () => {
     ).toBe("Local T3 thread");
     expect(roomsSurfaceSourceLabel({ kind: "threads" }, "sample")).toBe("Local T3 projects");
     expect(roomsSurfaceSourceLabel({ kind: "dashboard" }, "local")).toBe("Local T3 only");
+    expect(roomsSurfaceSourceLabel({ kind: "dashboard" }, "shared")).toBe("Shared Rooms");
   });
 
   it("keeps web routes path-based and adapts internal links to Electron hash history", () => {

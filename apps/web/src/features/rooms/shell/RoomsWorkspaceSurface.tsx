@@ -18,6 +18,7 @@ import { roomsWorkspaceSlots } from "./slots";
 import { RoomsNativeThreadSurface } from "../threads/RoomsNativeThreadSurface";
 import { RoomsThreadsSurface } from "../threads/RoomsThreadNavigation";
 import { RoomsLocalWorkspaceSurfaceView } from "./RoomsLocalWorkspaceSurface";
+import { RoomsHumanWorkspaceSurfaceView } from "./RoomsHumanWorkspaceSurface";
 
 function SurfacePlaceholder({ surface }: { readonly surface: RoomsWorkspaceSurface }) {
   const copy = (() => {
@@ -169,6 +170,17 @@ export function RoomsWorkspaceSurfaceView({
   if (sourceState.mode === "local") {
     return (
       <RoomsLocalWorkspaceSurfaceView
+        navigate={navigate}
+        room={room}
+        surface={surface}
+        workspace={sourceState.workspace}
+      />
+    );
+  }
+
+  if (sourceState.mode === "shared") {
+    return (
+      <RoomsHumanWorkspaceSurfaceView
         navigate={navigate}
         room={room}
         surface={surface}

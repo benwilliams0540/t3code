@@ -31,6 +31,8 @@ const configuredHttpUrl = isSingleOriginDev ? undefined : process.env.VITE_HTTP_
 const configuredRelayUrl = repoEnv.VITE_T3CODE_RELAY_URL?.trim() || "";
 const configuredClerkPublishableKey = repoEnv.VITE_CLERK_PUBLISHABLE_KEY?.trim() || "";
 const configuredClerkJwtTemplate = repoEnv.VITE_CLERK_JWT_TEMPLATE?.trim() || "";
+const configuredRoomsApiUrl = repoEnv.VITE_ROOMS_API_URL?.trim() || "";
+const configuredRoomsClerkJwtTemplate = repoEnv.VITE_ROOMS_CLERK_JWT_TEMPLATE?.trim() || "";
 const configuredClerkCliOAuthClientId = repoEnv.VITE_CLERK_CLI_OAUTH_CLIENT_ID?.trim() || "";
 const configuredRelayTracingUrl = repoEnv.VITE_RELAY_OTLP_TRACES_URL?.trim() || "";
 const configuredRelayTracingDataset = repoEnv.VITE_RELAY_OTLP_TRACES_DATASET?.trim() || "";
@@ -162,6 +164,10 @@ export default defineConfig(() => {
       "import.meta.env.VITE_T3CODE_RELAY_URL": JSON.stringify(configuredRelayUrl),
       "import.meta.env.VITE_CLERK_PUBLISHABLE_KEY": JSON.stringify(configuredClerkPublishableKey),
       "import.meta.env.VITE_CLERK_JWT_TEMPLATE": JSON.stringify(configuredClerkJwtTemplate),
+      "import.meta.env.VITE_ROOMS_API_URL": JSON.stringify(configuredRoomsApiUrl),
+      "import.meta.env.VITE_ROOMS_CLERK_JWT_TEMPLATE": JSON.stringify(
+        configuredRoomsClerkJwtTemplate,
+      ),
       "import.meta.env.VITE_CLERK_CLI_OAUTH_CLIENT_ID": JSON.stringify(
         configuredClerkCliOAuthClientId,
       ),

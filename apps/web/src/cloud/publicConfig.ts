@@ -5,7 +5,7 @@ import * as Schema from "effect/Schema";
 export class CloudPublicConfigMissingError extends Schema.TaggedErrorClass<CloudPublicConfigMissingError>()(
   "CloudPublicConfigMissingError",
   {
-    key: Schema.Literal("T3CODE_CLERK_JWT_TEMPLATE"),
+    key: Schema.Literals(["T3CODE_CLERK_JWT_TEMPLATE", "T3CODE_ROOMS_CLERK_JWT_TEMPLATE"]),
   },
 ) {
   override get message(): string {
@@ -17,11 +17,41 @@ export interface CloudPublicConfig {
   readonly clerkPublishableKey: string | null;
   readonly clerkJwtTemplate: string | null;
   readonly relayUrl: string | null;
+  readonly roomsApiUrl: string | null;
+  readonly roomsClerkJwtTemplate: string | null;
   readonly relayTracing: {
     readonly tracesUrl: string | null;
     readonly tracesDataset: string | null;
     readonly tracesToken: string | null;
   };
+}
+
+const LOOPBACK_IPV4 = /^127(?:\.\d{1,3}){3}$/;
+
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  if (normalized === "localhost" || normalized === "[::1]" || normalized === "::1") return true;
+  if (!LOOPBACK_IPV4.test(normalized)) return false;
+  return normalized
+    .split(".")
+    .every((part) => Number.isInteger(Number(part)) && Number(part) >= 0 && Number(part) <= 255);
+}
+
+export function normalizeRoomsApiUrl(value: string): string | null {
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === "http:" &&
+      isLoopbackHostname(url.hostname) &&
+      url.username === "" &&
+      url.password === "" &&
+      (url.pathname === "" || url.pathname === "/") &&
+      url.search === "" &&
+      url.hash === ""
+      ? url.origin
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 export function trimNonEmpty(value: string | undefined): string | null {
@@ -45,6 +75,12 @@ export function resolveCloudPublicConfig(): CloudPublicConfig {
     clerkJwtTemplate: trimNonEmpty(import.meta.env.VITE_CLERK_JWT_TEMPLATE as string | undefined),
     relayUrl: normalizeSecureRelayUrl(
       (import.meta.env.VITE_T3CODE_RELAY_URL as string | undefined) ?? "",
+    ),
+    roomsApiUrl: normalizeRoomsApiUrl(
+      (import.meta.env.VITE_ROOMS_API_URL as string | undefined) ?? "",
+    ),
+    roomsClerkJwtTemplate: trimNonEmpty(
+      import.meta.env.VITE_ROOMS_CLERK_JWT_TEMPLATE as string | undefined,
     ),
     relayTracing: {
       tracesUrl: normalizeSecureUrl(
@@ -74,10 +110,28 @@ export function hasCloudPublicConfig(): boolean {
   return Boolean(config.clerkPublishableKey && config.clerkJwtTemplate && config.relayUrl);
 }
 
+export function hasRoomsPublicConfig(): boolean {
+  const config = resolveCloudPublicConfig();
+  return Boolean(config.clerkPublishableKey && config.roomsApiUrl && config.roomsClerkJwtTemplate);
+}
+
+export function shouldMountClerkProvider(): boolean {
+  const config = resolveCloudPublicConfig();
+  return Boolean(config.clerkPublishableKey && (hasCloudPublicConfig() || hasRoomsPublicConfig()));
+}
+
 export function resolveRelayClerkTokenOptions() {
   const { clerkJwtTemplate } = resolveCloudPublicConfig();
   if (!clerkJwtTemplate) {
     throw new CloudPublicConfigMissingError({ key: "T3CODE_CLERK_JWT_TEMPLATE" });
   }
   return relayClerkTokenOptions(clerkJwtTemplate);
+}
+
+export function resolveRoomsClerkTokenOptions() {
+  const { roomsClerkJwtTemplate } = resolveCloudPublicConfig();
+  if (!roomsClerkJwtTemplate) {
+    throw new CloudPublicConfigMissingError({ key: "T3CODE_ROOMS_CLERK_JWT_TEMPLATE" });
+  }
+  return { template: roomsClerkJwtTemplate } as const;
 }

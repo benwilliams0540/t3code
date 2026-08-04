@@ -39,7 +39,7 @@ export function RoomsAddChannelDialog({
   readonly onOpenChange: (open: boolean) => void;
   readonly open: boolean;
 }) {
-  const { createLocalChannel } = useRoomsDataSource();
+  const { createLocalChannel, mode } = useRoomsDataSource();
   const [name, setName] = useState("");
   const [purpose, setPurpose] = useState("");
   const [command, setCommand] = useState<StableRoomsCommand<ChannelDraft> | null>(null);
@@ -106,7 +106,8 @@ export function RoomsAddChannelDialog({
           <DialogHeader>
             <DialogTitle>Add channel</DialogTitle>
             <DialogDescription>
-              Create a durable human discussion channel in this Local workspace.
+              Create a durable human discussion channel in this{" "}
+              {mode === "shared" ? "shared" : "Local"} workspace.
             </DialogDescription>
           </DialogHeader>
           <DialogPanel className="grid gap-4">

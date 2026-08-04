@@ -4,6 +4,11 @@ T3 Connect uses one Clerk application for web, desktop, and mobile authenticatio
 Clerk JWTs only when they are generated from the `t3-relay` template with the shared
 `t3-code-relay` audience.
 
+Authenticated Shared Rooms may reuse the same Clerk sign-in while requesting a separate,
+dedicated Rooms JWT template and audience. Its template, Rails verifier, and loopback transport are
+documented in [Shared Rooms human identity](../rooms/shared-human-identity.md). Do not reuse the
+Relay template as the Rooms audience or make the managed Relay depend on Rooms configuration.
+
 ## Application Keys
 
 T3 Connect is disabled in a fresh clone. To enable it for source builds, add a repository-root `.env`

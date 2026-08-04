@@ -37,6 +37,8 @@ import type {
   RoomsLocalStoryV2,
 } from "../dataSource/localStoriesContract";
 import { isRoomsLocalStoryV2 } from "../dataSource/localStoriesContract";
+import type { RoomsHumanStoriesResponse } from "../dataSource/humanSharedContract";
+import type { RoomsDataSourceMode } from "../dataSource";
 import { createLowercaseUuidV7 } from "../dataSource/uuidV7";
 import {
   finishStableRoomsSubmission,
@@ -150,14 +152,18 @@ export function RoomsLocalLinkedThreadStatus({
   );
 }
 
-export function RoomsLocalStoriesEmptyState() {
+export function RoomsLocalStoriesEmptyState({
+  sourceLabel = "Local",
+}: {
+  readonly sourceLabel?: string;
+}) {
   return (
     <div
       className="rounded-2xl border border-dashed border-border bg-muted/20 p-8 text-center"
       data-rooms-local-stories-empty=""
     >
       <GitBranchIcon aria-hidden className="mx-auto size-6 text-muted-foreground" />
-      <h2 className="mt-4 text-base font-semibold text-foreground">No Local stories yet</h2>
+      <h2 className="mt-4 text-base font-semibold text-foreground">No {sourceLabel} stories yet</h2>
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
         Create the first durable story, then associate it with one actual thread from a bound T3
         project.
@@ -172,12 +178,14 @@ function RoomsCreateStoryDialog({
   onOpenChange,
   open,
   roomId,
+  sourceLabel,
 }: {
   readonly authorized: boolean;
   readonly onCreated: (story: RoomsLocalStory) => void;
   readonly onOpenChange: (open: boolean) => void;
   readonly open: boolean;
   readonly roomId: string;
+  readonly sourceLabel: string;
 }) {
   const { createLocalStory } = useRoomsDataSource();
   const [title, setTitle] = useState("");
@@ -228,7 +236,7 @@ function RoomsCreateStoryDialog({
       <DialogPopup className="max-w-md" showCloseButton={!pending}>
         <form onSubmit={(event) => void submit(event)}>
           <DialogHeader>
-            <DialogTitle>Create Local story</DialogTitle>
+            <DialogTitle>Create {sourceLabel} story</DialogTitle>
             <DialogDescription>
               Add one server-owned story at the initial backlog stage. You can link a native T3
               thread afterward.
@@ -815,21 +823,26 @@ function RoomsLocalStoryCard({
 export function RoomsLocalStoriesSurface({
   navigate,
   roomId,
+  sourceMode = "local",
 }: {
   readonly navigate: RoomsWorkspaceNavigate;
   readonly roomId: string;
+  readonly sourceMode?: Extract<RoomsDataSourceMode, "local" | "shared">;
 }) {
   const { loadLocalStories, localFeedRefreshGeneration } = useRoomsDataSource();
-  const { boundProjectRefs, boundProjects } = useRoomProjectBindings(roomId, "local");
+  const { boundProjectRefs, boundProjects } = useRoomProjectBindings(roomId, sourceMode);
   const shells = useThreadShellsForProjectRefs(boundProjectRefs);
   const threads = useMemo(
     () => selectRoomsNativeThreadEntries(shells, boundProjects),
     [boundProjects, shells],
   );
-  const [response, setResponse] = useState<RoomsLocalStoriesResponse | null>(null);
+  const [response, setResponse] = useState<
+    RoomsLocalStoriesResponse | RoomsHumanStoriesResponse | null
+  >(null);
   const [error, setError] = useState<LocalStoryError | null>(null);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
+  const sourceLabel = sourceMode === "shared" ? "Shared" : "Local";
   const loadGeneration = useRef(0);
 
   const refresh = useCallback(async () => {
@@ -864,7 +877,7 @@ export function RoomsLocalStoriesSurface({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-            Local durable work
+            {sourceLabel} durable work
           </p>
           <h1 className="mt-1 text-xl font-semibold text-foreground">Stories</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
@@ -895,11 +908,11 @@ export function RoomsLocalStoriesSurface({
       ) : null}
       {loading && !response ? (
         <p className="mt-8 text-sm text-muted-foreground" role="status">
-          Loading Local stories…
+          Loading {sourceLabel} stories…
         </p>
       ) : response?.stories.length === 0 ? (
         <div className="mt-8">
-          <RoomsLocalStoriesEmptyState />
+          <RoomsLocalStoriesEmptyState sourceLabel={sourceLabel} />
         </div>
       ) : (
         <div className="mt-6 grid gap-4">
@@ -923,6 +936,7 @@ export function RoomsLocalStoriesSurface({
         onOpenChange={setCreateOpen}
         open={createOpen}
         roomId={roomId}
+        sourceLabel={sourceLabel}
       />
     </section>
   );

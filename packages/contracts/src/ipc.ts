@@ -975,6 +975,20 @@ export const RoomsLocalHttpResponseSchema = Schema.Struct({
 });
 export type RoomsLocalHttpResponse = typeof RoomsLocalHttpResponseSchema.Type;
 
+export const RoomsHumanHttpRequestSchema = Schema.Struct({
+  baseUrl: Schema.String,
+  path: Schema.String,
+  method: Schema.Literals(["GET", "POST"]),
+  bearer: Schema.String,
+  body: Schema.optionalKey(Schema.String),
+  bodyEncoding: Schema.optionalKey(Schema.Literals(["utf8", "base64"])),
+  contentType: Schema.optionalKey(Schema.String),
+});
+export type RoomsHumanHttpRequest = typeof RoomsHumanHttpRequestSchema.Type;
+
+export const RoomsHumanHttpResponseSchema = RoomsLocalHttpResponseSchema;
+export type RoomsHumanHttpResponse = typeof RoomsHumanHttpResponseSchema.Type;
+
 export interface DesktopBridge {
   getAppBranding: () => DesktopAppBranding | null;
   // One bootstrap per pool instance currently registered with bootstrap
@@ -985,6 +999,7 @@ export interface DesktopBridge {
   getClientSettings: () => Promise<ClientSettings | null>;
   setClientSettings: (settings: ClientSettings) => Promise<void>;
   requestRoomsLocal?: (request: RoomsLocalHttpRequest) => Promise<RoomsLocalHttpResponse>;
+  requestRoomsHuman?: (request: RoomsHumanHttpRequest) => Promise<RoomsHumanHttpResponse>;
   getConnectionCatalog?: () => Promise<string | null>;
   setConnectionCatalog?: (catalog: string) => Promise<boolean>;
   clearConnectionCatalog?: () => Promise<void>;
@@ -1142,6 +1157,9 @@ export interface LocalApi {
   };
   roomsLocal?: {
     request: (request: RoomsLocalHttpRequest) => Promise<RoomsLocalHttpResponse>;
+  };
+  roomsHuman?: {
+    request: (request: RoomsHumanHttpRequest) => Promise<RoomsHumanHttpResponse>;
   };
 }
 

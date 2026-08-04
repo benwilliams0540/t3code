@@ -12,7 +12,7 @@ import { cn } from "~/lib/utils";
 import { SidebarChromeFooter } from "~/components/sidebar/SidebarChrome";
 
 import type { RoomsDataSourceMode, RoomsSourceRoom } from "../dataSource";
-import type { RoomsLocalWorkspace } from "../dataSource/localChannelsContract";
+import type { RoomsInteractiveWorkspace } from "../dataSource/humanSharedContract";
 import { RoomsAddChannelDialog } from "../channel/RoomsAddChannelDialog";
 import {
   channelSlugFromName,
@@ -36,7 +36,7 @@ export function roomsProjectNavigationItems(
   sourceMode: RoomsDataSourceMode,
   workspace: RoomsWorkspace | null,
 ): readonly { readonly key: string; readonly label: string }[] {
-  if (sourceMode === "local") return LOCAL_PROJECT_NAVIGATION;
+  if (sourceMode !== "sample") return LOCAL_PROJECT_NAVIGATION;
   return (
     workspace?.navigation.filter((item) =>
       ["vision", "stories", "evidence", "audit_decisions"].includes(item.key),
@@ -89,7 +89,7 @@ export function RoomsWorkspaceNavigation({
 }: {
   readonly localLiveUpdatesReconnecting: boolean;
   readonly navigate: RoomsWorkspaceNavigate;
-  readonly localWorkspace: RoomsLocalWorkspace | null;
+  readonly localWorkspace: RoomsInteractiveWorkspace | null;
   readonly room: RoomsSourceRoom;
   readonly sourceMode: RoomsDataSourceMode;
   readonly surface: RoomsWorkspaceSurface;
@@ -106,7 +106,9 @@ export function RoomsWorkspaceNavigation({
         <p className="mt-0.5 text-[11px] text-sidebar-muted-foreground">
           {sourceMode === "local"
             ? "Local T3 only"
-            : `${room.locality === "local_only" ? "Local-only room" : "Shared room"} · ${room.membershipRole}`}
+            : sourceMode === "shared"
+              ? `T3 Connect · ${room.membershipRole}`
+              : `${room.locality === "local_only" ? "Local-only room" : "Shared room"} · ${room.membershipRole}`}
         </p>
         {sourceMode === "local" && localLiveUpdatesReconnecting ? (
           <p
@@ -130,7 +132,7 @@ export function RoomsWorkspaceNavigation({
           <p className="text-[10px] font-semibold tracking-[0.12em] text-sidebar-muted-foreground/65 uppercase">
             Channels
           </p>
-          {sourceMode === "local" ? (
+          {sourceMode !== "sample" ? (
             <button
               aria-label="Add channel"
               className="ml-auto rounded p-0.5 text-sidebar-muted-foreground transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-foreground disabled:cursor-not-allowed disabled:opacity-45"
@@ -143,7 +145,7 @@ export function RoomsWorkspaceNavigation({
             </button>
           ) : null}
         </div>
-        {sourceMode === "local" ? (
+        {sourceMode !== "sample" ? (
           localWorkspace?.channels.length ? (
             localWorkspace.channels.map((channel) => (
               <WorkspaceNavItem
@@ -221,7 +223,7 @@ export function RoomsWorkspaceNavigation({
         />
       </div>
       <SidebarChromeFooter />
-      {sourceMode === "local" ? (
+      {sourceMode !== "sample" ? (
         <RoomsAddChannelDialog
           onCreated={(channel) => navigate({ kind: "channel", channelSlug: channel.slug })}
           onOpenChange={setAddChannelOpen}
