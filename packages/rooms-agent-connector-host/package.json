@@ -1,0 +1,32 @@
+{
+  "name": "@t3tools/rooms-agent-connector-host",
+  "version": "1.0.0",
+  "private": true,
+  "bin": {
+    "rooms-agent-connector-host": "./dist/bin.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/bin.ts --bundle --platform=node --format=esm --target=node24 --outfile=dist/bin.mjs",
+    "start": "node dist/bin.mjs",
+    "check": "node dist/bin.mjs --check",
+    "typecheck": "tsgo --noEmit",
+    "test": "vp test run"
+  },
+  "devDependencies": {
+    "@t3tools/rooms-agent-connector": "workspace:*",
+    "@types/node": "catalog:",
+    "esbuild": "0.28.1",
+    "vite-plus": "catalog:"
+  }
+}
