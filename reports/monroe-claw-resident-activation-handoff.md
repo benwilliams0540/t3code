@@ -2,11 +2,11 @@
 
 ## Result
 
-The private resident connector host is implemented, tested, packaged, and
-accepted against the exact isolated server producer with a real one-time Agent
-credential and fake Gateway. This handoff freezes the implementation for later
-fcfdev activation. It does not claim dogfood enrollment, deployment, real
-provider execution, or human-message acceptance.
+The private resident connector host is implemented, tested, packaged, accepted
+against the exact isolated server producer with a real one-time Agent credential
+and fake Gateway, and staged owner-only on fcfdev. The exact server producer is
+now deployed to dogfood. This handoff does not claim Agent enrollment, a running
+connector service, real provider execution, or human-message acceptance.
 
 - Repository: `benwilliams0540/t3code`
 - Checkout: `/Users/monroe/Developer/GitRepos/t3code`
@@ -24,7 +24,7 @@ provider execution, or human-message acceptance.
 
 - Server branch: `feat/rooms-m5-claw-live-delivery`
 - Server implementation: `4511c58419f0dde56d3149358af91fc2871816bc`
-- Server report head: `3a6b45d4d8aafd54aa762e5fb7c2dfbbb2f795bf`
+- Server report head: `5242b571803f32ed404ef913d5a480ec1a47be6d`
 - `rooms.agent-deliveries` v1 schema SHA-256:
   `98f507c0d67ddecda9cafdbc19d9bf8b55649583cd95576a039d9ebd4d950258`
 - `rooms.agent-invocations` v1 schema SHA-256:
@@ -120,8 +120,9 @@ The intended fcfdev layout is:
 ```
 
 The intended user unit is `rooms-claw-connector.service`, owned by `monroe`,
-with the exact user-local Node 24.16.0 executable and release path. No unit or
-live path has been installed by this implementation commit.
+with the exact user-local Node 24.16.0 executable and release path. The release
+path and `current` symlink are staged, but no config, secret, SQLite state, or
+unit has been installed.
 
 ## Readiness and packaging
 
@@ -222,18 +223,42 @@ retained under
 `/home/monroe/.cache/t3rooms-claw-live/isolated-evidence-4511c58-7437362/`;
 the exact tested image remains for deployment comparison.
 
+## Live staging and server deployment
+
+User-local fcfdev runtime is installed without changing the system Ruby, system
+Node, or OpenClaw runtime: mise `2026.8.1`, Node `24.16.0`, npm `11.13.0`, Ruby
+`4.0.6`, and Bundler `4.0.16` under Unix user `monroe`.
+
+The exact packed artifact was hash-verified after transfer and extracted to:
+
+`/home/monroe/services/rooms-claw-connector/releases/7437362b74ffeae945188ff621d58d8e51b51eb5/`
+
+The release root, release directory, manifest, and extracted package are
+owner-only. `current` points to the exact implementation release. The manifest
+records app SHA `7437362b...`, package version `1.0.0`, artifact and bundle
+hashes, Node `24.16.0`, and `package/dist/bin.mjs`. No Rooms bearer, Gateway
+token, native T3 ID, provider credential, or message body is present.
+
+The dogfood Rails service now runs exact isolated-proof image
+`sha256:fd8418a45bd66f584f46d2686a7ea21f115e00e76ecdd2ed3c8e91fe76a7608b`
+with full OCI revision `4511c58419f0dde56d3149358af91fc2871816bc`.
+Rails and PostgreSQL are healthy and remain published only on
+`127.0.0.1:3000` and `127.0.0.1:55432`. Migrations are current. Final
+pre-enrollment counts match the backup point: 16 room events, 12 messages, zero
+invocations, and zero outboxes. See server report head `5242b571...` for the
+backup, Git transport, exact image, and deployment audit.
+
 ## Remaining activation gates
 
 1. Monroe must select real native T3 environment, project, and thread IDs.
    Rooms channel IDs are not substitutes and will not be inferred.
-2. Build and deploy the immutable ARM64 server image from server implementation
-   `4511c584...`, after a new backup and exact OCI revision checks.
-3. Enroll one seven-day room-scoped `read_write` Agent through a verified human
-   admin and atomically install its one-time bearer.
-4. Install and prove the single user service.
-5. Monroe must author the ordinary control, `@Claw` mention, and disabled
+2. Enroll one seven-day room-scoped `read_write` Agent through the verified
+   Local human admin and atomically install its one-time bearer.
+3. Install and prove the single user service.
+4. Monroe must author the ordinary control, `@Claw` mention, and disabled
    mention in the normal Rooms UI. The connector must not impersonate him.
 
-No dogfood room message, invocation, provider turn, result, receipt, outbox, or
-reply was created during implementation or isolated proof. Ben's M6A branch was
-not checked out, edited, rebased, merged, or pushed.
+No dogfood room message, Agent credential, invocation, provider turn, result,
+receipt, outbox, or reply was created during implementation, isolated proof, or
+server deployment. Ben's M6A branch was not checked out, edited, rebased,
+merged, or pushed.
