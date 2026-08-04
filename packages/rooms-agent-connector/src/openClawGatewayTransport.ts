@@ -64,6 +64,7 @@ interface EventFrame {
 }
 
 interface PendingRequest {
+  readonly method: string;
   readonly resolve: (value: unknown) => void;
   readonly reject: (error: Error) => void;
   readonly timer: ReturnType<typeof NodeTimers.setTimeout>;
@@ -173,6 +174,7 @@ class GatewayRpcConnection {
   readonly #platform: string;
   readonly #requestTimeoutMs: number;
   readonly #pending = new Map<string, PendingRequest>();
+  readonly #acceptedAgentRequests = new Map<string, string>();
   readonly #eventListeners = new Set<(event: EventFrame) => void>();
   #nextRequestId = 1;
   #connected = false;
@@ -268,7 +270,8 @@ class GatewayRpcConnection {
   close(): void {
     if (this.#closed) return;
     this.#closed = true;
-    this.#socket.close(1000, "rooms connector request complete");
+    this.#acceptedAgentRequests.clear();
+    this.#closeSocket(1000, "rooms connector request complete");
     this.#rejectPending(
       new GatewayTransportError({
         kind: "cancelled",
@@ -371,8 +374,19 @@ class GatewayRpcConnection {
       );
       return;
     }
+    const response = frame as unknown as ResponseFrame;
     const pending = this.#pending.get(frame.id);
     if (!pending) {
+      const expectedRunId = this.#acceptedAgentRequests.get(frame.id);
+      if (
+        expectedRunId !== undefined &&
+        isObject(response.payload) &&
+        response.payload.runId === expectedRunId &&
+        ["ok", "error", "timeout"].includes(String(response.payload.status))
+      ) {
+        this.#acceptedAgentRequests.delete(frame.id);
+        return;
+      }
       this.#fail(
         new GatewayTransportError({
           kind: "failed",
@@ -386,9 +400,18 @@ class GatewayRpcConnection {
     this.#pending.delete(frame.id);
     NodeTimers.clearTimeout(pending.timer);
     pending.abortCleanup?.();
-    const response = frame as unknown as ResponseFrame;
     if (!response.ok) pending.reject(safeGatewayError(response));
-    else pending.resolve(response.payload);
+    else {
+      if (
+        pending.method === "agent" &&
+        isObject(response.payload) &&
+        response.payload.status === "accepted" &&
+        typeof response.payload.runId === "string"
+      ) {
+        this.#acceptedAgentRequests.set(frame.id, response.payload.runId);
+      }
+      pending.resolve(response.payload);
+    }
   }
 
   async #connectFromChallenge(frame: EventFrame, clientVersion: string): Promise<void> {
@@ -572,6 +595,7 @@ class GatewayRpcConnection {
       };
       options.signal?.addEventListener("abort", onAbort, { once: true });
       this.#pending.set(id, {
+        method,
         resolve,
         reject,
         timer,
@@ -619,7 +643,16 @@ class GatewayRpcConnection {
     this.#resolveReady = undefined;
     this.#rejectReady = undefined;
     this.#rejectPending(error);
-    this.#socket.close(1002, "rooms connector protocol failure");
+    this.#acceptedAgentRequests.clear();
+    this.#closeSocket(4002, "rooms connector protocol failure");
+  }
+
+  #closeSocket(code: number, reason: string): void {
+    try {
+      this.#socket.close(code, reason);
+    } catch {
+      // Closing is best-effort and must never replace the bounded transport outcome.
+    }
   }
 
   #rejectPending(error: Error): void {
@@ -976,8 +1009,8 @@ export class OpenClawGatewayTransport implements ResidentAgentGatewayTransport {
 export const OPENCLAW_GATEWAY_PROTOCOL_EVIDENCE = Object.freeze({
   protocolVersion: OPENCLAW_PROTOCOL_VERSION,
   requestMethods: REQUIRED_METHODS,
-  inspectedSourceVersion: "2026.6.2",
-  inspectedSourceCommit: "0b464ff410e56b37270ab7d5a371e152a83e0a41",
+  inspectedSourceVersion: "2026.7.1-2",
+  inspectedSourceCommit: "0790d9f593ad30c940ed93b5872a8cf6d6f3cf8c",
   sourcePaths: [
     "packages/gateway-protocol/src/schema/frames.ts",
     "packages/gateway-protocol/src/schema/agent.ts",

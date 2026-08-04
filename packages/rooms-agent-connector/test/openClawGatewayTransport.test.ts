@@ -22,6 +22,7 @@ class FakeWebSocket implements WebSocketLike {
   readyState = 1;
   readonly url: string;
   readonly sent: Frame[] = [];
+  readonly closeCodes: number[] = [];
   readonly #listeners = new Map<string, Set<(event: { readonly data?: unknown }) => void>>();
   readonly #server: ServerHandler;
 
@@ -43,7 +44,11 @@ class FakeWebSocket implements WebSocketLike {
     this.#server(frame, this);
   }
 
-  close(): void {
+  close(code?: number): void {
+    if (code !== undefined && code !== 1000 && (code < 3000 || code > 4999)) {
+      throw new DOMException("invalid code", "InvalidAccessError");
+    }
+    if (code !== undefined) this.closeCodes.push(code);
     this.readyState = 3;
   }
 
@@ -239,6 +244,54 @@ describe("OpenClaw Gateway RPC transport", () => {
     expect(JSON.stringify(sent.slice(1))).not.toContain("sentinel-gateway-secret");
     expect(JSON.stringify(result)).not.toContain("sentinel-gateway-secret");
     expect(sockets[0]!.url).toBe("ws://127.0.0.1:18789");
+  });
+
+  it("accepts OpenClaw's terminal response after the agent acceptance response", async () => {
+    const sockets: FakeWebSocket[] = [];
+    let agentRequestId: string | undefined;
+    const transport = createTransport({
+      sockets,
+      server: (frame, socket) => {
+        if (frame.method === "connect") socket.emit(hello(frame.id!));
+        else if (frame.method === "agent") {
+          agentRequestId = frame.id;
+          socket.emit({
+            type: "res",
+            id: frame.id,
+            ok: true,
+            payload: { runId: "run-double-response", status: "accepted" },
+          });
+        } else if (frame.method === "agent.wait") {
+          socket.emit({
+            type: "res",
+            id: agentRequestId,
+            ok: true,
+            payload: { runId: "run-double-response", status: "ok", result: {} },
+          });
+          socket.emit({
+            type: "res",
+            id: frame.id,
+            ok: true,
+            payload: { runId: "run-double-response", status: "ok" },
+          });
+        } else if (frame.method === "chat.history") {
+          socket.emit({
+            type: "res",
+            id: frame.id,
+            ok: true,
+            payload: { messages: [{ role: "assistant", content: "Recovered live reply." }] },
+          });
+        }
+      },
+    });
+
+    await expect(
+      transport.invoke(invocation, { onAccepted: () => undefined }),
+    ).resolves.toMatchObject({
+      status: "completed",
+      replyMarkdown: "Recovered live reply.",
+    });
+    expect(sockets[0]!.closeCodes).toEqual([1000]);
   });
 
   it("resumes an accepted run without issuing another agent request", async () => {
