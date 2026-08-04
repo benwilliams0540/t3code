@@ -175,6 +175,7 @@ class GatewayRpcConnection {
   readonly #requestTimeoutMs: number;
   readonly #pending = new Map<string, PendingRequest>();
   readonly #acceptedAgentRequests = new Map<string, string>();
+  readonly #agentTerminalResponses = new Map<string, unknown>();
   readonly #eventListeners = new Set<(event: EventFrame) => void>();
   #nextRequestId = 1;
   #connected = false;
@@ -258,6 +259,12 @@ class GatewayRpcConnection {
     return () => this.#eventListeners.delete(listener);
   }
 
+  takeAgentTerminalResponse(runId: string): unknown {
+    const terminal = this.#agentTerminalResponses.get(runId);
+    this.#agentTerminalResponses.delete(runId);
+    return terminal;
+  }
+
   async request<T>(
     method: string,
     params: unknown,
@@ -271,6 +278,7 @@ class GatewayRpcConnection {
     if (this.#closed) return;
     this.#closed = true;
     this.#acceptedAgentRequests.clear();
+    this.#agentTerminalResponses.clear();
     this.#closeSocket(1000, "rooms connector request complete");
     this.#rejectPending(
       new GatewayTransportError({
@@ -385,6 +393,7 @@ class GatewayRpcConnection {
         ["ok", "error", "timeout"].includes(String(response.payload.status))
       ) {
         this.#acceptedAgentRequests.delete(frame.id);
+        this.#agentTerminalResponses.set(expectedRunId, response.payload);
         return;
       }
       this.#fail(
@@ -644,6 +653,7 @@ class GatewayRpcConnection {
     this.#rejectReady = undefined;
     this.#rejectPending(error);
     this.#acceptedAgentRequests.clear();
+    this.#agentTerminalResponses.clear();
     this.#closeSocket(4002, "rooms connector protocol failure");
   }
 
@@ -696,6 +706,16 @@ function extractLastAssistantText(history: unknown): string | undefined {
     if (text !== undefined) return text;
   }
   return undefined;
+}
+
+function extractTerminalAgentText(terminal: unknown): string | undefined {
+  if (!isObject(terminal) || !isObject(terminal.result) || !Array.isArray(terminal.result.payloads))
+    return undefined;
+  const parts = terminal.result.payloads.flatMap((payload) => {
+    if (!isObject(payload) || typeof payload.text !== "string") return [];
+    return [payload.text];
+  });
+  return parts.length > 0 ? parts.join("\n\n") : undefined;
 }
 
 function sanitizeReply(value: string | undefined): string | undefined {
@@ -848,6 +868,7 @@ export class OpenClawGatewayTransport implements ResidentAgentGatewayTransport {
         accepted.runId,
         sessionKey,
         options.signal,
+        ["ok", "timeout"].includes(String(accepted.status)) ? accepted : undefined,
       );
     } finally {
       connection.close();
@@ -912,6 +933,7 @@ export class OpenClawGatewayTransport implements ResidentAgentGatewayTransport {
     runId: string,
     sessionKey: string,
     signal?: AbortSignal,
+    initialTerminal?: unknown,
   ): Promise<GatewayRunOutcome> {
     let streamedText: string | undefined;
     const removeListener = connection.onEvent((event) => {
@@ -975,7 +997,10 @@ export class OpenClawGatewayTransport implements ResidentAgentGatewayTransport {
         limit: 4,
         maxChars: CONTEXT_LIMITS.maxReplyBytes,
       });
-      const replyMarkdown = sanitizeReply(extractLastAssistantText(history) ?? streamedText);
+      const terminal = initialTerminal ?? connection.takeAgentTerminalResponse(runId);
+      const replyMarkdown = sanitizeReply(
+        extractLastAssistantText(history) ?? extractTerminalAgentText(terminal) ?? streamedText,
+      );
       if (replyMarkdown === undefined) {
         return {
           status: "failed",

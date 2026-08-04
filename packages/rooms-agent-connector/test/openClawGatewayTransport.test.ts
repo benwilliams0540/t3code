@@ -266,7 +266,11 @@ describe("OpenClaw Gateway RPC transport", () => {
             type: "res",
             id: agentRequestId,
             ok: true,
-            payload: { runId: "run-double-response", status: "ok", result: {} },
+            payload: {
+              runId: "run-double-response",
+              status: "ok",
+              result: { payloads: [{ text: "Terminal response reply." }] },
+            },
           });
           socket.emit({
             type: "res",
@@ -279,7 +283,7 @@ describe("OpenClaw Gateway RPC transport", () => {
             type: "res",
             id: frame.id,
             ok: true,
-            payload: { messages: [{ role: "assistant", content: "Recovered live reply." }] },
+            payload: { messages: [] },
           });
         }
       },
@@ -289,7 +293,7 @@ describe("OpenClaw Gateway RPC transport", () => {
       transport.invoke(invocation, { onAccepted: () => undefined }),
     ).resolves.toMatchObject({
       status: "completed",
-      replyMarkdown: "Recovered live reply.",
+      replyMarkdown: "Terminal response reply.",
     });
     expect(sockets[0]!.closeCodes).toEqual([1000]);
   });
@@ -306,7 +310,11 @@ describe("OpenClaw Gateway RPC transport", () => {
             type: "res",
             id: frame.id,
             ok: true,
-            payload: { runId: "run-cached-terminal", status: "ok", result: {} },
+            payload: {
+              runId: "run-cached-terminal",
+              status: "ok",
+              result: { payloads: [{ text: "Cached provider reply." }] },
+            },
           });
         } else if (frame.method === "agent.wait") {
           socket.emit({
@@ -320,7 +328,7 @@ describe("OpenClaw Gateway RPC transport", () => {
             type: "res",
             id: frame.id,
             ok: true,
-            payload: { messages: [{ role: "assistant", content: "Cached provider reply." }] },
+            payload: { messages: [] },
           });
         }
       },
