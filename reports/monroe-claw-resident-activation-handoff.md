@@ -2,10 +2,11 @@
 
 ## Result
 
-The private resident connector host is implemented, tested, and packaged on
-the task-owned app branch. This handoff freezes the implementation for isolated
-producer/consumer proof and later fcfdev activation. It does not claim live
-enrollment, deployment, provider execution, or human-message acceptance.
+The private resident connector host is implemented, tested, packaged, and
+accepted against the exact isolated server producer with a real one-time Agent
+credential and fake Gateway. This handoff freezes the implementation for later
+fcfdev activation. It does not claim dogfood enrollment, deployment, real
+provider execution, or human-message acceptance.
 
 - Repository: `benwilliams0540/t3code`
 - Checkout: `/Users/monroe/Developer/GitRepos/t3code`
@@ -166,20 +167,73 @@ stable invocation identity, one provider acceptance, retry/recovery,
 unavailable results, disablement, duplicate delivery, bounded context, server
 settlement, exactly-one reply, and Agent attribution.
 
+## Independent compatibility proof
+
+The packed implementation ran on fcfdev against exact ARM64 server image
+`sha256:fd8418a45bd66f584f46d2686a7ea21f115e00e76ecdd2ed3c8e91fe76a7608b`,
+whose OCI revision was exactly server implementation `4511c584...`. PostgreSQL,
+Rails, the credential, connector state, and fake Gateway were task-owned and
+isolated from dogfood. Rails used loopback `127.0.0.1:33120`; the fake Gateway
+used loopback `127.0.0.1:18790`.
+
+Safe proof identity:
+
+- room: `room:019fca1d-30e2-77f5-9a72-e5a1b9a39522`
+- channel: `channel:019fca1d-31ed-75a1-97d9-7a30d56f22a3`
+- credential: `credential:019fca1d-321c-73fb-9752-eb4f5f0b9e3b`
+- Agent: `a:019fca1d-321c-726e-9469-740c66e7250e`
+- machine: `m:019fca1d-321c-70b5-a1b0-7232cc93e268`
+- invocation: `invocation:019fca1f-5508-7844-a8ec-234e08b1f3e2`
+- outbox: `outbox:019fca1f-567c-7f55-bfcf-6ba0f1528c37`
+- result: `m5d:result:b58474cb132efed6b54e323c8bf7a563e397433bc20a275214c0cadc32337f3f`
+- receipt: `m5d:receipt:b58474cb132efed6b54e323c8bf7a563e397433bc20a275214c0cadc32337f3f`
+- Agent reply event sequence: `11`
+
+Acceptance evidence:
+
+1. A non-mention advanced cursor `6 → 7` with one message, zero invocation,
+   zero outbox, and no fake-Gateway state file.
+2. One human `@Claw` mention advanced cursor `7 → 8`, created exactly one
+   succeeded invocation, fetched two bounded context messages, and produced one
+   fake provider acceptance/wait/history.
+3. Exactly one Agent-attributed reply, result, receipt, and outbox were created;
+   result sequence `10`, reply sequence `11`, receipt/notification sequence
+   `12`.
+4. The next fresh host process observed the Agent reply through the delivery
+   feed as `mentioned=false`, advanced cursor `8 → 12`, and did not reinvoke.
+5. Resetting only the isolated poll cursor `12 → 7` while preserving dedupe
+   state replayed two deliveries and returned to `12` with one mapping and zero
+   provider or settlement delta.
+6. Restarting the exact Rails container preserved cursor and invocation truth;
+   a fresh host process timed out cleanly at `12` with zero provider delta.
+7. Manager disablement followed by a later human mention returned
+   `authentication_required`, left cursor `12`, and left invocation/outbox/fake
+   provider counts at exactly one.
+
+Final isolated counts were four human/Agent messages, one invocation, one
+outbox, one local invocation, one server mapping, three recorded allow-listed
+inbound events, and fake Gateway counts `accepted=1`, `waits=1`, `histories=1`,
+`aborts=0`.
+
+The Rooms bearer and Gateway token had zero matches in retained cache artifacts
+and process arguments. The proof credential/state, Rails and PostgreSQL
+containers, Docker network, and fake Gateway were removed. Safe evidence is
+retained under
+`/home/monroe/.cache/t3rooms-claw-live/isolated-evidence-4511c58-7437362/`;
+the exact tested image remains for deployment comparison.
+
 ## Remaining activation gates
 
 1. Monroe must select real native T3 environment, project, and thread IDs.
    Rooms channel IDs are not substitutes and will not be inferred.
-2. Run the exact server image plus disposable PostgreSQL and the packed host
-   against a fake Gateway using one real task-owned Agent credential.
-3. Build and deploy the immutable ARM64 server image from server implementation
+2. Build and deploy the immutable ARM64 server image from server implementation
    `4511c584...`, after a new backup and exact OCI revision checks.
-4. Enroll one seven-day room-scoped `read_write` Agent through a verified human
+3. Enroll one seven-day room-scoped `read_write` Agent through a verified human
    admin and atomically install its one-time bearer.
-5. Install and prove the single user service.
-6. Monroe must author the ordinary control, `@Claw` mention, and disabled
+4. Install and prove the single user service.
+5. Monroe must author the ordinary control, `@Claw` mention, and disabled
    mention in the normal Rooms UI. The connector must not impersonate him.
 
-No live room message, invocation, provider turn, result, receipt, outbox, or
-reply was created during implementation. Ben's M6A branch was not checked out,
-edited, rebased, merged, or pushed.
+No dogfood room message, invocation, provider turn, result, receipt, outbox, or
+reply was created during implementation or isolated proof. Ben's M6A branch was
+not checked out, edited, rebased, merged, or pushed.
