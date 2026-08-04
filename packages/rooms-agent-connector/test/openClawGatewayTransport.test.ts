@@ -294,6 +294,52 @@ describe("OpenClaw Gateway RPC transport", () => {
     expect(sockets[0]!.closeCodes).toEqual([1000]);
   });
 
+  it("recovers a cached terminal agent run without issuing new provider work", async () => {
+    const methods: string[] = [];
+    let acceptedRunId: string | undefined;
+    const transport = createTransport({
+      server: (frame, socket) => {
+        methods.push(frame.method!);
+        if (frame.method === "connect") socket.emit(hello(frame.id!));
+        else if (frame.method === "agent") {
+          socket.emit({
+            type: "res",
+            id: frame.id,
+            ok: true,
+            payload: { runId: "run-cached-terminal", status: "ok", result: {} },
+          });
+        } else if (frame.method === "agent.wait") {
+          socket.emit({
+            type: "res",
+            id: frame.id,
+            ok: true,
+            payload: { runId: "run-cached-terminal", status: "ok" },
+          });
+        } else if (frame.method === "chat.history") {
+          socket.emit({
+            type: "res",
+            id: frame.id,
+            ok: true,
+            payload: { messages: [{ role: "assistant", content: "Cached provider reply." }] },
+          });
+        }
+      },
+    });
+
+    await expect(
+      transport.invoke(invocation, {
+        onAccepted: (runId) => {
+          acceptedRunId = runId;
+        },
+      }),
+    ).resolves.toMatchObject({
+      status: "completed",
+      replyMarkdown: "Cached provider reply.",
+    });
+    expect(acceptedRunId).toBe("run-cached-terminal");
+    expect(methods).toEqual(["connect", "agent", "agent.wait", "chat.history"]);
+  });
+
   it("resumes an accepted run without issuing another agent request", async () => {
     const methods: string[] = [];
     const transport = createTransport({

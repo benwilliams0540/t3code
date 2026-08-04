@@ -812,12 +812,16 @@ export class OpenClawGatewayTransport implements ResidentAgentGatewayTransport {
         },
         options.signal ? { signal: options.signal } : {},
       );
+      const recoverableStatus =
+        isObject(accepted) &&
+        typeof accepted.status === "string" &&
+        ["accepted", "in_flight", "ok", "timeout"].includes(accepted.status);
       if (
         !isObject(accepted) ||
         typeof accepted.runId !== "string" ||
         accepted.runId.length === 0 ||
         accepted.runId.length > 128 ||
-        accepted.status !== "accepted"
+        !recoverableStatus
       ) {
         throw new GatewayTransportError({
           kind: "failed",
