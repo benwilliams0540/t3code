@@ -139,7 +139,7 @@ manifest/source, connector journal, Rails/OpenClaw relevant logs, image
 metadata, and the named backup dump. Expected boundaries contained exactly one
 Rooms bearer in the owner-only Rooms secret file and exactly one Gateway token
 in the owner-only OpenClaw configuration. Authorization/Bearer source literals
-were present only as contract code/documentation (`app diff=1`, `server
+were present only as contract code/documentation (`app diff=2`, `server
 diff=4`, `server report=1`, `release source=3`). One app-diff token-value shape
 was an inert test fixture; actual-secret matches remained zero. Raw
 Unstructured upstream-failure pattern matches were zero.
