@@ -7,7 +7,7 @@ integration floor. The implementation is published only after this report is com
 branch is pushed.
 
 ```text
-app integration floor branch: feat/rooms-m5-claw-live-delivery
+app integration floor branch: feat/rooms-m5-claw-live-activation
 app integration floor SHA: 2b55ff38dbd76788d3fc6e69317947d081933cdc
 inherited M5 implementation: 1c981888ecdea88527b09b9d9dfbcc143039b790
 app M6B implementation SHA: 6c25b93a3f3d9a8b782107f44ebcf649ae972c1b
