@@ -86,6 +86,7 @@ import {
   ROOMS_SELECTED_ROOM_BY_SOURCE_STORAGE_KEY,
   isRoomsHumanStateCurrent,
   resolveSelectedSourceRoom,
+  shouldReloadRoomsHumanSelection,
 } from "./model";
 import { roomsSampleDataSource } from "./sample";
 
@@ -776,8 +777,27 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       if (room.sourceMode !== mode || !state.rooms.some((candidate) => candidate.id === room.id)) {
         return;
       }
-      setSelectedBySource((current) => ({ ...current, [mode]: room.id }));
-      if (mode === "shared") void loadHumanSession(room.id);
+      setSelectedBySource((current) =>
+        current[mode] === room.id ? current : { ...current, [mode]: room.id },
+      );
+      if (mode === "shared") {
+        const currentAuthentication = readRoomsAuthenticationSnapshot();
+        if (
+          shouldReloadRoomsHumanSelection(
+            humanStateRef.current,
+            {
+              generation: currentAuthentication.generation,
+              accountId:
+                currentAuthentication.status === "signed-in"
+                  ? currentAuthentication.accountId
+                  : null,
+            },
+            room.id,
+          )
+        ) {
+          void loadHumanSession(room.id);
+        }
+      }
     },
     [loadHumanSession, mode, setSelectedBySource, state.rooms],
   );

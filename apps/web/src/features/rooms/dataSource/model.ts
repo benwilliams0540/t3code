@@ -141,6 +141,18 @@ export function isRoomsHumanStateCurrent(
 
 export type RoomsHumanSourceState = RoomsHumanSourceReady | RoomsHumanSourceFailure;
 
+export function shouldReloadRoomsHumanSelection(
+  state: RoomsHumanSourceState,
+  authentication: { readonly generation: number; readonly accountId: string | null },
+  roomId: string,
+): boolean {
+  return (
+    state.status !== "ready" ||
+    !isRoomsHumanStateCurrent(state, authentication) ||
+    state.workspace.room.id !== roomId
+  );
+}
+
 export function resolveSelectedSourceRoom(
   state: RoomsDataSourceState,
   selectedBySource: RoomsSelectedRoomBySource,

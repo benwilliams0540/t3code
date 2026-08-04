@@ -11,6 +11,7 @@ import {
   RoomsLocalWorkspaceConfig,
   RoomsSelectedRoomBySource,
   resolveSelectedSourceRoom,
+  shouldReloadRoomsHumanSelection,
 } from "./model";
 import { roomsRoutePath } from "../shell/navigation";
 import { roomsSampleDataSource } from "./sample";
@@ -105,6 +106,28 @@ describe("Rooms data source boundary", () => {
     expect(isRoomsHumanStateCurrent(cached, { generation: 7, accountId: "account-a" })).toBe(true);
     expect(isRoomsHumanStateCurrent(cached, { generation: 8, accountId: "account-b" })).toBe(false);
     expect(isRoomsHumanStateCurrent(cached, { generation: 7, accountId: "account-b" })).toBe(false);
+  });
+
+  it("does not reload a current shared room when its route selects it again", () => {
+    const cached = {
+      mode: "shared",
+      status: "ready",
+      rooms: [],
+      session: {} as never,
+      workspace: { room: { id: "room-a" } } as never,
+      authenticationGeneration: 7,
+      accountId: "account-a",
+    } as const;
+
+    expect(
+      shouldReloadRoomsHumanSelection(cached, { generation: 7, accountId: "account-a" }, "room-a"),
+    ).toBe(false);
+    expect(
+      shouldReloadRoomsHumanSelection(cached, { generation: 7, accountId: "account-a" }, "room-b"),
+    ).toBe(true);
+    expect(
+      shouldReloadRoomsHumanSelection(cached, { generation: 8, accountId: "account-a" }, "room-a"),
+    ).toBe(true);
   });
 
   it("recovers stale shell selection and direct routes from the server room identity", () => {
