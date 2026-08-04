@@ -28,6 +28,7 @@ import {
   resolveClerkPasskeyNativeArtifacts,
   resolveMacPasskeySigningConfiguration,
   resolveDesktopRuntimeDependencies,
+  resolveServerRuntimeDependencies,
   resolveFffNativeDependencies,
   resolveBuildOptions,
   resolveDesktopBuildIconAssets,
@@ -175,6 +176,28 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       {
         "@effect/platform-node": "4.0.0-beta.59",
         effect: "4.0.0-beta.59",
+      },
+    );
+  });
+
+  it("omits bundled workspace packages from staged server dependencies", () => {
+    assert.deepStrictEqual(
+      resolveServerRuntimeDependencies(
+        {
+          "@effect/platform-node": "catalog:",
+          "@t3tools/rooms-agent-api": "workspace:*",
+          effect: "catalog:",
+          yaml: "2.8.2",
+        },
+        {
+          "@effect/platform-node": "4.0.0-beta.59",
+          effect: "4.0.0-beta.59",
+        },
+      ),
+      {
+        "@effect/platform-node": "4.0.0-beta.59",
+        effect: "4.0.0-beta.59",
+        yaml: "2.8.2",
       },
     );
   });

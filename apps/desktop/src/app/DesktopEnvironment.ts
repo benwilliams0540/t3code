@@ -61,6 +61,7 @@ export class DesktopEnvironment extends Context.Service<
     readonly commitHashOverride: Option.Option<string>;
     readonly otlpTracesUrl: Option.Option<string>;
     readonly otlpExportIntervalMs: number;
+    readonly clerkPasskeysEnabled: boolean;
     readonly branding: DesktopAppBranding;
     readonly displayName: string;
     readonly appUserModelId: string;
@@ -198,6 +199,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
     commitHashOverride: config.commitHashOverride,
     otlpTracesUrl: config.otlpTracesUrl,
     otlpExportIntervalMs: config.otlpExportIntervalMs,
+    clerkPasskeysEnabled: !config.disableClerkPasskeys,
     branding,
     displayName,
     appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>

@@ -78,6 +78,20 @@ describe("DesktopEnvironment", () => {
       assert.deepEqual(environment.commitHashOverride, Option.some("0123456789abcdef"));
       assert.deepEqual(environment.otlpTracesUrl, Option.some("http://127.0.0.1:4318/v1/traces"));
       assert.equal(environment.otlpExportIntervalMs, 2500);
+      assert.equal(environment.clerkPasskeysEnabled, true);
+    }),
+  );
+
+  it.effect("can disable Clerk passkeys for an unsigned local package", () =>
+    Effect.gen(function* () {
+      const environment = yield* makeEnvironment(
+        {},
+        {
+          T3CODE_DISABLE_CLERK_PASSKEYS: "true",
+        },
+      );
+
+      assert.equal(environment.clerkPasskeysEnabled, false);
     }),
   );
 
