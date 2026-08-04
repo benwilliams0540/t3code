@@ -73,6 +73,45 @@ resolved only at handshake. Final unit state is active/running/enabled with
 PostgreSQL connection, and only loopback Rails/OpenClaw connections. Readiness
 is `ready=true`, cursor `35`, Gateway `2026.7.1-2`, release `1c981888...`.
 
+## Native binding and retained automated evidence
+
+The live config uses genuine native T3 identities rather than room/channel
+substitutes:
+
+- Environment: `90b3e9fe-270b-49a3-abc3-99d49be48ac0`
+- Project: `d8e0afa1-3aa2-4197-9e95-f56dcba51787`
+- Thread: `734d3c58-1503-4196-a61e-32f53a56cd03`
+
+No tests were rerun during final report recovery. Existing app evidence records
+the connector-plus-host suite at **7 files / 48 tests passed**, both package
+typechecks passed, focused lint and format passed, and the production bundle
+passed. Existing server evidence at
+`/home/monroe/.cache/t3rooms-claw-live/server-full-test.log` records the full
+server suite at **367 runs, 4,802 assertions, 0 failures, 0 errors, 0 skips**.
+
+The separate isolated semantic proof is retained at
+`/home/monroe/.cache/t3rooms-claw-live/isolated-evidence-4511c58-7437362/summary.json`.
+It paired app `7437362b74ffeae945188ff621d58d8e51b51eb5` with server
+`4511c58419f0dde56d3149358af91fc2871816bc`, not the later live adapter fixes.
+Its cursor moved `6 → 12`; the non-mention result was messages `1`, invocations
+`0`, outboxes `0`; final server counts were messages `4`, invocations `1`,
+outboxes `1`. Local semantic counts were inbound `3`, invocation `1`, mapping
+`1`; fake-Gateway counts were accepted `1`, waits `1`, histories `1`, aborts
+`0`; replay, server-restart, and disabled provider deltas were each `0`.
+
+Safe isolated IDs were room
+`room:019fca1d-30e2-77f5-9a72-e5a1b9a39522`, channel
+`channel:019fca1d-31ed-75a1-97d9-7a30d56f22a3`, Agent
+`a:019fca1d-321c-726e-9469-740c66e7250e`, machine
+`m:019fca1d-321c-70b5-a1b0-7232cc93e268`, invocation
+`invocation:019fca1f-5508-7844-a8ec-234e08b1f3e2`, outbox
+`outbox:019fca1f-567c-7f55-bfcf-6ba0f1528c37`, result
+`m5d:result:b58474cb132efed6b54e323c8bf7a563e397433bc20a275214c0cadc32337f3f`,
+receipt
+`m5d:receipt:b58474cb132efed6b54e323c8bf7a563e397433bc20a275214c0cadc32337f3f`,
+and one reply at event sequence `11`. These are isolated-proof facts, not live
+one-and-one acceptance evidence.
+
 ## Live chronology and recovery
 
 All genuine UI actions below were agent-operated through Monroe's isolated
