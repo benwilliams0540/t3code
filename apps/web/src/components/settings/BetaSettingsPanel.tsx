@@ -55,6 +55,10 @@ export function composerShortcutPatch(target: "channel" | "thread", value: Compo
     : { threadComposerSendShortcut: value };
 }
 
+export function shouldShowRoomsBetaSettings(sidebarVariant: AppSidebarVariant): boolean {
+  return sidebarVariant === "v3";
+}
+
 function ComposerSendShortcutControl({
   label,
   onChange,
@@ -274,148 +278,156 @@ export function BetaSettingsPanel() {
             ) : null}
           </>
         ) : null}
-        <SettingsRow
-          title="Channel send shortcut"
-          description="Choose when Enter sends messages in Local Rooms channels."
-        >
-          <ComposerSendShortcutControl
-            label="Channel send shortcut"
-            onChange={(value) => updateSettings(composerShortcutPatch("channel", value))}
-            value={channelComposerSendShortcut}
-          />
-        </SettingsRow>
-        <SettingsRow
-          title="Thread send shortcut"
-          description="Choose when Enter sends prompts through the native T3 composer."
-        >
-          <ComposerSendShortcutControl
-            label="Thread send shortcut"
-            onChange={(value) => updateSettings(composerShortcutPatch("thread", value))}
-            value={threadComposerSendShortcut}
-          />
-        </SettingsRow>
-        <SettingsRow
-          title="Rooms content"
-          description="Sample is certified demonstration data. Local is the development-only fallback. Shared uses T3 Connect and server-backed human membership."
-        >
-          <RadioGroup
-            aria-label="Rooms content"
-            className="grid gap-2 py-3 sm:grid-cols-3"
-            onValueChange={(value) => setMode(value as RoomsDataSourceMode)}
-            value={mode}
-          >
-            {(
-              [
-                ["sample", "Sample workspace", "Certified Rooms data for evaluation."],
-                ["local", "Local workspace", "Actual local T3 projects and threads only."],
-                ["shared", "Shared Rooms", "Authenticated multiplayer through T3 Connect."],
-              ] as const
-            ).map(([value, title, description]) => (
-              <label
-                className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border bg-background px-3 py-3 has-[[data-checked]]:border-primary has-[[data-checked]]:ring-1 has-[[data-checked]]:ring-primary/30"
-                key={value}
+        {shouldShowRoomsBetaSettings(sidebarVariant) ? (
+          <>
+            <SettingsRow
+              title="Channel send shortcut"
+              description="Choose when Enter sends messages in Local Rooms channels."
+            >
+              <ComposerSendShortcutControl
+                label="Channel send shortcut"
+                onChange={(value) => updateSettings(composerShortcutPatch("channel", value))}
+                value={channelComposerSendShortcut}
+              />
+            </SettingsRow>
+            <SettingsRow
+              title="Thread send shortcut"
+              description="Choose when Enter sends prompts through the native T3 composer."
+            >
+              <ComposerSendShortcutControl
+                label="Thread send shortcut"
+                onChange={(value) => updateSettings(composerShortcutPatch("thread", value))}
+                value={threadComposerSendShortcut}
+              />
+            </SettingsRow>
+            <SettingsRow
+              title="Rooms content"
+              description="Sample is certified demonstration data. Local is the development-only fallback. Shared uses T3 Connect and server-backed human membership."
+            >
+              <RadioGroup
+                aria-label="Rooms content"
+                className="grid gap-2 py-3 sm:grid-cols-3"
+                onValueChange={(value) => setMode(value as RoomsDataSourceMode)}
+                value={mode}
               >
-                <Radio className="mt-0.5" value={value} />
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium text-foreground">{title}</span>
-                  <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
-                    {description}
-                  </span>
-                </span>
-              </label>
-            ))}
-          </RadioGroup>
-        </SettingsRow>
-        <SettingsRow
-          title="Shared Rooms"
-          description="Build-time, non-secret status for the dedicated Rooms Clerk template and supervised loopback transport. Credentials are requested just in time and are never stored here."
-        >
-          <div className="grid gap-1 py-3 text-xs text-muted-foreground">
-            <p>
-              T3 Connect: {humanRoomsConfig.clerkPublishableKey ? "configured" : "not configured"}
-            </p>
-            <p>
-              Rooms JWT template:{" "}
-              {humanRoomsConfig.roomsClerkJwtTemplate ? "configured" : "not configured"}
-            </p>
-            <p>Rooms loopback API: {humanRoomsConfig.roomsApiUrl ?? "not configured"}</p>
-          </div>
-        </SettingsRow>
-        <SettingsRow
-          title="Local Rooms API"
-          description="Development-only loopback service for one durable Local workspace. This is not remote or multiplayer connectivity."
-        >
-          <RoomsLocalApiBaseUrlInput
-            onCommit={(value) => updateSettings({ roomsLocalApiBaseUrl: value })}
-            value={roomsLocalApiBaseUrl}
-          />
-          <p className="pb-3 text-xs text-muted-foreground">
-            Current source state:{" "}
-            <span className="font-medium text-foreground">{state.status}</span>
-            {state.status !== "ready" && state.error ? ` · ${state.error.code}` : ""}
-          </p>
-        </SettingsRow>
-        <SettingsRow
-          title="Rooms diagnostics"
-          description="Copy a redacted snapshot of the Rooms mode, selected IDs, project references, source state, and last Rooms route."
-          control={
-            <Button
-              onClick={() =>
-                copyToClipboard(
-                  buildRoomsDiagnostics({
-                    mode,
-                    state,
-                    selectedBySource,
-                    selectedRoomId: selectedRoom?.id ?? null,
-                    localConfig,
-                    sampleBindings,
-                    lastRoomsRoute,
-                    localApiBaseUrl: roomsLocalApiBaseUrl,
-                  }),
-                  undefined,
-                )
+                {(
+                  [
+                    ["sample", "Sample workspace", "Certified Rooms data for evaluation."],
+                    ["local", "Local workspace", "Actual local T3 projects and threads only."],
+                    ["shared", "Shared Rooms", "Authenticated multiplayer through T3 Connect."],
+                  ] as const
+                ).map(([value, title, description]) => (
+                  <label
+                    className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border bg-background px-3 py-3 has-[[data-checked]]:border-primary has-[[data-checked]]:ring-1 has-[[data-checked]]:ring-primary/30"
+                    key={value}
+                  >
+                    <Radio className="mt-0.5" value={value} />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-foreground">{title}</span>
+                      <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+                        {description}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </RadioGroup>
+            </SettingsRow>
+            <SettingsRow
+              title="Shared Rooms"
+              description="Build-time, non-secret status for the dedicated Rooms Clerk template and supervised loopback transport. Credentials are requested just in time and are never stored here."
+            >
+              <div className="grid gap-1 py-3 text-xs text-muted-foreground">
+                <p>
+                  T3 Connect:{" "}
+                  {humanRoomsConfig.clerkPublishableKey ? "configured" : "not configured"}
+                </p>
+                <p>
+                  Rooms JWT template:{" "}
+                  {humanRoomsConfig.roomsClerkJwtTemplate ? "configured" : "not configured"}
+                </p>
+                <p>Rooms loopback API: {humanRoomsConfig.roomsApiUrl ?? "not configured"}</p>
+              </div>
+            </SettingsRow>
+            <SettingsRow
+              title="Local Rooms API"
+              description="Development-only loopback service for one durable Local workspace. This is not remote or multiplayer connectivity."
+            >
+              <RoomsLocalApiBaseUrlInput
+                onCommit={(value) => updateSettings({ roomsLocalApiBaseUrl: value })}
+                value={roomsLocalApiBaseUrl}
+              />
+              <p className="pb-3 text-xs text-muted-foreground">
+                Current source state:{" "}
+                <span className="font-medium text-foreground">{state.status}</span>
+                {state.status !== "ready" && state.error ? ` · ${state.error.code}` : ""}
+              </p>
+            </SettingsRow>
+            <SettingsRow
+              title="Rooms diagnostics"
+              description="Copy a redacted snapshot of the Rooms mode, selected IDs, project references, source state, and last Rooms route."
+              control={
+                <Button
+                  onClick={() =>
+                    copyToClipboard(
+                      buildRoomsDiagnostics({
+                        mode,
+                        state,
+                        selectedBySource,
+                        selectedRoomId: selectedRoom?.id ?? null,
+                        localConfig,
+                        sampleBindings,
+                        lastRoomsRoute,
+                        localApiBaseUrl: roomsLocalApiBaseUrl,
+                      }),
+                      undefined,
+                    )
+                  }
+                  size="sm"
+                  variant="outline"
+                >
+                  {isCopied ? "Copied" : "Copy Rooms diagnostics"}
+                </Button>
               }
-              size="sm"
-              variant="outline"
-            >
-              {isCopied ? "Copied" : "Copy Rooms diagnostics"}
-            </Button>
-          }
-        />
-        <SettingsRow
-          title="Reset Rooms beta settings"
-          description="Return Rooms to Sample and clear only Rooms source, selection, project-binding, and V3 sidebar preferences. T3 projects and threads are never removed."
-          control={
-            <Button onClick={() => setResetRoomsOpen(true)} size="sm" variant="outline">
-              Reset Rooms…
-            </Button>
-          }
-        />
+            />
+            <SettingsRow
+              title="Reset Rooms beta settings"
+              description="Return Rooms to Sample and clear only Rooms source, selection, project-binding, and V3 sidebar preferences. T3 projects and threads are never removed."
+              control={
+                <Button onClick={() => setResetRoomsOpen(true)} size="sm" variant="outline">
+                  Reset Rooms…
+                </Button>
+              }
+            />
+          </>
+        ) : null}
       </SettingsSection>
-      <AlertDialog open={resetRoomsOpen} onOpenChange={setResetRoomsOpen}>
-        <AlertDialogPopup>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Reset Rooms beta settings?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This clears only Rooms source, room selection, local bindings, and V3 sidebar layout.
-              It does not delete T3 projects, threads, prompts, credentials, or app settings.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
-            <Button
-              onClick={() => {
-                resetRoomsBetaSettings();
-                updateSettings({ roomsLocalApiBaseUrl: DEFAULT_ROOMS_LOCAL_API_BASE_URL });
-                setResetRoomsOpen(false);
-              }}
-              variant="destructive"
-            >
-              Reset Rooms settings
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogPopup>
-      </AlertDialog>
+      {shouldShowRoomsBetaSettings(sidebarVariant) ? (
+        <AlertDialog open={resetRoomsOpen} onOpenChange={setResetRoomsOpen}>
+          <AlertDialogPopup>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Reset Rooms beta settings?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This clears only Rooms source, room selection, local bindings, and V3 sidebar
+                layout. It does not delete T3 projects, threads, prompts, credentials, or app
+                settings.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+              <Button
+                onClick={() => {
+                  resetRoomsBetaSettings();
+                  updateSettings({ roomsLocalApiBaseUrl: DEFAULT_ROOMS_LOCAL_API_BASE_URL });
+                  setResetRoomsOpen(false);
+                }}
+                variant="destructive"
+              >
+                Reset Rooms settings
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogPopup>
+        </AlertDialog>
+      ) : null}
     </SettingsPageContainer>
   );
 }

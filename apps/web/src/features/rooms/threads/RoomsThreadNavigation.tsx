@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 
+import { openCommandPalette } from "~/commandPaletteBus";
 import { sidebarV2StatusPresentation } from "~/components/Sidebar.logic";
 import { WorkingDuration } from "~/components/ThreadStatusIndicators";
 import {
@@ -53,6 +54,15 @@ export function RoomsMenuGroup({
   );
 }
 
+export function roomsProjectBindingMenuMode(input: {
+  readonly availableProjectCount: number;
+  readonly unresolvedBindingCount: number;
+}): "create" | "manage" {
+  return input.availableProjectCount === 0 && input.unresolvedBindingCount === 0
+    ? "create"
+    : "manage";
+}
+
 export function RoomsProjectBindingMenu({
   compact,
   roomId,
@@ -74,19 +84,39 @@ export function RoomsProjectBindingMenu({
   const boundKeys = new Set(
     boundProjects.map((project) => `${project.environmentId}:${project.id}`),
   );
+  const triggerClassName = cn(
+    "inline-flex items-center justify-center gap-1.5 rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+    compact ? "size-6" : "h-8 px-2.5 text-xs font-medium",
+  );
+  const openCreateProject = () => openCommandPalette({ open: "add-project" });
+
+  if (
+    roomsProjectBindingMenuMode({
+      availableProjectCount: projects.length,
+      unresolvedBindingCount: unresolvedBindings.length,
+    }) === "create"
+  ) {
+    return (
+      <button
+        aria-label={compact ? "Create T3 project" : undefined}
+        className={triggerClassName}
+        onClick={openCreateProject}
+        type="button"
+      >
+        <FolderPlusIcon className="size-3.5" />
+        {compact ? null : "Create a T3 project"}
+      </button>
+    );
+  }
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={compact ? "Manage room T3 projects" : undefined}
-        className={cn(
-          "inline-flex items-center justify-center gap-1.5 rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
-          compact ? "size-6" : "h-8 px-2.5 text-xs font-medium",
-        )}
-        disabled={projects.length === 0 && unresolvedBindings.length === 0}
+        className={triggerClassName}
       >
         {compact ? <Settings2Icon className="size-3.5" /> : <FolderPlusIcon className="size-3.5" />}
-        {compact ? null : projects.length === 0 ? "No T3 projects available" : "Add a T3 project"}
+        {compact ? null : projects.length === 0 ? "Manage T3 projects" : "Add a T3 project"}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-72">
         <RoomsMenuGroup label="Local room projects">
@@ -133,6 +163,11 @@ export function RoomsProjectBindingMenu({
             </RoomsMenuGroup>
           </>
         ) : null}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={openCreateProject}>
+          <FolderPlusIcon />
+          Create a new T3 project
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
