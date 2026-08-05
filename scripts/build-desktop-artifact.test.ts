@@ -26,6 +26,7 @@ import {
   MissingMacPasskeyProvisioningProfileError,
   renderMacPasskeyEntitlements,
   resolveClerkPasskeyNativeArtifacts,
+  resolveConfiguredMacPasskeySigningConfiguration,
   resolveMacPasskeySigningConfiguration,
   resolveDesktopRuntimeDependencies,
   resolveServerRuntimeDependencies,
@@ -432,6 +433,40 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       rpDomains: ["example.clerk.accounts.dev"],
       provisioningProfilePath: "/tmp/t3code.provisionprofile",
     });
+  });
+
+  it("allows ordinary signed macOS builds without passkey provisioning", () => {
+    const configuration = resolveConfiguredMacPasskeySigningConfiguration({
+      T3CODE_CLERK_PUBLISHABLE_KEY: `pk_test_${btoa("example.clerk.accounts.dev$")}`,
+    });
+
+    assert.isUndefined(configuration);
+  });
+
+  it("enables macOS passkey signing when passkey-specific configuration is present", () => {
+    const configuration = resolveConfiguredMacPasskeySigningConfiguration({
+      T3CODE_APPLE_TEAM_ID: "abc1234567",
+      T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
+      T3CODE_CLERK_PUBLISHABLE_KEY: `pk_test_${btoa("example.clerk.accounts.dev$")}`,
+    });
+
+    assert.deepStrictEqual(configuration, {
+      appId: "com.t3tools.t3code",
+      teamId: "ABC1234567",
+      rpDomains: ["example.clerk.accounts.dev"],
+      provisioningProfilePath: "/tmp/t3code.provisionprofile",
+    });
+  });
+
+  it("rejects partial opt-in to macOS passkey signing", () => {
+    assert.throws(
+      () =>
+        resolveConfiguredMacPasskeySigningConfiguration({
+          T3CODE_APPLE_TEAM_ID: "ABC1234567",
+          T3CODE_CLERK_PUBLISHABLE_KEY: `pk_test_${btoa("example.clerk.accounts.dev$")}`,
+        }),
+      MissingMacPasskeyProvisioningProfileError,
+    );
   });
 
   it("normalizes explicit macOS passkey RP domains and renders required entitlements", () => {

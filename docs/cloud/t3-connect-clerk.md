@@ -169,8 +169,9 @@ The production macOS bundle ID is `com.t3tools.t3code`. To enable native passkey
    `webcredentials.apps` contains `<TEAM_ID>.com.t3tools.t3code`.
 5. Set the local or CI signing configuration described below.
 
-For a local signed build, add these values to `.env.local` or export them before invoking the
-desktop artifact command:
+Ordinary Developer ID signing does not require passkey provisioning and is sufficient for OAuth
+sign-in plus Keychain-backed Clerk session storage. To opt a signed build into native passkeys, add
+these values to `.env.local` or export them before invoking the desktop artifact command:
 
 ```dotenv
 T3CODE_APPLE_TEAM_ID=ABC1234567
@@ -180,8 +181,10 @@ T3CODE_CLERK_PASSKEY_RP_DOMAINS=example.clerk.accounts.dev,clerk.example.com
 ```
 
 When `T3CODE_CLERK_PASSKEY_RP_DOMAINS` is absent, the build derives the RP domain from
-`T3CODE_CLERK_PUBLISHABLE_KEY`. Signed macOS builds fail early if the Team ID, provisioning profile,
-or RP-domain configuration is missing. The generated main-app entitlements include every configured
+`T3CODE_CLERK_PUBLISHABLE_KEY`. Setting any passkey-specific signing value opts the build into
+passkey signing; opted-in builds fail early if the Team ID, provisioning profile, or RP-domain
+configuration is incomplete. A signed build with none of the passkey-specific values omits the
+Associated Domains entitlement. The generated main-app entitlements include every configured
 `webcredentials:<domain>` entry; helper apps keep Electron's minimal default entitlements.
 
 The normal `dev:desktop` launcher is unsigned and cannot complete macOS passkey ceremonies. For

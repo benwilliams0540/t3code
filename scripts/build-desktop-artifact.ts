@@ -825,6 +825,18 @@ export function resolveMacPasskeySigningConfiguration(
   };
 }
 
+export function resolveConfiguredMacPasskeySigningConfiguration(
+  env: Readonly<Record<string, string | undefined>>,
+): MacPasskeySigningConfiguration | undefined {
+  const hasPasskeySigningConfiguration = [
+    env.T3CODE_APPLE_TEAM_ID,
+    env.T3CODE_MACOS_PROVISIONING_PROFILE,
+    env.T3CODE_CLERK_PASSKEY_RP_DOMAINS,
+  ].some((value) => (value?.trim().length ?? 0) > 0);
+
+  return hasPasskeySigningConfiguration ? resolveMacPasskeySigningConfiguration(env) : undefined;
+}
+
 function escapeXml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -1866,7 +1878,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   const configuredMacPasskeySigning =
     options.platform === "mac" && options.signed
       ? yield* Effect.try({
-          try: () => resolveMacPasskeySigningConfiguration(loadRepoEnv({ repoRoot })),
+          try: () => resolveConfiguredMacPasskeySigningConfiguration(loadRepoEnv({ repoRoot })),
           catch: MacPasskeySigningConfigurationResolutionError.fromCause,
         })
       : undefined;
