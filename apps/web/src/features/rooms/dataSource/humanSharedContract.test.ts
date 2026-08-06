@@ -31,7 +31,7 @@ describe("rooms.human-shared v1 consumer contract", () => {
       ],
     });
 
-    expect(ROOMS_HUMAN_SERVER_PRODUCER_SHA).toBe("5c58c843ede9f77a13010645736ddc0abf36eef5");
+    expect(ROOMS_HUMAN_SERVER_PRODUCER_SHA).toBe("ee381424993ec4a892a9a722e44ced593b2e35e9");
     expect(session.rooms[0]?.role).toBe("admin");
   });
 

@@ -11,7 +11,7 @@ import { RoomsLocalCasTuple, RoomsLocalStory, RoomsLocalStoryV2 } from "./localS
 export const ROOMS_HUMAN_CONTRACT_ID = "rooms.human-shared" as const;
 export const ROOMS_HUMAN_CONTRACT_VERSION = 1 as const;
 export const ROOMS_HUMAN_SCHEMA_URI = "contracts/rooms/human-shared/v1/schema.json" as const;
-export const ROOMS_HUMAN_SERVER_PRODUCER_SHA = "5c58c843ede9f77a13010645736ddc0abf36eef5" as const;
+export const ROOMS_HUMAN_SERVER_PRODUCER_SHA = "ee381424993ec4a892a9a722e44ced593b2e35e9" as const;
 
 export const RoomsHumanContract = Schema.Struct({
   id: Schema.Literal(ROOMS_HUMAN_CONTRACT_ID),
