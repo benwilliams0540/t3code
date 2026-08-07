@@ -31,10 +31,10 @@ T3CODE_ROOMS_API_URL
 ```
 
 The loader projects them to `VITE_CLERK_PUBLISHABLE_KEY`,
-`VITE_ROOMS_CLERK_JWT_TEMPLATE`, and `VITE_ROOMS_API_URL`. The Rooms API URL must be a
-credential-free HTTP loopback origin, normally the local endpoint supplied by the supervised
-transport. The Rooms JWT template is separate from `T3CODE_CLERK_JWT_TEMPLATE`, which remains the
-managed Relay template.
+`VITE_ROOMS_CLERK_JWT_TEMPLATE`, and `VITE_ROOMS_API_URL`. The Rooms API URL may be a
+credential-free HTTPS service origin or the existing credential-free HTTP-loopback dogfood origin.
+The Rooms JWT template is separate from `T3CODE_CLERK_JWT_TEMPLATE`, which remains the managed
+Relay template.
 
 These identifiers are public build configuration. Clerk secret keys, session tokens, bootstrap
 credentials, and invite credentials must never enter client environment files.
@@ -48,18 +48,18 @@ settings, local storage, project bindings, diagnostics, serialized source state,
 
 Electron sends a narrow typed request to the main process. The main process:
 
-- accepts only HTTP loopback with no URL credentials, path, query, or fragment in the base origin;
+- accepts Shared HTTPS or HTTP loopback with no URL credentials, path, query, or fragment;
 - owns the exact `/rooms/human/v1` route and method allow-list;
 - constructs the only `Authorization` header itself;
 - accepts no renderer-controlled header map;
 - rejects blank, CR/LF-bearing, or oversized bearers;
 - bounds raw CAS bytes and permits them only on the selected shared room's CAS route; and
-- does not retain lower-level HTTP error causes that could contain request headers.
+- refuses redirects and does not retain lower-level HTTP error causes that could contain headers.
 
-Locally hosted web can use the same fixed client paths when browser CORS policy permits access to
-the loopback service. A hosted HTTPS page cannot assume that an HTTP loopback request will pass
-mixed-content, private-network-access, or server CORS policy. M6B does not weaken those browser
-policies and does not expose Rails on a LAN, tailnet, or public address to work around them.
+Hosted web uses the same fixed client paths and contracts through direct HTTPS requests. The
+browser sends only the authorization and bounded content-type headers, omits cookies, refuses
+redirects, and depends on the Rails hosted-origin allow-list. HTTP loopback remains available for
+local dogfood, but a hosted HTTPS page does not depend on mixed-content or private-network access.
 
 ## Account and credential lifecycle
 
@@ -92,17 +92,17 @@ request ID. Message submission preserves its stable request ID across retry.
 
 ## Surface classification
 
-| Surface                  | M6B behavior                                                                                           |
-| ------------------------ | ------------------------------------------------------------------------------------------------------ |
-| Electron desktop         | Required product surface; implemented through the main-process loopback boundary.                      |
-| Locally hosted web       | Implemented through fixed client paths when browser CORS/private-network policy permits.               |
-| Hosted web               | Clerk can mount, but mixed-content/CORS/private-network policy may block loopback; no bypass is added. |
-| Mobile                   | No Rooms UI in M6B; existing T3 Connect mobile authentication is unchanged.                            |
-| T3 Connect managed Relay | Existing configuration, template, minting, and UI requirements remain unchanged.                       |
+| Surface                  | M7 behavior                                                                                          |
+| ------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Electron desktop         | Shared HTTPS through the exact main-process boundary; loopback dogfood remains supported.            |
+| Locally hosted web       | Same direct typed request path, subject to the configured server origin policy.                      |
+| Hosted web               | Direct HTTPS with explicit Rails CORS origin admission; no Tailscale, SSH, or local tunnel required. |
+| Mobile                   | No Rooms UI in M7; shared transport lives below the web UI for later reuse.                          |
+| T3 Connect managed Relay | Existing configuration, template, minting, and relay semantics remain unchanged.                     |
 
 ## Acceptance boundary
 
 Automated tests use no real Clerk tenant, account, JWT, bootstrap, invite, or deployed service. The
-live two-human desktop gate remains mandatory. Follow the copy-ready runbook in
-`reports/app-m6b-human-identity-handoff.md`; do not treat a build, generated-key server proof, or
-single-account walkthrough as live acceptance.
+live two-human desktop and hosted-web gate remains mandatory. Follow the M7 handoff and alpha
+ingress runbook; do not treat a build, generated-key server proof, or single-account walkthrough as
+live acceptance.

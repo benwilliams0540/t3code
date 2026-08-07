@@ -5,6 +5,7 @@
   - [Overview](./architecture/overview.md)
   - [Connection runtime](./architecture/connection-runtime.md)
   - [Remote environments](./architecture/remote.md)
+  - [Rooms cloud transport](./architecture/rooms-cloud-transport.md)
   - [Server updates](./architecture/server-updates.md)
 - User guides
   - [Background service](./user/background-service.md)
@@ -13,6 +14,7 @@
   - [Keybindings](./user/keybindings.md)
 - [T3 Connect](./cloud/t3-connect-clerk.md)
 - [Shared Rooms human identity](./rooms/shared-human-identity.md)
+- [Rooms alpha ingress](./operations/rooms-alpha-ingress.md)
 - [Integrations](./integrations/source-control-providers.md)
 - [Mobile](./mobile/app.md)
 - [Operations](./operations/ci.md)

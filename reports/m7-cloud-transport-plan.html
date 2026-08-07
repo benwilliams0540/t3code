@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>M7 Cloud Rooms Transport Plan</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+      body {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 32px 20px 64px;
+        line-height: 1.5;
+      }
+      h1,
+      h2 {
+        line-height: 1.15;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, monospace;
+      }
+      .flow {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 12px;
+        align-items: center;
+      }
+      .box {
+        border: 1px solid #8886;
+        border-radius: 10px;
+        padding: 14px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        border-bottom: 1px solid #8885;
+        padding: 9px;
+        text-align: left;
+        vertical-align: top;
+      }
+      .hard {
+        color: #c43;
+        font-weight: 700;
+      }
+      .ok {
+        color: #287b48;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>M7 Cloud Rooms Transport</h1>
+    <p>
+      Implementation plan pinned to app <code>6758d7bdeae329ed074ec798811f53b75e03fd73</code> and
+      Rails <code>ee381424993ec4a892a9a722e44ced593b2e35e9</code>.
+    </p>
+
+    <h2>Target flow</h2>
+    <div class="flow">
+      <div class="box">
+        <strong>Desktop / hosted web</strong><br />Clerk Rooms JWT acquired just in time
+      </div>
+      <div aria-hidden="true">&#8644;</div>
+      <div class="box">
+        <strong>HTTPS Shared Rooms</strong><br />Rails owns identity, membership, capability,
+        sequence, and CAS truth
+      </div>
+    </div>
+    <div class="flow" style="margin-top: 12px">
+      <div class="box">
+        <strong>Resident connector</strong><br />Outbound HTTPS only; durable cursor and invocation
+        IDs
+      </div>
+      <div aria-hidden="true">&#8644;</div>
+      <div class="box">
+        <strong>Local T3/OpenClaw</strong><br />Loopback WebSocket only; never public ingress
+      </div>
+    </div>
+
+    <h2>Trust boundaries</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Boundary</th>
+          <th>Allowed</th>
+          <th>Rejected</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Local Rooms</td>
+          <td>Credential-free HTTP loopback origin</td>
+          <td>HTTPS, remote HTTP, credentials, path/query/fragment</td>
+        </tr>
+        <tr>
+          <td>Shared Rooms</td>
+          <td>Credential-free HTTPS origin or existing HTTP loopback dogfood origin</td>
+          <td>Insecure remote HTTP, redirects, arbitrary headers, URL credentials</td>
+        </tr>
+        <tr>
+          <td>Desktop IPC</td>
+          <td>Exact <code>/rooms/human/v1</code> route/method/query allow-list</td>
+          <td>General authenticated proxy behavior</td>
+        </tr>
+        <tr>
+          <td>Public Rails ingress</td>
+          <td>Shared Human, required Agent invocation/delivery paths, minimal readiness</td>
+          <td>Local/admin/bootstrap internals, database, legacy APIs</td>
+        </tr>
+        <tr>
+          <td>Connector gateway</td>
+          <td>Loopback <code>ws:</code> T3/OpenClaw</td>
+          <td>LAN, tunnel, public, or remote gateway origins</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Implementation lanes</h2>
+    <ol>
+      <li>
+        <strong>Client transport:</strong> shared typed origin/request policy, hosted fetch adapter,
+        narrow Electron execution, generation invalidation.
+      </li>
+      <li>
+        <strong>Rails perimeter:</strong> public route and origin allow-lists, body and rate bounds,
+        trusted proxy policy, redacted errors, readiness.
+      </li>
+      <li>
+        <strong>Connector:</strong> outbound HTTPS Rooms access with redirects disabled while
+        preserving durable retry/dedupe semantics.
+      </li>
+      <li>
+        <strong>Alpha ingress:</strong> secret-free Cloudflare example and operator runbook; no
+        account mutation or deployment.
+      </li>
+      <li>
+        <strong>Evidence:</strong> focused tests and package checks only, secret scan, exact
+        commits, final branch push with no PR.
+      </li>
+    </ol>
+
+    <h2>Hard gates</h2>
+    <ul>
+      <li class="hard">
+        No live infrastructure, credential issuance, real-room writes, provider turns, PR, merge, or
+        deployment.
+      </li>
+      <li class="hard">
+        No bearer, invite, bootstrap, device, or provider credential in URLs, logs, persisted source
+        state, or reports.
+      </li>
+      <li class="hard">
+        Live acceptance remains UNRUN until separately authorized and human-controlled.
+      </li>
+      <li class="ok">
+        Completion target: implemented branches pushed for an authorized alpha gate.
+      </li>
+    </ul>
+  </body>
+</html>

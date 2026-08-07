@@ -1,0 +1,22 @@
+# Secret-free example only. Copy this file outside the repository before use.
+# Never commit the named-tunnel credentials JSON or its contents.
+tunnel: <named-tunnel-uuid>
+credentials-file: /absolute/path/to/named-tunnel-credentials.json
+
+ingress:
+  - hostname: rooms.example.test
+    path: ^/rooms/human/v1(/.*)?$
+    service: http://127.0.0.1:3000
+  - hostname: rooms.example.test
+    path: ^/agent/v1/deliveries$
+    service: http://127.0.0.1:3000
+  - hostname: rooms.example.test
+    path: ^/agent/v1/invocations(/.*)?$
+    service: http://127.0.0.1:3000
+  - hostname: rooms.example.test
+    path: ^/agent/v1/work/channel-context$
+    service: http://127.0.0.1:3000
+  - hostname: rooms.example.test
+    path: ^/rooms/ready$
+    service: http://127.0.0.1:3000
+  - service: http_status:404
