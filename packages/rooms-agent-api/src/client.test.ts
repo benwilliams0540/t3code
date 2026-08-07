@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { describe, expect, it, vi } from "@effect/vitest";
+import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Result from "effect/Result";
@@ -71,7 +71,7 @@ describe("Rooms Agent shared client", () => {
     const requests: Array<HttpClientRequest.HttpClientRequest> = [];
     return Effect.gen(function* () {
       const client = yield* make({
-        baseUrl: "http://127.0.0.1:33104",
+        baseUrl: "https://rooms.example.test",
         bearerToken: "rag1.test.super-secret",
         profile: "read_only",
       });
@@ -217,7 +217,7 @@ describe("Rooms Agent shared client", () => {
     );
   });
 
-  it.effect("rejects non-loopback packaging before sending a request", () => {
+  it.effect("accepts a credential-free HTTPS Rooms origin", () => {
     const requests: Array<HttpClientRequest.HttpClientRequest> = [];
     return Effect.gen(function* () {
       const client = yield* make({
@@ -225,19 +225,33 @@ describe("Rooms Agent shared client", () => {
         bearerToken: "rag1.test.secret",
         profile: "read_only",
       });
-      const result = yield* Effect.result(client.invoke("rooms_context_get", {}));
-      expect(Result.isFailure(result)).toBe(true);
-      if (Result.isSuccess(result)) return;
-      const error = result.failure;
-      expect(error.code).toBe("rooms_agent_local_only_required");
+      expect(yield* client.invoke("rooms_context_get", {})).toEqual(readSuccess);
+      expect(requests[0]?.url).toBe("https://rooms.example.test/agent/v2/context");
+    }).pipe(Effect.provide(runtime(requests, () => responseFor(readSuccess))));
+  });
+
+  it.effect("rejects insecure, credential-bearing, and non-origin Rooms URLs", () => {
+    const requests: Array<HttpClientRequest.HttpClientRequest> = [];
+    return Effect.gen(function* () {
+      for (const baseUrl of [
+        "http://rooms.example.test",
+        "https://user:secret@rooms.example.test",
+        "https://rooms.example.test/nested",
+        "https://rooms.example.test?token=secret",
+        "https://rooms.example.test#fragment",
+        "//rooms.example.test",
+      ]) {
+        const client = yield* make({
+          baseUrl,
+          bearerToken: "rag1.test.secret",
+          profile: "read_only",
+        });
+        const result = yield* Effect.result(client.invoke("rooms_context_get", {}));
+        expect(Result.isFailure(result)).toBe(true);
+        if (Result.isSuccess(result)) continue;
+        expect(result.failure.code).toBe("rooms_agent_origin_required");
+      }
       expect(requests).toHaveLength(0);
-    }).pipe(
-      Effect.provide(
-        runtime(
-          requests,
-          vi.fn(() => responseFor(readSuccess)),
-        ),
-      ),
-    );
+    }).pipe(Effect.provide(runtime(requests, () => responseFor(readSuccess))));
   });
 });

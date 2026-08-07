@@ -1,3 +1,4 @@
+import { normalizeRoomsOrigin } from "@t3tools/shared/roomsTransport";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -6,7 +7,12 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http";
+import {
+  FetchHttpClient,
+  HttpClient,
+  HttpClientRequest,
+  HttpClientResponse,
+} from "effect/unstable/http";
 
 import {
   isReadTool,
@@ -58,33 +64,20 @@ const clientError = (
     source: "client",
   });
 
-const normalizeLocalBaseUrl = (
+const normalizeRoomsBaseUrl = (
   value: string,
 ): { readonly baseUrl?: string; readonly error?: RoomsAgentToolError } => {
-  try {
-    const url = new URL(value);
-    const hostname = url.hostname.toLowerCase();
-    const local = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
-    if (url.protocol !== "http:" || !local || url.username !== "" || url.password !== "") {
-      return {
-        error: clientError(
-          "rooms_agent_local_only_required",
-          "Rooms Agent MCP accepts only unauthenticated HTTP loopback endpoints.",
-          { status: 400 },
-        ),
-      };
-    }
-    url.pathname = url.pathname.replace(/\/+$/u, "");
-    url.search = "";
-    url.hash = "";
-    return { baseUrl: url.toString().replace(/\/$/u, "") };
-  } catch {
+  const baseUrl = normalizeRoomsOrigin("shared", value);
+  if (baseUrl === null) {
     return {
-      error: clientError("rooms_agent_configuration_invalid", "Rooms Agent base URL is invalid.", {
-        status: 400,
-      }),
+      error: clientError(
+        "rooms_agent_origin_required",
+        "Rooms Agent accepts only credential-free HTTPS or HTTP loopback origins.",
+        { status: 400 },
+      ),
     };
   }
+  return { baseUrl };
 };
 
 const canonicalize = (value: unknown): unknown => {
@@ -276,11 +269,11 @@ export const make = Effect.fn("RoomsAgentClient.make")(function* (
 ) {
   const httpClient = yield* HttpClient.HttpClient;
   const crypto = yield* Crypto.Crypto;
-  const localBaseUrl = normalizeLocalBaseUrl(options.baseUrl);
+  const roomsBaseUrl = normalizeRoomsBaseUrl(options.baseUrl);
 
   const invoke: RoomsAgentClientShape["invoke"] = Effect.fn("RoomsAgentClient.invoke")(
     function* (tool, input) {
-      if (localBaseUrl.error) return yield* localBaseUrl.error;
+      if (roomsBaseUrl.error) return yield* roomsBaseUrl.error;
       if (!options.bearerToken) {
         return yield* clientError(
           "rooms_agent_not_configured",
@@ -295,7 +288,7 @@ export const make = Effect.fn("RoomsAgentClient.make")(function* (
           { status: 403 },
         );
       }
-      let request = requestForTool(localBaseUrl.baseUrl!, tool, input).pipe(
+      let request = requestForTool(roomsBaseUrl.baseUrl!, tool, input).pipe(
         HttpClientRequest.acceptJson,
         HttpClientRequest.bearerToken(options.bearerToken),
       );
@@ -319,6 +312,7 @@ export const make = Effect.fn("RoomsAgentClient.make")(function* (
         );
       }
       const response = yield* httpClient.execute(request).pipe(
+        Effect.provideService(FetchHttpClient.RequestInit, { redirect: "error" }),
         Effect.mapError(() =>
           clientError("rooms_agent_unavailable", "Rooms Agent request failed.", {
             retryable: true,

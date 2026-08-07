@@ -2,6 +2,8 @@
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
+import { normalizeRoomsOrigin } from "@t3tools/shared/roomsTransport";
+
 export const HOST_CONFIG_CONTRACT = {
   id: "rooms.resident-agent-host-config",
   version: 1,
@@ -133,6 +135,17 @@ const loopbackUrl = (value: unknown, protocol: "http:" | "ws:", label: string): 
   return url.origin;
 };
 
+const sharedRoomsUrl = (value: unknown, label: string): string => {
+  const url = normalizeRoomsOrigin("shared", text(value, label));
+  if (url === null) {
+    throw new HostConfigurationError(
+      "configuration_rooms_origin_required",
+      `${label} must be a credential-free HTTPS or HTTP loopback origin.`,
+    );
+  }
+  return url;
+};
+
 export const parseResidentHostConfig = (value: unknown): ResidentHostConfig => {
   const root = record(value, "configuration");
   exact(
@@ -186,7 +199,7 @@ export const parseResidentHostConfig = (value: unknown): ResidentHostConfig => {
       ),
     },
     rooms: {
-      baseUrl: loopbackUrl(rooms.baseUrl, "http:", "rooms.baseUrl"),
+      baseUrl: sharedRoomsUrl(rooms.baseUrl, "rooms.baseUrl"),
       bearerTokenFile: absolutePath(rooms.bearerTokenFile, "rooms.bearerTokenFile"),
       roomId: identifier(rooms.roomId, "rooms.roomId", /^room:[0-9a-f-]{36}$/u),
       channelId: identifier(rooms.channelId, "rooms.channelId", /^channel:[0-9a-f-]{36}$/u),

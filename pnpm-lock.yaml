@@ -820,6 +820,9 @@ importers:
 
   packages/rooms-agent-api:
     dependencies:
+      '@t3tools/shared':
+        specifier: workspace:*
+        version: link:../shared
       effect:
         specifier: 4.0.0-beta.102
         version: 4.0.0-beta.102(patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488)
@@ -845,6 +848,9 @@ importers:
       '@t3tools/rooms-agent-api':
         specifier: workspace:*
         version: link:../rooms-agent-api
+      '@t3tools/shared':
+        specifier: workspace:*
+        version: link:../shared
       effect:
         specifier: 4.0.0-beta.102
         version: 4.0.0-beta.102(patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488)
@@ -861,6 +867,9 @@ importers:
       '@t3tools/rooms-agent-connector':
         specifier: workspace:*
         version: link:../rooms-agent-connector
+      '@t3tools/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4

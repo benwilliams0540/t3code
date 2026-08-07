@@ -80,6 +80,44 @@ describe("rooms.agent-deliveries v1 client", () => {
     expect(() => parseAgentDeliveryPage(cursor)).toThrowError(/bounds/u);
   });
 
+  it("uses HTTPS without redirects and keeps the bearer out of the delivery URL", async () => {
+    const observed: Array<{ readonly url: string; readonly init: RequestInit | undefined }> = [];
+    const bearer = "rooms-secret-never-in-url";
+    const client = new AgentDeliveryHttpClient({
+      baseUrl: "https://rooms.example.test",
+      bearerToken: bearer,
+      fetch: async (input, init) => {
+        observed.push({ url: String(input), init });
+        return Response.json(response());
+      },
+    });
+
+    await expect(client.wait(41, 1_000)).resolves.toMatchObject({
+      page: { afterSeq: 41, nextCursor: 42 },
+    });
+    expect(observed[0]?.url).toBe(
+      "https://rooms.example.test/agent/v1/deliveries?after_seq=41&timeout_ms=1000",
+    );
+    expect(observed[0]?.url).not.toContain(bearer);
+    expect(observed[0]?.init?.redirect).toBe("error");
+    expect(new Headers(observed[0]?.init?.headers).get("authorization")).toBe(`Bearer ${bearer}`);
+  });
+
+  it("rejects invalid delivery origins before fetching", () => {
+    for (const baseUrl of [
+      "http://rooms.example.test",
+      "https://user:secret@rooms.example.test",
+      "https://rooms.example.test/nested",
+      "https://rooms.example.test?token=secret",
+      "https://rooms.example.test#fragment",
+      "//rooms.example.test",
+    ]) {
+      expect(() => new AgentDeliveryHttpClient({ baseUrl, bearerToken: "secret" })).toThrowError(
+        DeliveryClientError,
+      );
+    }
+  });
+
   it("reports unavailable and cancelled delivery waits without exposing the bearer", async () => {
     const bearer = "rooms-secret-never-log-this";
     const unavailable = new AgentDeliveryHttpClient({

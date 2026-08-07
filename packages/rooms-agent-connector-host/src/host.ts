@@ -249,8 +249,9 @@ export class ResidentConnectorHost {
     const cursor = this.#cursorStore.peek() ?? this.#config.delivery.initialCursor;
     let rails: Response;
     try {
-      rails = await this.#fetch(`${this.#config.rooms.baseUrl}/up`, {
+      rails = await this.#fetch(`${this.#config.rooms.baseUrl}/rooms/ready`, {
         method: "GET",
+        redirect: "error",
         ...(signal ? { signal } : {}),
       });
     } catch {

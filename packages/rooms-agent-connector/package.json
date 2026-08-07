@@ -15,6 +15,7 @@
   "dependencies": {
     "@effect/platform-node": "catalog:",
     "@t3tools/rooms-agent-api": "workspace:*",
+    "@t3tools/shared": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

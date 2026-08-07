@@ -3,6 +3,7 @@ import * as NodeSqlite from "node:sqlite";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { make as makeRoomsAgentClient, type RoomsAgentClientShape } from "@t3tools/rooms-agent-api";
+import { normalizeRoomsOrigin } from "@t3tools/shared/roomsTransport";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { FetchHttpClient } from "effect/unstable/http";
@@ -127,39 +128,17 @@ export class RoomsServerClientError extends Error {
   }
 }
 
-const localHttpBaseUrl = (value: string): string => {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
+const roomsServerBaseUrl = (value: string): string => {
+  const baseUrl = normalizeRoomsOrigin("shared", value);
+  if (baseUrl === null) {
     throw new RoomsServerClientError({
-      code: "rooms_server_configuration_invalid",
+      code: "rooms_server_origin_required",
       status: 400,
-      message: "Rooms server base URL is invalid.",
+      message:
+        "Rooms resident connector accepts only credential-free HTTPS or HTTP loopback origins.",
     });
   }
-  const hostname = url.hostname.toLowerCase();
-  const loopback =
-    hostname === "localhost" ||
-    hostname === "[::1]" ||
-    hostname === "::1" ||
-    /^127(?:\.\d{1,3}){3}$/u.test(hostname);
-  if (
-    url.protocol !== "http:" ||
-    !loopback ||
-    url.username !== "" ||
-    url.password !== "" ||
-    url.search !== "" ||
-    url.hash !== ""
-  ) {
-    throw new RoomsServerClientError({
-      code: "rooms_server_local_only_required",
-      status: 400,
-      message: "Rooms resident connector accepts only credential-free HTTP loopback origins.",
-    });
-  }
-  url.pathname = url.pathname.replace(/\/+$/u, "");
-  return url.toString().replace(/\/$/u, "");
+  return baseUrl;
 };
 
 const integer = (value: unknown, label: string, minimum: number): number => {
@@ -358,7 +337,7 @@ export class RoomsInvocationHttpClient implements RoomsInvocationClient {
     readonly bearerToken: string;
     readonly fetch?: typeof globalThis.fetch;
   }) {
-    this.#baseUrl = localHttpBaseUrl(input.baseUrl);
+    this.#baseUrl = roomsServerBaseUrl(input.baseUrl);
     this.#bearerToken = assertNonEmptyString(input.bearerToken, "Rooms bearer token", 4096);
     this.#fetch = input.fetch ?? globalThis.fetch;
   }
@@ -410,6 +389,7 @@ export class RoomsInvocationHttpClient implements RoomsInvocationClient {
     try {
       response = await this.#fetch(`${this.#baseUrl}${path}`, {
         ...init,
+        redirect: "error",
         headers: {
           accept: "application/json",
           authorization: `Bearer ${this.#bearerToken}`,
@@ -565,7 +545,7 @@ export const makeRoomsAgentClientFactory = (input: {
   readonly baseUrl: string;
   readonly bearerToken: string;
 }): RoomsAgentClientFactory => {
-  const baseUrl = localHttpBaseUrl(input.baseUrl);
+  const baseUrl = roomsServerBaseUrl(input.baseUrl);
   const bearerToken = assertNonEmptyString(input.bearerToken, "Rooms bearer token", 4096);
   return (invocation) =>
     Effect.runPromise(

@@ -4,6 +4,7 @@ import {
   assertNonEmptyString,
   isRecord,
 } from "@t3tools/rooms-agent-connector";
+import { normalizeRoomsOrigin } from "@t3tools/shared/roomsTransport";
 
 export const ROOMS_DELIVERIES_CONTRACT = {
   id: "rooms.agent-deliveries",
@@ -314,7 +315,16 @@ export class AgentDeliveryHttpClient {
     readonly bearerToken: string;
     readonly fetch?: typeof globalThis.fetch;
   }) {
-    this.#baseUrl = input.baseUrl.replace(/\/+$/u, "");
+    const baseUrl = normalizeRoomsOrigin("shared", input.baseUrl);
+    if (baseUrl === null) {
+      throw new DeliveryClientError({
+        code: "delivery_origin_required",
+        status: 400,
+        message: "Rooms delivery accepts only credential-free HTTPS or HTTP loopback origins.",
+        retryable: false,
+      });
+    }
+    this.#baseUrl = baseUrl;
     this.#bearer = input.bearerToken;
     this.#fetch = input.fetch ?? globalThis.fetch;
   }
@@ -331,6 +341,7 @@ export class AgentDeliveryHttpClient {
     try {
       response = await this.#fetch(url, {
         method: "GET",
+        redirect: "error",
         headers: { accept: "application/json", authorization: `Bearer ${this.#bearer}` },
         ...(signal ? { signal } : {}),
       });

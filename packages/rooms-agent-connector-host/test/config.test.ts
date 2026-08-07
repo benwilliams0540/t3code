@@ -42,12 +42,28 @@ const valid = (): Readonly<Record<string, unknown>> => ({
 });
 
 describe("resident host configuration", () => {
-  it("accepts only the frozen loopback configuration shape", () => {
+  it("accepts HTTPS Shared Rooms while keeping the frozen configuration shape", () => {
     expect(parseResidentHostConfig(valid()).rooms.baseUrl).toBe("http://127.0.0.1:3000");
+    const shared = structuredClone(valid());
+    (shared.rooms as Record<string, unknown>).baseUrl = "https://rooms.example.test";
+    expect(parseResidentHostConfig(shared).rooms.baseUrl).toBe("https://rooms.example.test");
     expect(() => parseResidentHostConfig({ ...valid(), extra: true })).toThrowError(/frozen/u);
-    const remote = structuredClone(valid());
-    (remote.rooms as Record<string, unknown>).baseUrl = "http://100.108.246.98:3000";
-    expect(() => parseResidentHostConfig(remote)).toThrowError(/loopback/u);
+    for (const baseUrl of [
+      "http://100.108.246.98:3000",
+      "https://user:secret@rooms.example.test",
+      "https://rooms.example.test/nested",
+      "https://rooms.example.test?token=secret",
+      "https://rooms.example.test#fragment",
+      "//rooms.example.test",
+    ]) {
+      const invalid = structuredClone(valid());
+      (invalid.rooms as Record<string, unknown>).baseUrl = baseUrl;
+      expect(() => parseResidentHostConfig(invalid)).toThrowError(/HTTPS|loopback/u);
+    }
+
+    const remoteGateway = structuredClone(shared);
+    (remoteGateway.openClaw as Record<string, unknown>).gatewayUrl = "wss://gateway.example.test";
+    expect(() => parseResidentHostConfig(remoteGateway)).toThrowError(/loopback/u);
   });
 
   it("reads both secrets only from regular owner mode-0600 files", () => {

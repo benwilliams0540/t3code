@@ -314,7 +314,7 @@ describe("Rooms invocation HTTP client", () => {
   it("sends the exact server envelope and keeps configVersion equal to configuration_epoch", async () => {
     const requests: Request[] = [];
     const client = new RoomsInvocationHttpClient({
-      baseUrl: "http://127.0.0.1:33104",
+      baseUrl: "https://rooms.example.test",
       bearerToken: "rag1.test.sentinel-secret",
       fetch: async (request, init) => {
         requests.push(request instanceof Request ? request : new Request(request, init));
@@ -333,7 +333,8 @@ describe("Rooms invocation HTTP client", () => {
       sourceHeadSequence: 21,
     });
     const request = requests[0]!;
-    expect(request.url).toBe("http://127.0.0.1:33104/agent/v1/invocations");
+    expect(request.url).toBe("https://rooms.example.test/agent/v1/invocations");
+    expect(request.redirect).toBe("error");
     expect(request.headers.get("x-rooms-configuration-epoch")).toBe("7");
     expect(request.headers.get("x-rooms-connector-id")).toBe(binding().connectorId);
     expect(request.headers.get("authorization")).toBe("Bearer rag1.test.sentinel-secret");
@@ -345,7 +346,7 @@ describe("Rooms invocation HTTP client", () => {
     expect(request.url).not.toContain("sentinel-secret");
   });
 
-  it("preserves only structured safe server errors and rejects remote exposure", async () => {
+  it("preserves only structured safe server errors and rejects invalid origins", async () => {
     const client = new RoomsInvocationHttpClient({
       baseUrl: "http://localhost:33104",
       bearerToken: "rag1.test.secret",
@@ -370,13 +371,22 @@ describe("Rooms invocation HTTP client", () => {
       details: {},
     });
     expect(JSON.stringify(failure)).not.toContain("rag1.test.secret");
-    expect(
-      () =>
-        new RoomsInvocationHttpClient({
-          baseUrl: "https://rooms.example.test",
-          bearerToken: "secret",
-        }),
-    ).toThrow(RoomsServerClientError);
+    for (const baseUrl of [
+      "http://rooms.example.test",
+      "https://user:secret@rooms.example.test",
+      "https://rooms.example.test/nested",
+      "https://rooms.example.test?token=secret",
+      "https://rooms.example.test#fragment",
+      "//rooms.example.test",
+    ]) {
+      expect(
+        () =>
+          new RoomsInvocationHttpClient({
+            baseUrl,
+            bearerToken: "secret",
+          }),
+      ).toThrow(RoomsServerClientError);
+    }
   });
 });
 
