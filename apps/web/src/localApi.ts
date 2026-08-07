@@ -1,4 +1,5 @@
 import type { ContextMenuItem, LocalApi } from "@t3tools/contracts";
+import { createRoomsHumanFetchTransport } from "@t3tools/client-runtime/rooms";
 
 import { resetRequestLatencyStateForTests } from "./rpc/requestLatencyState";
 import { showContextMenuFallback } from "./contextMenuFallback";
@@ -7,6 +8,7 @@ import { readBrowserClientSettings, writeBrowserClientSettings } from "./clientP
 let cachedApi: LocalApi | undefined;
 
 function createBrowserLocalApi(): LocalApi {
+  const hostedRoomsHumanTransport = createRoomsHumanFetchTransport();
   return {
     dialogs: {
       pickFolder: async (options) => {
@@ -91,28 +93,7 @@ function createBrowserLocalApi(): LocalApi {
         if (window.desktopBridge?.requestRoomsHuman) {
           return window.desktopBridge.requestRoomsHuman(request);
         }
-        const target = new URL(request.path, request.baseUrl);
-        const body =
-          request.body === undefined
-            ? undefined
-            : request.bodyEncoding === "base64"
-              ? Uint8Array.from(atob(request.body), (character) => character.charCodeAt(0))
-              : request.body;
-        const response = await fetch(target, {
-          method: request.method,
-          headers: {
-            authorization: `Bearer ${request.bearer}`,
-            ...(body === undefined
-              ? {}
-              : { "content-type": request.contentType ?? "application/json" }),
-          },
-          ...(body === undefined ? {} : { body }),
-        });
-        return {
-          status: response.status,
-          headers: Object.fromEntries(response.headers.entries()),
-          body: await response.text(),
-        };
+        return hostedRoomsHumanTransport.request(request);
       },
     },
   };

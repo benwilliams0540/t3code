@@ -57,6 +57,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("LocalApi", () => {
@@ -114,5 +115,40 @@ describe("LocalApi", () => {
 
     await api.persistence.setClientSettings(settings);
     await expect(api.persistence.getClientSettings()).resolves.toEqual(settings);
+  });
+
+  it("uses the bounded direct transport for hosted Shared Rooms", async () => {
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) => new Response("{}", { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { createLocalApi } = await import("./localApi");
+
+    await createLocalApi().roomsHuman!.request({
+      baseUrl: "https://rooms.example.test",
+      path: "/rooms/human/v1/session",
+      method: "GET",
+      bearer: "header.payload.signature",
+    });
+
+    const [target, init] = fetchMock.mock.calls[0]!;
+    expect(String(target)).toBe("https://rooms.example.test/rooms/human/v1/session");
+    expect(init?.credentials).toBe("omit");
+    expect(init?.redirect).toBe("manual");
+  });
+
+  it("delegates Shared Rooms requests to the desktop boundary", async () => {
+    const requestRoomsHuman = vi.fn().mockResolvedValue({ status: 200, headers: {}, body: "{}" });
+    testWindow().desktopBridge = { requestRoomsHuman } as unknown as DesktopBridge;
+    const { createLocalApi } = await import("./localApi");
+    const request = {
+      baseUrl: "https://rooms.example.test",
+      path: "/rooms/human/v1/session",
+      method: "GET" as const,
+      bearer: "header.payload.signature",
+    };
+
+    await createLocalApi().roomsHuman!.request(request);
+    expect(requestRoomsHuman).toHaveBeenCalledWith(request);
   });
 });

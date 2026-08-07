@@ -43,6 +43,12 @@ export function readRoomsAuthenticationSnapshot(): RoomsAuthenticationSnapshot {
   return snapshot;
 }
 
+export function assertRoomsAuthenticationGeneration(expectedGeneration: number): void {
+  if (snapshot.status !== "signed-in" || snapshot.generation !== expectedGeneration) {
+    throw new RoomsAuthenticationError("rooms_auth_unavailable");
+  }
+}
+
 export function markRoomsAuthenticationLoading(): void {
   tokenProvider = null;
   generation += 1;

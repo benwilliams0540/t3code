@@ -35,12 +35,15 @@ describe("Rooms public configuration", () => {
     expect(resolveRoomsClerkTokenOptions()).toEqual({ template: "t3-rooms" });
   });
 
-  it("accepts only credential-free HTTP loopback Rooms origins", () => {
+  it("accepts credential-free HTTPS or HTTP loopback Shared Rooms origins", () => {
     expect(normalizeRoomsApiUrl("http://127.0.0.1:33102")).toBe("http://127.0.0.1:33102");
     expect(normalizeRoomsApiUrl("http://localhost:33102/")).toBe("http://localhost:33102");
-    expect(normalizeRoomsApiUrl("https://rooms.example.test")).toBeNull();
+    expect(normalizeRoomsApiUrl("https://rooms.example.test")).toBe("https://rooms.example.test");
+    expect(normalizeRoomsApiUrl("http://rooms.example.test")).toBeNull();
     expect(normalizeRoomsApiUrl("http://user:secret@127.0.0.1:33102")).toBeNull();
     expect(normalizeRoomsApiUrl("http://127.0.0.1:33102/rooms")).toBeNull();
+    expect(normalizeRoomsApiUrl("https://rooms.example.test?query=value")).toBeNull();
+    expect(normalizeRoomsApiUrl("https://rooms.example.test#fragment")).toBeNull();
   });
 
   it("reports a missing dedicated Rooms template", () => {

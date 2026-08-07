@@ -3,31 +3,19 @@ import {
   RoomsHumanHttpResponseSchema,
   type RoomsHumanHttpRequest,
 } from "@t3tools/contracts";
+import {
+  resolveRoomsHumanRequestUrl as resolveSharedRoomsHumanRequestUrl,
+  validateRoomsHumanBearer as validateSharedRoomsHumanBearer,
+  validateRoomsHumanRequestBody,
+} from "@t3tools/shared/roomsTransport";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 
 import * as IpcChannels from "../channels.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
-
-const LOOPBACK_IPV4 = /^127(?:\.\d{1,3}){3}$/;
-const BASE64_BODY = /^[A-Za-z0-9+/]*={0,2}$/;
-const MAX_CAS_BODY_BYTES = 5 * 1024 * 1024;
-const MAX_BEARER_BYTES = 16 * 1024;
-const UUID_V7 = "[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
-const ROOM_ID = `room:${UUID_V7}`;
-const CHANNEL_ID = `channel:${UUID_V7}`;
-const STORY_ID = `story:${UUID_V7}`;
-
-function isLoopbackHostname(hostname: string): boolean {
-  const normalized = hostname.toLowerCase();
-  if (normalized === "localhost" || normalized === "[::1]" || normalized === "::1") return true;
-  if (!LOOPBACK_IPV4.test(normalized)) return false;
-  return normalized
-    .split(".")
-    .every((part) => Number.isInteger(Number(part)) && Number(part) >= 0 && Number(part) <= 255);
-}
 
 export class RoomsHumanHttpRequestError extends Schema.TaggedErrorClass<RoomsHumanHttpRequestError>()(
   "RoomsHumanHttpRequestError",
@@ -36,121 +24,51 @@ export class RoomsHumanHttpRequestError extends Schema.TaggedErrorClass<RoomsHum
 
 const isRoomsHumanHttpRequestError = Schema.is(RoomsHumanHttpRequestError);
 
-function exactRouteMethods(pathname: string): readonly ("GET" | "POST")[] {
-  if (pathname === "/rooms/human/v1/session") return ["GET"];
-  if (
-    pathname === "/rooms/human/v1/bootstrap/redemptions" ||
-    pathname === "/rooms/human/v1/invite-inspections" ||
-    pathname === "/rooms/human/v1/invite-redemptions"
-  ) {
-    return ["POST"];
+export function validateRoomsHumanResponseStatus(status: number): void {
+  if (status >= 300 && status < 400) {
+    throw new RoomsHumanHttpRequestError({
+      message: "Rooms human API redirects are not allowed.",
+    });
   }
-  const routes: readonly [RegExp, readonly ("GET" | "POST")[]][] = [
-    [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/workspace$`), ["GET"]],
-    [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/invites$`), ["POST"]],
-    [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/channels$`), ["POST"]],
-    [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/channels/${CHANNEL_ID}/feed$`), ["GET"]],
-    [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/channels/${CHANNEL_ID}/messages$`), ["POST"]],
-    [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/changes$`), ["GET"]],
-    [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/stories$`), ["GET", "POST"]],
-    [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/stories/${STORY_ID}$`), ["GET"]],
-    [
-      new RegExp(
-        `^/rooms/human/v1/rooms/${ROOM_ID}/stories/${STORY_ID}/(?:thread|evidence|transitions|reviews)$`,
-      ),
-      ["POST"],
-    ],
-    [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/cas$`), ["POST"]],
-  ];
-  return routes.find(([pattern]) => pattern.test(pathname))?.[1] ?? [];
-}
-
-function validQuery(target: URL): boolean {
-  if (target.search === "") return true;
-  const decodedPath = decodeURIComponent(target.pathname);
-  const allowed = decodedPath.endsWith("/feed")
-    ? new Set(["after_seq", "limit", "snapshot_head_seq"])
-    : decodedPath.endsWith("/changes")
-      ? new Set(["after_seq", "timeout_ms"])
-      : new Set<string>();
-  return [...target.searchParams.keys()].every((key) => allowed.has(key));
 }
 
 export function validateRoomsHumanBearer(bearer: string): string {
-  if (
-    bearer.trim() === "" ||
-    bearer !== bearer.trim() ||
-    /[\r\n]/.test(bearer) ||
-    Buffer.byteLength(bearer, "utf8") > MAX_BEARER_BYTES
-  ) {
+  try {
+    return validateSharedRoomsHumanBearer(bearer);
+  } catch {
     throw new RoomsHumanHttpRequestError({ message: "Rooms human bearer credential is invalid." });
   }
-  return bearer;
 }
 
 export function resolveRoomsHumanRequestUrl(request: RoomsHumanHttpRequest): URL {
-  const base = new URL(request.baseUrl);
-  if (
-    base.protocol !== "http:" ||
-    !isLoopbackHostname(base.hostname) ||
-    base.username !== "" ||
-    base.password !== "" ||
-    (base.pathname !== "" && base.pathname !== "/") ||
-    base.search !== "" ||
-    base.hash !== ""
-  ) {
-    throw new RoomsHumanHttpRequestError({
-      message: "Rooms human API must use an HTTP loopback origin without credentials or a path.",
-    });
-  }
-  const target = new URL(request.path, base);
-  let decodedPath: string;
   try {
-    decodedPath = decodeURIComponent(target.pathname);
+    return resolveSharedRoomsHumanRequestUrl(request);
   } catch {
-    throw new RoomsHumanHttpRequestError({ message: "Rooms human API path is invalid." });
-  }
-  const expectedMethods = exactRouteMethods(decodedPath);
-  if (
-    target.origin !== base.origin ||
-    !expectedMethods.includes(request.method) ||
-    !validQuery(target)
-  ) {
     throw new RoomsHumanHttpRequestError({
       message: "Rooms human API request is outside the exact authenticated route allow-list.",
     });
   }
-  validateRoomsHumanBearer(request.bearer);
-  return target;
 }
 
 export function decodeRoomsHumanRequestBody(request: RoomsHumanHttpRequest): {
   readonly bytes: Uint8Array;
   readonly contentType: string;
 } | null {
-  if (request.body === undefined) return null;
-  const contentType = request.contentType ?? "application/json";
-  if (contentType.trim() === "" || /[\r\n]/.test(contentType)) {
-    throw new RoomsHumanHttpRequestError({ message: "Rooms human Content-Type is invalid." });
-  }
-  if (request.bodyEncoding !== "base64") {
-    return { bytes: new TextEncoder().encode(request.body), contentType };
-  }
-  const decodedPath = decodeURIComponent(new URL(request.path, request.baseUrl).pathname);
-  if (
-    !decodedPath.endsWith("/cas") ||
-    request.body.length % 4 !== 0 ||
-    !BASE64_BODY.test(request.body)
-  ) {
-    throw new RoomsHumanHttpRequestError({ message: "Rooms human CAS body is not valid base64." });
-  }
-  const bytes = Buffer.from(request.body, "base64");
-  if (bytes.byteLength > MAX_CAS_BODY_BYTES) {
+  try {
+    const body = validateRoomsHumanRequestBody(request);
+    if (body === null) return null;
+    return {
+      bytes:
+        body.bodyEncoding === "base64"
+          ? Buffer.from(body.body, "base64")
+          : new TextEncoder().encode(body.body),
+      contentType: body.contentType,
+    };
+  } catch (cause) {
     throw new RoomsHumanHttpRequestError({
-      message: "Rooms human CAS uploads are limited to 5 MiB.",
+      message: cause instanceof Error ? cause.message : "Rooms human body is invalid.",
     });
   }
-  return { bytes, contentType };
 }
 
 const performRoomsHumanRequest = Effect.fn("desktop.ipc.roomsHuman.performRequest")(function* (
@@ -181,13 +99,19 @@ const performRoomsHumanRequest = Effect.fn("desktop.ipc.roomsHuman.performReques
       requestBody.contentType,
     );
   }
-  const response = yield* httpClient
-    .execute(httpRequest)
-    .pipe(
-      Effect.mapError(
-        () => new RoomsHumanHttpRequestError({ message: "Rooms human API request failed." }),
-      ),
-    );
+  const response = yield* httpClient.execute(httpRequest).pipe(
+    Effect.provideService(FetchHttpClient.RequestInit, { redirect: "manual" }),
+    Effect.mapError(
+      () => new RoomsHumanHttpRequestError({ message: "Rooms human API request failed." }),
+    ),
+  );
+  yield* Effect.try({
+    try: () => validateRoomsHumanResponseStatus(response.status),
+    catch: (cause) =>
+      isRoomsHumanHttpRequestError(cause)
+        ? cause
+        : new RoomsHumanHttpRequestError({ message: "Rooms human API response is invalid." }),
+  });
   const responseBody = yield* response.text.pipe(
     Effect.mapError(
       () =>

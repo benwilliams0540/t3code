@@ -1,5 +1,6 @@
 import { relayClerkTokenOptions } from "@t3tools/shared/relayAuth";
 import { normalizeSecureRelayUrl } from "@t3tools/shared/relayUrl";
+import { normalizeRoomsOrigin } from "@t3tools/shared/roomsTransport";
 import * as Schema from "effect/Schema";
 
 export class CloudPublicConfigMissingError extends Schema.TaggedErrorClass<CloudPublicConfigMissingError>()(
@@ -26,32 +27,8 @@ export interface CloudPublicConfig {
   };
 }
 
-const LOOPBACK_IPV4 = /^127(?:\.\d{1,3}){3}$/;
-
-function isLoopbackHostname(hostname: string): boolean {
-  const normalized = hostname.toLowerCase();
-  if (normalized === "localhost" || normalized === "[::1]" || normalized === "::1") return true;
-  if (!LOOPBACK_IPV4.test(normalized)) return false;
-  return normalized
-    .split(".")
-    .every((part) => Number.isInteger(Number(part)) && Number(part) >= 0 && Number(part) <= 255);
-}
-
 export function normalizeRoomsApiUrl(value: string): string | null {
-  try {
-    const url = new URL(value.trim());
-    return url.protocol === "http:" &&
-      isLoopbackHostname(url.hostname) &&
-      url.username === "" &&
-      url.password === "" &&
-      (url.pathname === "" || url.pathname === "/") &&
-      url.search === "" &&
-      url.hash === ""
-      ? url.origin
-      : null;
-  } catch {
-    return null;
-  }
+  return normalizeRoomsOrigin("shared", value);
 }
 
 export function trimNonEmpty(value: string | undefined): string | null {

@@ -6,6 +6,7 @@ import {
   decodeRoomsHumanRequestBody,
   resolveRoomsHumanRequestUrl,
   validateRoomsHumanBearer,
+  validateRoomsHumanResponseStatus,
 } from "./roomsHuman.ts";
 
 const base = "http://127.0.0.1:33102";
@@ -63,12 +64,24 @@ describe("desktop Rooms human HTTP boundary", () => {
     ).toThrow("allow-list");
   });
 
-  it("rejects remote, credentialed, and path-bearing origins", () => {
+  it("accepts a credential-free HTTPS Shared Rooms origin", () => {
+    expect(
+      resolveRoomsHumanRequestUrl({
+        baseUrl: "https://rooms.example.test",
+        path: "/rooms/human/v1/session",
+        method: "GET",
+        bearer,
+      }).origin,
+    ).toBe("https://rooms.example.test");
+  });
+
+  it("rejects insecure remote, credentialed, and broadened origins", () => {
     for (const baseUrl of [
-      "https://127.0.0.1:33102",
       "http://rooms.example.test",
       "http://user:secret@127.0.0.1:33102",
       "http://127.0.0.1:33102/nested",
+      "https://rooms.example.test?query=value",
+      "https://rooms.example.test#fragment",
     ]) {
       expect(() =>
         resolveRoomsHumanRequestUrl({
@@ -79,6 +92,11 @@ describe("desktop Rooms human HTTP boundary", () => {
         }),
       ).toThrow();
     }
+  });
+
+  it("rejects redirects without reading or following the response", () => {
+    expect(() => validateRoomsHumanResponseStatus(302)).toThrow("redirects are not allowed");
+    expect(() => validateRoomsHumanResponseStatus(200)).not.toThrow();
   });
 
   it("rejects header-breaking and oversized bearers", () => {
