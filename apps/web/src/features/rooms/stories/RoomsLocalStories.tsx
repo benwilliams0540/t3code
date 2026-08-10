@@ -1,10 +1,11 @@
 import {
   AlertTriangleIcon,
-  CheckCircle2Icon,
+  Columns3Icon,
   ExternalLinkIcon,
   GitBranchIcon,
   HistoryIcon,
   LinkIcon,
+  ListIcon,
   PlusIcon,
   RefreshCwIcon,
   ShieldCheckIcon,
@@ -24,6 +25,8 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { useLocalStorage } from "~/hooks/useLocalStorage";
+import { cn } from "~/lib/utils";
 import { useThreadShellsForProjectRefs } from "~/state/entities";
 import { formatRelativeTimeLabel } from "~/timestampFormat";
 
@@ -53,6 +56,20 @@ import {
   selectRoomsNativeThreadEntries,
   type RoomsNativeThreadEntry,
 } from "../threads/roomsNativeThreads";
+import {
+  localStoryEvidenceGate,
+  localStoryNeedsCurrentHuman,
+  localStoryNextAction,
+  localStoryOwnerId,
+  localStoryStageCounts,
+  localStoryStageLabel,
+  localStoryUpdatedAt,
+  ROOMS_STORIES_VIEW_STORAGE_KEY,
+  ROOMS_STORY_STAGE_ORDER,
+  RoomsStoriesView,
+} from "./presentation";
+
+export { localStoryStageLabel } from "./presentation";
 
 interface LocalStoryError {
   readonly code: string;
@@ -324,27 +341,19 @@ export function localStoryCompletionEvidence(story: RoomsLocalStoryV2): readonly
   return story.reviews.find((review) => review.id === approvedId)?.evidence ?? [];
 }
 
-export function localStoryStageLabel(stage: string): string {
-  return (
-    {
-      backlog: "Backlog",
-      "in-progress": "In progress",
-      "human-qa": "Human QA",
-      done: "Done",
-    }[stage] ?? stage
-  );
-}
-
 export function RoomsLocalStoryGateStatus({
-  onApprove,
+  onApproveAndComplete,
   pending,
   story,
 }: {
-  readonly onApprove: () => void;
+  readonly onApproveAndComplete: () => void;
   readonly pending: boolean;
   readonly story: RoomsLocalStoryV2;
 }) {
   if (!story.gate) return null;
+  const canApprove =
+    story.gate.approved_review_id !== null ||
+    (story.allowed_actions.review && story.gate.evidence_satisfied && story.gate.reviewer_allowed);
   return (
     <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -357,27 +366,29 @@ export function RoomsLocalStoryGateStatus({
             Requires {story.gate.required_evidence.mode} of{" "}
             {story.gate.required_evidence.kinds.join(", ")}.
             {story.gate.approved_review_id
-              ? " Approval is persisted; completion is now a separate action."
-              : " Approval records your durable human decision."}
+              ? " Approval is persisted; completing will use that exact evidence set."
+              : " Approval records you as reviewer, then completes with the same evidence."}
           </p>
         </div>
         <Button
           data-rooms-story-review="approved"
-          disabled={pending || !story.allowed_actions.review}
-          onClick={onApprove}
+          disabled={pending || !canApprove}
+          onClick={onApproveAndComplete}
           size="sm"
         >
           <ShieldCheckIcon />
           {pending
-            ? "Recording…"
+            ? "Approving…"
             : story.gate.approved_review_id
-              ? "Human QA approved"
-              : "Approve Human QA"}
+              ? "Complete story"
+              : "Approve and complete"}
         </Button>
       </div>
       {!story.gate.reviewer_allowed && !story.gate.approved_review_id ? (
         <p className="mt-3 text-xs text-amber-800 dark:text-amber-200">
-          This reviewer or the currently attached evidence does not satisfy the pinned gate.
+          {!story.gate.evidence_satisfied
+            ? "Attach a qualifying screenshot or artifact before approval."
+            : "You cannot review evidence you produced when this workflow forbids self-review."}
         </p>
       ) : null}
     </div>
@@ -508,34 +519,70 @@ function RoomsLocalStoryLifecycle({
     }
   };
 
-  const approveHumanQa = async () => {
+  const approveAndComplete = async () => {
     if (
       !story.gate ||
-      !story.allowed_actions.review ||
+      (!story.gate.approved_review_id && !story.allowed_actions.review) ||
       !tryStartStableRoomsSubmission(pendingRef)
     ) {
       return;
     }
-    const payload = {
-      expectedHeadSeq: story.scope_head_seq,
-      evidence: story.gate.eligible_evidence,
-    };
-    const next = prepareStableRoomsCommand(reviewCommand, payload, createLowercaseUuidV7);
-    setReviewCommand(next);
-    setPending("review");
+    setPending("review-complete");
     setError(null);
     try {
-      const result = await reviewLocalStory(roomId, story.id, {
-        requestId: next.requestId,
-        expectedHeadSeq: next.payload.expectedHeadSeq,
-        decision: "approved",
-        evidence: next.payload.evidence,
+      let approvedStory = story;
+      if (!story.gate.approved_review_id) {
+        const payload = {
+          expectedHeadSeq: story.scope_head_seq,
+          evidence: story.gate.eligible_evidence,
+        };
+        const nextReview = prepareStableRoomsCommand(reviewCommand, payload, createLowercaseUuidV7);
+        setReviewCommand(nextReview);
+        const reviewed = await reviewLocalStory(roomId, story.id, {
+          requestId: nextReview.requestId,
+          expectedHeadSeq: nextReview.payload.expectedHeadSeq,
+          decision: "approved",
+          evidence: nextReview.payload.evidence,
+        });
+        approvedStory = reviewed.value;
+        setReviewCommand(null);
+        // Keep the durable review visible even if the separate completion command fails.
+        onUpdated(approvedStory);
+      }
+
+      const completion = approvedStory.allowed_next_transitions.find(
+        (candidate) => candidate.terminal && candidate.to === "done",
+      );
+      if (!completion?.allowed) {
+        onUpdated(approvedStory);
+        throw new Error("The approved story is not ready for its declared terminal transition.");
+      }
+      const completionPayload = {
+        expectedHeadSeq: approvedStory.scope_head_seq,
+        to: completion.to,
+        evidence: localStoryCompletionEvidence(approvedStory),
+      };
+      const nextTransition = prepareStableRoomsCommand(
+        transitionCommand,
+        completionPayload,
+        createLowercaseUuidV7,
+      );
+      setTransitionCommand(nextTransition);
+      const completed = await transitionLocalStory(roomId, story.id, {
+        requestId: nextTransition.requestId,
+        ...nextTransition.payload,
       });
-      setReviewCommand(null);
-      onUpdated(result.value);
+      setTransitionCommand(null);
+      onUpdated(completed.value);
     } catch (cause) {
       await recoverStaleStory(cause);
-      setError(localStoryError(cause, "unexpected_review_error", "Could not record Human QA."));
+      setError(
+        localStoryError(
+          cause,
+          "unexpected_review_completion_error",
+          "The review or completion could not be finished. Refresh to see any decision that was already recorded.",
+        ),
+      );
     } finally {
       finishStableRoomsSubmission(pendingRef);
       setPending(null);
@@ -552,26 +599,43 @@ function RoomsLocalStoryLifecycle({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {story.allowed_next_transitions.map((candidate) => (
-            <Button
-              data-rooms-story-transition={candidate.to}
-              disabled={pending !== null || !candidate.allowed}
-              key={`${candidate.from}:${candidate.to}`}
-              onClick={() => void transition(candidate.to, candidate.terminal)}
-              size="sm"
-              title={candidate.unavailable_reason ?? undefined}
-              variant={candidate.terminal ? "default" : "outline"}
-            >
-              {candidate.terminal ? <CheckCircle2Icon /> : null}
-              {pending === `transition:${candidate.to}`
-                ? "Saving…"
-                : candidate.terminal
-                  ? "Complete story"
-                  : `Move to ${candidate.label}`}
-            </Button>
-          ))}
+          {story.allowed_next_transitions
+            .filter((candidate) => !candidate.terminal)
+            .map((candidate) => {
+              const reviewGate = candidate.to === "human-qa" ? localStoryEvidenceGate(story) : null;
+              const allowed = candidate.allowed && (reviewGate?.satisfied ?? true);
+              return (
+                <Button
+                  data-rooms-story-transition={candidate.to}
+                  disabled={pending !== null || !allowed}
+                  key={`${candidate.from}:${candidate.to}`}
+                  onClick={() => void transition(candidate.to, candidate.terminal)}
+                  size="sm"
+                  title={reviewGate?.unavailableReason ?? candidate.unavailable_reason ?? undefined}
+                  variant="outline"
+                >
+                  {pending === `transition:${candidate.to}`
+                    ? "Saving…"
+                    : candidate.to === "in-progress"
+                      ? "Claim and start"
+                      : candidate.to === "human-qa"
+                        ? "Request review"
+                        : `Move to ${candidate.label}`}
+                </Button>
+              );
+            })}
         </div>
       </div>
+
+      {story.stage === "in-progress" && !localStoryEvidenceGate(story).satisfied ? (
+        <p
+          className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
+          data-rooms-story-review-gate="blocked"
+        >
+          {localStoryEvidenceGate(story).unavailableReason} The review action unlocks here after the
+          evidence is attached.
+        </p>
+      ) : null}
 
       {story.allowed_actions.attach_evidence || story.evidence.length > 0 ? (
         <div className="rounded-xl border border-border bg-muted/20 p-4">
@@ -670,8 +734,8 @@ function RoomsLocalStoryLifecycle({
       ) : null}
 
       <RoomsLocalStoryGateStatus
-        onApprove={() => void approveHumanQa()}
-        pending={pending === "review"}
+        onApproveAndComplete={() => void approveAndComplete()}
+        pending={pending === "review-complete"}
         story={story}
       />
 
@@ -820,6 +884,161 @@ function RoomsLocalStoryCard({
   );
 }
 
+function RoomsStorySummaryCard({
+  currentPrincipalId,
+  displayPrincipal,
+  onSelect,
+  selected,
+  story,
+  threads,
+}: {
+  readonly currentPrincipalId: string | null;
+  readonly displayPrincipal: (principalId: string) => string;
+  readonly onSelect: () => void;
+  readonly selected: boolean;
+  readonly story: RoomsLocalStory;
+  readonly threads: readonly RoomsNativeThreadEntry[];
+}) {
+  const ownerId = localStoryOwnerId(story);
+  const thread = resolveLocalStoryNativeThread(story, threads);
+  const needsYou = currentPrincipalId
+    ? localStoryNeedsCurrentHuman(story, currentPrincipalId)
+    : false;
+  const evidenceCount = isRoomsLocalStoryV2(story) ? story.evidence.length : 0;
+  const threadState = !story.native_thread
+    ? "thread not linked"
+    : !thread
+      ? "thread missing"
+      : thread.status === "working"
+        ? "thread working"
+        : thread.status === "failed"
+          ? "thread stopped"
+          : `thread ${thread.status}`;
+  return (
+    <button
+      aria-pressed={selected}
+      className={cn(
+        "w-full rounded-xl border bg-card p-4 text-left transition-colors hover:border-foreground/25 hover:bg-muted/25",
+        selected ? "border-foreground/35 bg-muted/25" : "border-border",
+        needsYou && "border-amber-500/40",
+      )}
+      data-rooms-story-summary={story.id}
+      onClick={onSelect}
+      type="button"
+    >
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span
+          className={cn(
+            "size-2 rounded-full",
+            story.stage === "done"
+              ? "bg-emerald-400"
+              : story.stage === "human-qa"
+                ? "bg-amber-400"
+                : story.stage === "in-progress"
+                  ? "bg-blue-400"
+                  : "bg-muted-foreground/55",
+          )}
+        />
+        <span>{localStoryStageLabel(story.stage)}</span>
+        <time className="ml-auto" dateTime={localStoryUpdatedAt(story)}>
+          {formatRelativeTimeLabel(localStoryUpdatedAt(story))}
+        </time>
+      </div>
+      <h3 className="mt-2 text-sm font-semibold leading-snug text-foreground">{story.title}</h3>
+      <p className="mt-2 text-xs text-muted-foreground">
+        {ownerId ? `${displayPrincipal(ownerId)} owns` : "Unassigned"} · {threadState} ·{" "}
+        {evidenceCount} evidence
+      </p>
+      <p className="mt-3 border-t border-border/70 pt-3 text-xs font-medium text-amber-700 dark:text-amber-300">
+        {localStoryNextAction(story)}
+      </p>
+    </button>
+  );
+}
+
+type RoomsStoryListFilter = "needs-you" | "active" | "mine" | "all";
+
+function RoomsStoryViewToggle({
+  onChange,
+  view,
+}: {
+  readonly onChange: (view: RoomsStoriesView) => void;
+  readonly view: RoomsStoriesView;
+}) {
+  return (
+    <div className="inline-flex rounded-lg border border-border bg-muted/30 p-0.5" role="group">
+      <Button
+        aria-pressed={view === "board"}
+        onClick={() => onChange("board")}
+        size="sm"
+        type="button"
+        variant={view === "board" ? "secondary" : "ghost"}
+      >
+        <Columns3Icon /> Board
+      </Button>
+      <Button
+        aria-pressed={view === "list"}
+        onClick={() => onChange("list")}
+        size="sm"
+        type="button"
+        variant={view === "list" ? "secondary" : "ghost"}
+      >
+        <ListIcon /> List
+      </Button>
+    </div>
+  );
+}
+
+function RoomsStoriesBoard({
+  currentPrincipalId,
+  displayPrincipal,
+  onSelect,
+  selectedStoryId,
+  stories,
+  threads,
+}: {
+  readonly currentPrincipalId: string | null;
+  readonly displayPrincipal: (principalId: string) => string;
+  readonly onSelect: (storyId: string) => void;
+  readonly selectedStoryId: string | null;
+  readonly stories: readonly RoomsLocalStory[];
+  readonly threads: readonly RoomsNativeThreadEntry[];
+}) {
+  const counts = localStoryStageCounts(stories);
+  return (
+    <div
+      className="grid min-w-[64rem] grid-cols-4 items-start gap-3"
+      data-rooms-stories-layout="board"
+    >
+      {ROOMS_STORY_STAGE_ORDER.map((stage) => (
+        <section className="min-h-[28rem] rounded-xl border border-border bg-muted/10" key={stage}>
+          <header className="flex items-center gap-2 border-b border-border px-3 py-3">
+            <h2 className="text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
+              {localStoryStageLabel(stage)}
+            </h2>
+            <span className="ml-auto text-xs text-muted-foreground">{counts.get(stage)}</span>
+          </header>
+          <div className="grid gap-2.5 p-2.5">
+            {stories
+              .filter((story) => story.stage === stage)
+              .map((story) => (
+                <RoomsStorySummaryCard
+                  currentPrincipalId={currentPrincipalId}
+                  displayPrincipal={displayPrincipal}
+                  key={story.id}
+                  onSelect={() => onSelect(story.id)}
+                  selected={selectedStoryId === story.id}
+                  story={story}
+                  threads={threads}
+                />
+              ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 export function RoomsLocalStoriesSurface({
   navigate,
   roomId,
@@ -829,7 +1048,7 @@ export function RoomsLocalStoriesSurface({
   readonly roomId: string;
   readonly sourceMode?: Extract<RoomsDataSourceMode, "local" | "shared">;
 }) {
-  const { loadLocalStories, localFeedRefreshGeneration } = useRoomsDataSource();
+  const { loadLocalStories, localFeedRefreshGeneration, state } = useRoomsDataSource();
   const { boundProjectRefs, boundProjects } = useRoomProjectBindings(roomId, sourceMode);
   const shells = useThreadShellsForProjectRefs(boundProjectRefs);
   const threads = useMemo(
@@ -842,8 +1061,34 @@ export function RoomsLocalStoriesSurface({
   const [error, setError] = useState<LocalStoryError | null>(null);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
+  const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<RoomsStoryListFilter>("all");
+  const [view, setView] = useLocalStorage(
+    ROOMS_STORIES_VIEW_STORAGE_KEY,
+    "board",
+    RoomsStoriesView,
+  );
   const sourceLabel = sourceMode === "shared" ? "Shared" : "Local";
   const loadGeneration = useRef(0);
+  const interactiveWorkspace =
+    state.status === "ready" && state.mode !== "sample" ? state.workspace : null;
+  const currentPrincipalId = interactiveWorkspace?.principal.id ?? null;
+  const displayPrincipal = useCallback(
+    (principalId: string) => {
+      if (!interactiveWorkspace) return principalId;
+      if (interactiveWorkspace.principal.id === principalId) {
+        return interactiveWorkspace.principal.display_name ?? "Current person";
+      }
+      if ("principals" in interactiveWorkspace) {
+        return (
+          interactiveWorkspace.principals.find((principal) => principal.id === principalId)
+            ?.display_name ?? principalId
+        );
+      }
+      return principalId;
+    },
+    [interactiveWorkspace],
+  );
 
   const refresh = useCallback(async () => {
     const generation = ++loadGeneration.current;
@@ -868,9 +1113,31 @@ export function RoomsLocalStoriesSurface({
     };
   }, [localFeedRefreshGeneration, refresh]);
 
-  const acceptStory = (_story: RoomsLocalStory) => {
+  useEffect(() => {
+    const stories = response?.stories ?? [];
+    if (stories.length === 0) {
+      setSelectedStoryId(null);
+      return;
+    }
+    if (!selectedStoryId || !stories.some((story) => story.id === selectedStoryId)) {
+      setSelectedStoryId(stories[0]!.id);
+    }
+  }, [response?.stories, selectedStoryId]);
+
+  const acceptStory = (story: RoomsLocalStory) => {
+    setSelectedStoryId(story.id);
     void refresh();
   };
+
+  const stories = response?.stories ?? [];
+  const visibleStories = stories.filter((story) => {
+    if (filter === "all") return true;
+    if (filter === "active") return story.stage !== "backlog" && story.stage !== "done";
+    if (filter === "mine") return localStoryOwnerId(story) === currentPrincipalId;
+    return currentPrincipalId ? localStoryNeedsCurrentHuman(story, currentPrincipalId) : false;
+  });
+  const selectedStory = stories.find((story) => story.id === selectedStoryId) ?? null;
+  const canLinkStories = response?.capabilities["work.link_thread"] ?? false;
 
   return (
     <section className="mx-auto w-full max-w-5xl p-5 sm:p-8" data-rooms-local-stories="">
@@ -885,7 +1152,8 @@ export function RoomsLocalStoriesSurface({
             and execution status.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <RoomsStoryViewToggle onChange={setView} view={view} />
           <Button disabled={loading} onClick={() => void refresh()} size="sm" variant="outline">
             <RefreshCwIcon />
             Refresh
@@ -915,18 +1183,80 @@ export function RoomsLocalStoriesSurface({
           <RoomsLocalStoriesEmptyState sourceLabel={sourceLabel} />
         </div>
       ) : (
-        <div className="mt-6 grid gap-4">
-          {response?.stories.map((story) => (
-            <RoomsLocalStoryCard
-              canLink={response.capabilities["work.link_thread"]}
-              key={story.id}
-              navigate={navigate}
-              onUpdated={acceptStory}
-              roomId={roomId}
-              story={story}
-              threads={threads}
-            />
-          ))}
+        <div className="mt-6">
+          {view === "board" ? (
+            <div className="overflow-x-auto pb-3">
+              <RoomsStoriesBoard
+                currentPrincipalId={currentPrincipalId}
+                displayPrincipal={displayPrincipal}
+                onSelect={(storyId) => {
+                  setSelectedStoryId(storyId);
+                  setView("list");
+                }}
+                selectedStoryId={selectedStoryId}
+                stories={stories}
+                threads={threads}
+              />
+            </div>
+          ) : (
+            <div data-rooms-stories-layout="list-detail">
+              <div className="mb-4 flex flex-wrap gap-2">
+                {(
+                  [
+                    ["needs-you", "Needs you"],
+                    ["active", "Active"],
+                    ["mine", "Mine"],
+                    ["all", "All"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <Button
+                    aria-pressed={filter === value}
+                    key={value}
+                    onClick={() => setFilter(value)}
+                    size="sm"
+                    type="button"
+                    variant={filter === value ? "secondary" : "outline"}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+              <div className="grid gap-4 min-[1100px]:grid-cols-[minmax(17rem,22rem)_minmax(0,1fr)]">
+                <div className="grid content-start gap-2.5">
+                  {visibleStories.length > 0 ? (
+                    visibleStories.map((story) => (
+                      <RoomsStorySummaryCard
+                        currentPrincipalId={currentPrincipalId}
+                        displayPrincipal={displayPrincipal}
+                        key={story.id}
+                        onSelect={() => setSelectedStoryId(story.id)}
+                        selected={selectedStoryId === story.id}
+                        story={story}
+                        threads={threads}
+                      />
+                    ))
+                  ) : (
+                    <p className="rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
+                      No stories match this view.
+                    </p>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  {selectedStory ? (
+                    <RoomsLocalStoryCard
+                      canLink={canLinkStories}
+                      key={selectedStory.id}
+                      navigate={navigate}
+                      onUpdated={acceptStory}
+                      roomId={roomId}
+                      story={selectedStory}
+                      threads={threads}
+                    />
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -1,7 +1,16 @@
-import { AlertTriangleIcon, HashIcon, InboxIcon, RefreshCwIcon, SendIcon } from "lucide-react";
+import {
+  AlertTriangleIcon,
+  GitBranchIcon,
+  HashIcon,
+  InboxIcon,
+  RefreshCwIcon,
+  SendIcon,
+  XIcon,
+} from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { shouldSubmitComposerOnEnter } from "~/composer-logic";
 import { useClientSettings } from "~/hooks/useSettings";
@@ -23,6 +32,7 @@ import type {
   RoomsLocalFeedItem,
 } from "../dataSource/localChannelsContract";
 import type { RoomsInteractiveWorkspace } from "../dataSource/humanSharedContract";
+import type { RoomsProjectedActivity } from "../activity/projection";
 import { createLowercaseUuidV7 } from "../dataSource/uuidV7";
 import {
   canSubmitStableRoomsCommand,
@@ -216,6 +226,131 @@ function ChannelComposer({
   );
 }
 
+function SelectedMessageStoryPanel({
+  activity,
+  canCreateStory,
+  onDismiss,
+  roomId,
+}: {
+  readonly activity: RoomsProjectedActivity;
+  readonly canCreateStory: boolean;
+  readonly onDismiss: () => void;
+  readonly roomId: string;
+}) {
+  const { createLocalStory } = useRoomsDataSource();
+  const [title, setTitle] = useState(activity.item.summary.slice(0, 200));
+  const [command, setCommand] = useState<StableRoomsCommand<string> | null>(null);
+  const [pending, setPending] = useState(false);
+  const [createdStoryId, setCreatedStoryId] = useState<string | null>(null);
+  const [error, setError] = useState<{ readonly code: string; readonly message: string } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    setTitle(activity.item.summary.slice(0, 200));
+    setCommand(null);
+    setCreatedStoryId(null);
+    setError(null);
+  }, [activity.item.id, activity.item.summary]);
+
+  const createUnlinkedStory = async () => {
+    if (!canCreateStory || title.trim() === "" || pending) return;
+    setPending(true);
+    setError(null);
+    try {
+      const next = prepareStableRoomsCommand(command, title, createLowercaseUuidV7);
+      setCommand(next);
+      const result = await createLocalStory(roomId, {
+        requestId: next.requestId,
+        title: next.payload,
+        storyType: "feature",
+      });
+      setCommand(null);
+      setCreatedStoryId(result.value.id);
+    } catch (cause) {
+      setError(
+        isRoomsLocalClientError(cause)
+          ? { code: cause.code, message: cause.message }
+          : { code: "unexpected_story_error", message: "Could not create the story." },
+      );
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <aside
+      className="border-t border-border bg-muted/15 px-4 py-3 sm:px-6"
+      data-rooms-selected-message={activity.item.id}
+    >
+      <div className="mx-auto max-w-4xl rounded-xl border border-amber-500/30 bg-card p-4">
+        <div className="flex items-start gap-3">
+          <GitBranchIcon className="mt-0.5 size-4 text-amber-500" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start gap-2">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">
+                  Shape a story from this message
+                </h2>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  Message-to-story linkage is not exposed by the current server contract. You can
+                  use the message as a title, but the resulting story will be explicitly unlinked.
+                </p>
+              </div>
+              <Button
+                aria-label="Clear selected message"
+                className="ml-auto"
+                onClick={onDismiss}
+                size="icon-xs"
+                variant="ghost"
+              >
+                <XIcon />
+              </Button>
+            </div>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <Input
+                aria-label="Story title"
+                disabled={pending || createdStoryId !== null}
+                maxLength={200}
+                onChange={(event) => {
+                  setTitle(event.target.value);
+                  setCommand(null);
+                  setError(null);
+                }}
+                value={title}
+              />
+              <Button
+                disabled={
+                  !canCreateStory || pending || createdStoryId !== null || title.trim() === ""
+                }
+                onClick={() => void createUnlinkedStory()}
+                variant="outline"
+              >
+                {pending ? "Creating…" : createdStoryId ? "Story created" : "Create without link"}
+              </Button>
+            </div>
+            {createdStoryId ? (
+              <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">
+                Created {createdStoryId}. The source message was not linked.
+              </p>
+            ) : null}
+            {!canCreateStory ? (
+              <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                This principal does not have work.create capability.
+              </p>
+            ) : null}
+            {error ? (
+              <p className="mt-2 text-xs text-destructive">
+                {error.message} <code>{error.code}</code>
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 export function RoomsLocalChannelFeed({
   channel,
   workspace,
@@ -229,6 +364,7 @@ export function RoomsLocalChannelFeed({
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [feedInvalidated, setFeedInvalidated] = useState(false);
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
   const loadGeneration = useRef(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -236,6 +372,8 @@ export function RoomsLocalChannelFeed({
     () => projectRoomsLocalActivityItems(workspace, feed?.items ?? []),
     [feed?.items, workspace],
   );
+  const selectedActivity =
+    activities.find((activity) => activity.item.id === selectedActivityId) ?? null;
   useRoomsFeedAutoScroll(scrollRef, activities.length);
 
   const reload = useCallback(
@@ -376,6 +514,8 @@ export function RoomsLocalChannelFeed({
               <RoomsActivityFeed
                 activities={activities}
                 label={`Ordered ${roomsChannelDisplayName(channel.name)} messages`}
+                onActivitySelect={(activity) => setSelectedActivityId(activity.item.id)}
+                selectedActivityId={selectedActivityId}
               />
             </div>
           )}
@@ -394,6 +534,16 @@ export function RoomsLocalChannelFeed({
           ) : null}
         </main>
       </div>
+      {selectedActivity ? (
+        <SelectedMessageStoryPanel
+          activity={selectedActivity}
+          canCreateStory={
+            "work.create" in workspace.capabilities && workspace.capabilities["work.create"]
+          }
+          onDismiss={() => setSelectedActivityId(null)}
+          roomId={workspace.room.id}
+        />
+      ) : null}
       <ChannelComposer
         canSend={workspace.capabilities["message.create"]}
         channel={channel}

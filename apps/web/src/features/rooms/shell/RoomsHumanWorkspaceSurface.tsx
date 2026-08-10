@@ -10,6 +10,9 @@ import type { RoomsHumanWorkspace } from "../dataSource/humanSharedContract";
 import { isRoomsLocalClientError } from "../dataSource/localChannelsClient";
 import { createLowercaseUuidV7 } from "../dataSource/uuidV7";
 import { RoomsLocalStoriesSurface } from "../stories/RoomsLocalStories";
+import { RoomsInteractiveDashboard } from "../dashboard/RoomsInteractiveDashboard";
+import { RoomsInteractiveProjectSurface } from "../project/RoomsInteractiveProjectSurface";
+import { RoomsInteractivePresent } from "./RoomsInteractivePresent";
 import { RoomsThreadsSurface } from "../threads/RoomsThreadNavigation";
 import type { RoomsWorkspaceSurface } from "./navigation";
 import { RoomsLocalUnavailableSurface } from "./RoomsLocalWorkspaceSurface";
@@ -180,24 +183,6 @@ function RoomsHumanDashboard({ workspace }: { readonly workspace: RoomsHumanWork
   );
 }
 
-function RoomsHumanPresent({ workspace }: { readonly workspace: RoomsHumanWorkspace }) {
-  return (
-    <section className="mx-auto grid w-full max-w-5xl gap-3 p-5 sm:grid-cols-2 sm:p-8">
-      {workspace.principals.map((principal) => (
-        <div className="rounded-xl border border-border bg-card p-4" key={principal.id}>
-          <p className="font-medium text-foreground">
-            {principal.display_name ?? "Unresolved name"}
-          </p>
-          <code className="mt-1 block text-[10px] text-muted-foreground">{principal.id}</code>
-          <p className="mt-2 text-xs capitalize text-muted-foreground">
-            {principal.type} · {principal.role ?? "no room role"}
-          </p>
-        </div>
-      ))}
-    </section>
-  );
-}
-
 export function RoomsHumanWorkspaceSurfaceView({
   navigate,
   room,
@@ -212,7 +197,21 @@ export function RoomsHumanWorkspaceSurfaceView({
   >;
   readonly workspace: RoomsHumanWorkspace;
 }) {
-  if (surface.kind === "dashboard") return <RoomsHumanDashboard workspace={workspace} />;
+  if (surface.kind === "dashboard") {
+    return (
+      <div className="min-h-full">
+        <RoomsInteractiveDashboard navigate={navigate} room={room} workspace={workspace} />
+        <details className="mx-auto mb-8 w-[calc(100%-2.5rem)] max-w-[1216px] rounded-2xl border border-border bg-card">
+          <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-foreground">
+            Room admin and membership
+          </summary>
+          <div className="border-t border-border">
+            <RoomsHumanDashboard workspace={workspace} />
+          </div>
+        </details>
+      </div>
+    );
+  }
   if (surface.kind === "channel") {
     return <RoomsLocalChannelSurface channelSlug={surface.channelSlug} workspace={workspace} />;
   }
@@ -229,6 +228,9 @@ export function RoomsHumanWorkspaceSurfaceView({
       />
     );
   }
-  if (surface.kind === "present") return <RoomsHumanPresent workspace={workspace} />;
+  if (surface.kind === "project") {
+    return <RoomsInteractiveProjectSurface room={room} surface={surface} workspace={workspace} />;
+  }
+  if (surface.kind === "present") return <RoomsInteractivePresent workspace={workspace} />;
   return <RoomsLocalUnavailableSurface surface={surface} />;
 }

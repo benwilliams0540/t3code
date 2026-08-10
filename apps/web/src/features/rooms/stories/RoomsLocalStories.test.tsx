@@ -88,16 +88,16 @@ describe("Rooms Local Stories surface", () => {
   it("renders the explicit persisted Human QA action from the v2 gate", () => {
     const markup = renderToStaticMarkup(
       <RoomsLocalStoryGateStatus
-        onApprove={() => undefined}
+        onApproveAndComplete={() => undefined}
         pending={false}
         story={humanQaStory}
       />,
     );
     expect(markup).toContain("Human QA decision");
-    expect(markup).toContain("Approve Human QA");
-    expect(markup).toContain("Approval records your durable human decision");
+    expect(markup).toContain("Approve and complete");
+    expect(markup).toContain("records you as reviewer");
     expect(markup).not.toContain("Request changes");
-    expect(localStoryStageLabel("human-qa")).toBe("Human QA");
+    expect(localStoryStageLabel("human-qa")).toBe("Needs review");
   });
 
   it("binds terminal completion to the exact approved review evidence", () => {

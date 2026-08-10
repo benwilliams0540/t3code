@@ -120,25 +120,34 @@ function PresentSurface({
   readonly workspace: RoomsWorkspace;
 }) {
   return (
-    <div className="mx-auto grid w-full max-w-5xl gap-6 p-5 sm:p-8 lg:grid-cols-3">
-      <PresenceGroup
-        icon={CircleUserRoundIcon}
-        ids={workspace.presence.human_ids}
-        label="Humans"
-        principals={fixture.principals}
-      />
-      <PresenceGroup
-        icon={BotIcon}
-        ids={workspace.presence.agent_ids}
-        label="Agents"
-        principals={fixture.principals}
-      />
-      <PresenceGroup
-        icon={MonitorIcon}
-        ids={workspace.presence.machine_ids}
-        label="Machines"
-        principals={fixture.principals}
-      />
+    <div className="mx-auto w-full max-w-5xl p-5 sm:p-8">
+      <header>
+        <h1 className="text-2xl font-semibold text-foreground">People and machines</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          People, agents, and machine registrations stay distinct. Matching machine names never
+          collapse separate IDs.
+        </p>
+      </header>
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <PresenceGroup
+          icon={CircleUserRoundIcon}
+          ids={workspace.presence.human_ids}
+          label="People"
+          principals={fixture.principals}
+        />
+        <PresenceGroup
+          icon={BotIcon}
+          ids={workspace.presence.agent_ids}
+          label="Agents"
+          principals={fixture.principals}
+        />
+        <PresenceGroup
+          icon={MonitorIcon}
+          ids={workspace.presence.machine_ids}
+          label="Machines"
+          principals={fixture.principals}
+        />
+      </div>
     </div>
   );
 }

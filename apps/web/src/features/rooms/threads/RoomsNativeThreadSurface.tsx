@@ -33,6 +33,7 @@ import type { RoomsDataSourceMode } from "../dataSource";
 import type { RoomsWorkspaceSurface } from "../shell/navigation";
 import { useRoomProjectBindings } from "./roomProjectBindings";
 import { isThreadBoundToRoom } from "./roomsNativeThreads";
+import { RoomsThreadContextRail } from "./RoomsThreadContextRail";
 
 function NativeThreadUnavailable({ description }: { readonly description: string }) {
   return (
@@ -127,17 +128,34 @@ function RoomsServerThreadSurface({
   }
   if (
     allowedRef &&
+    serverThreadShell &&
     (renderState === "ready" || (renderState === "loading" && serverThreadShell !== null))
   ) {
     return (
-      <ChatView
-        environmentId={allowedRef.environmentId}
-        threadId={allowedRef.threadId}
-        routeKind="server"
-        reserveTitleBarControlInset={false}
-        roomsRoomSlug={roomSlug}
-        threadSyncPhase={threadSyncPhase}
-      />
+      <div className="relative flex min-h-0 min-w-0 flex-1" data-rooms-native-cockpit="">
+        <div className="flex min-h-0 min-w-0 flex-1">
+          <ChatView
+            environmentId={allowedRef.environmentId}
+            threadId={allowedRef.threadId}
+            routeKind="server"
+            reserveTitleBarControlInset={false}
+            roomsRoomSlug={roomSlug}
+            threadSyncPhase={threadSyncPhase}
+          />
+        </div>
+        <RoomsThreadContextRail
+          environmentId={allowedRef.environmentId}
+          projectId={serverThreadShell.projectId}
+          providerInstanceId={
+            serverThreadShell.session?.providerInstanceId ??
+            serverThreadShell.modelSelection.instanceId
+          }
+          roomId={roomId}
+          roomSlug={roomSlug}
+          status={serverThreadStatus ?? "loading"}
+          threadId={allowedRef.threadId}
+        />
+      </div>
     );
   }
   return <NativeThreadLoading />;

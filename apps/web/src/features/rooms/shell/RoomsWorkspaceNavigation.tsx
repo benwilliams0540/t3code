@@ -218,7 +218,7 @@ export function RoomsWorkspaceNavigation({
               : undefined
           }
           icon={UsersIcon}
-          label="Humans, agents, machines"
+          label="People and machines"
           onClick={() => navigate({ kind: "present" })}
         />
       </div>

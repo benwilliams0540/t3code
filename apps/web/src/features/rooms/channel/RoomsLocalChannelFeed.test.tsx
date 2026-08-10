@@ -9,6 +9,8 @@ import {
   RoomsLocalFeedItem,
   RoomsLocalWorkspace,
 } from "../dataSource/localChannelsContract";
+import { RoomsActivityFeed } from "../activity/RoomsActivityFeed";
+import { projectRoomsLocalActivityItem } from "./localActivityProjection";
 import {
   isCurrentRoomsLocalFeedRequest,
   mergeRoomsLocalFeedPages,
@@ -120,5 +122,19 @@ describe("Rooms Local channel feed", () => {
     );
     expect(markup).toContain('data-rooms-activity-kind="unknown"');
     expect(markup).not.toContain('data-rooms-activity-register="conversation"');
+  });
+
+  it("offers selected messages through an explicit keyboard-focusable story action", () => {
+    const activity = projectRoomsLocalActivityItem(workspace, firstPage.items[0]!);
+    const markup = renderToStaticMarkup(
+      <RoomsActivityFeed
+        activities={[activity]}
+        label="Channel"
+        onActivitySelect={() => {}}
+        selectedActivityId={activity.item.id}
+      />,
+    );
+    expect(markup).toContain('aria-pressed="true"');
+    expect(markup).toContain("Shape story");
   });
 });

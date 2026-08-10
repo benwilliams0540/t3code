@@ -284,7 +284,7 @@ function NeedsAttention({ projection }: { readonly projection: RoomsDashboardPro
     <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
       <div className="mb-3 flex items-center gap-2">
         <CircleAlertIcon aria-hidden className="size-4 text-amber-600 dark:text-amber-400" />
-        <h2 className="text-sm font-semibold text-foreground">Needs attention</h2>
+        <h2 className="text-sm font-semibold text-foreground">Needs you</h2>
         <span className="ml-auto text-xs text-muted-foreground">
           {projection.needsAttention.length}
         </span>
@@ -293,7 +293,7 @@ function NeedsAttention({ projection }: { readonly projection: RoomsDashboardPro
         {projection.needsAttention.length > 0 ? (
           projection.needsAttention.map((item) => <AttentionItem item={item} key={item.fact.id} />)
         ) : (
-          <p className="text-sm text-muted-foreground">No fixture stories need attention.</p>
+          <p className="text-sm text-muted-foreground">Nothing currently needs your attention.</p>
         )}
       </div>
     </section>
@@ -308,8 +308,7 @@ function ActivityItem({ activity }: { readonly activity: RoomsDashboardActivityI
       <div className="min-w-0 flex-1">
         <p className="text-sm leading-snug text-foreground">{projected.item.summary}</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          rank {activity.fact.rank} · {humanize(activity.fact.reason)} · writer{" "}
-          {projected.attribution.writer.display_name} · seq {projected.item.source_event.seq} ·{" "}
+          {projected.attribution.writer.display_name} ·{" "}
           {dateTimeFormatter.format(new Date(projected.item.occurred_at))}
         </p>
       </div>
@@ -345,11 +344,13 @@ function DashboardHeader({ projection }: { readonly projection: RoomsDashboardPr
     >
       <div>
         <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-          {projection.room.name} workspace
+          Current workspace
         </p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Dashboard</h1>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
+          {projection.room.name}
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Fixture projection · {humanize(projection.sourceProjection.kind)}
+          What needs you, what is moving, and what changed recently.
         </p>
       </div>
       <div className="ml-auto flex flex-wrap gap-2">
@@ -365,11 +366,16 @@ function NarrowDashboard({ projection }: { readonly projection: RoomsDashboardPr
     <div className="grid gap-5 min-[900px]:hidden" data-rooms-dashboard-layout="narrow-vertical">
       <NeedsAttention projection={projection} />
       <VisionCard projection={projection} />
-      <div className="grid gap-6" data-rooms-dashboard-board="vertical-stages">
-        {projection.stages.map((group) => (
-          <StageGroup group={group} key={group.stage.id} />
-        ))}
-      </div>
+      <section>
+        <h2 className="mb-3 text-xs font-semibold tracking-[0.1em] text-muted-foreground uppercase">
+          Active work and momentum
+        </h2>
+        <div className="grid gap-6" data-rooms-dashboard-board="vertical-stages">
+          {projection.stages.map((group) => (
+            <StageGroup group={group} key={group.stage.id} />
+          ))}
+        </div>
+      </section>
       <RecentActivity projection={projection} />
     </div>
   );
@@ -378,17 +384,27 @@ function NarrowDashboard({ projection }: { readonly projection: RoomsDashboardPr
 function DesktopDashboard({ projection }: { readonly projection: RoomsDashboardProjection }) {
   return (
     <div
-      className="hidden min-[900px]:grid min-[900px]:gap-5"
+      className="hidden min-[900px]:grid min-[900px]:gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.8fr)]"
       data-rooms-dashboard-layout="desktop-columns"
     >
-      <VisionCard projection={projection} />
-      <div className="grid grid-cols-4 items-start gap-3" data-rooms-dashboard-board="columns">
-        {projection.stages.map((group) => (
-          <StageGroup group={group} key={group.stage.id} />
-        ))}
-      </div>
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className="grid content-start gap-5">
         <NeedsAttention projection={projection} />
+        <section>
+          <h2 className="mb-3 text-xs font-semibold tracking-[0.1em] text-muted-foreground uppercase">
+            Active work and momentum
+          </h2>
+          <div
+            className="grid grid-cols-2 items-start gap-3 2xl:grid-cols-4"
+            data-rooms-dashboard-board="columns"
+          >
+            {projection.stages.map((group) => (
+              <StageGroup group={group} key={group.stage.id} />
+            ))}
+          </div>
+        </section>
+      </div>
+      <div className="grid content-start gap-5">
+        <VisionCard projection={projection} />
         <RecentActivity projection={projection} />
       </div>
     </div>
