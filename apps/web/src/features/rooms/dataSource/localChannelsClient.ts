@@ -1,4 +1,5 @@
 import type { RoomsLocalHttpRequest, RoomsLocalHttpResponse } from "@t3tools/contracts";
+import { normalizeRoomsOrigin } from "@t3tools/shared/roomsTransport";
 import * as Schema from "effect/Schema";
 
 import { ensureLocalApi } from "~/localApi";
@@ -31,8 +32,6 @@ import {
   type RoomsLocalUploadCasInput,
   isRoomsLocalStoryV2,
 } from "./localStoriesContract";
-
-const LOOPBACK_IPV4 = /^127(?:\.\d{1,3}){3}$/;
 
 export type RoomsLocalClientErrorKind =
   | "invalid_configuration"
@@ -70,40 +69,15 @@ export function isRoomsLocalClientError(error: unknown): error is RoomsLocalClie
   return error instanceof RoomsLocalClientError;
 }
 
-function isLoopbackHostname(hostname: string): boolean {
-  const normalized = hostname.toLowerCase();
-  if (normalized === "localhost" || normalized === "[::1]" || normalized === "::1") return true;
-  if (!LOOPBACK_IPV4.test(normalized)) return false;
-  return normalized
-    .split(".")
-    .every((part) => Number.isInteger(Number(part)) && Number(part) >= 0 && Number(part) <= 255);
-}
-
 export type RoomsLocalApiBaseUrlValidation =
   | { readonly ok: true; readonly value: string }
   | { readonly ok: false; readonly message: string };
 
 export function validateRoomsLocalApiBaseUrl(value: string): RoomsLocalApiBaseUrlValidation {
-  try {
-    const url = new URL(value.trim());
-    if (
-      url.protocol !== "http:" ||
-      !isLoopbackHostname(url.hostname) ||
-      url.username !== "" ||
-      url.password !== "" ||
-      (url.pathname !== "" && url.pathname !== "/") ||
-      url.search !== "" ||
-      url.hash !== ""
-    ) {
-      return {
-        ok: false,
-        message: "Use an HTTP loopback origin such as http://127.0.0.1:3000.",
-      };
-    }
-    return { ok: true, value: url.origin };
-  } catch {
-    return { ok: false, message: "Enter a valid loopback URL including the port." };
-  }
+  const normalized = normalizeRoomsOrigin("local", value);
+  return normalized === null
+    ? { ok: false, message: "Use an HTTP loopback origin such as http://127.0.0.1:3000." }
+    : { ok: true, value: normalized };
 }
 
 export interface RoomsLocalTransport {

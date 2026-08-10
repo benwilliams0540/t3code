@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
+import { RoomsAuthenticationError } from "~/cloud/roomsAuth";
+
 import {
   createRoomsHumanClient,
   validateRoomsHumanOpaqueCredential,
@@ -23,7 +25,7 @@ describe("authenticated shared Rooms client", () => {
     const requests: Parameters<RoomsHumanTransport["request"]>[0][] = [];
     let tokenRead = 0;
     const client = createRoomsHumanClient(
-      "http://127.0.0.1:33102",
+      "https://rooms.example.test",
       async () => `rooms-token-${++tokenRead}`,
       () => ({
         request: async (request) => {
@@ -46,6 +48,10 @@ describe("authenticated shared Rooms client", () => {
     await client.waitForChanges(roomId, { afterSeq: 0, timeoutMs: 1_000 });
 
     expect(requests.map((request) => request.bearer)).toEqual(["rooms-token-1", "rooms-token-2"]);
+    expect(requests.map((request) => request.baseUrl)).toEqual([
+      "https://rooms.example.test",
+      "https://rooms.example.test",
+    ]);
     expect(requests[1]?.path).toContain("/rooms/human/v1/rooms/");
     expect(
       JSON.stringify(requests.map(({ bearer: _bearer, ...request }) => request)),
@@ -129,4 +135,46 @@ describe("authenticated shared Rooms client", () => {
     );
     expect(() => validateRoomsHumanOpaqueCredential("x".repeat(513))).toThrow("missing or invalid");
   });
+
+  it.each(["ordinary request", "long poll"] as const)(
+    "rejects a %s response after the authentication generation changes",
+    async (requestKind) => {
+      let resolveResponse!: (value: ReturnType<typeof response>) => void;
+      const pending = new Promise<ReturnType<typeof response>>((resolve) => {
+        resolveResponse = resolve;
+      });
+      let current = true;
+      const client = createRoomsHumanClient(
+        "https://rooms.example.test",
+        async () => "bearer",
+        () => ({ request: async () => pending }),
+        () => {
+          if (!current) throw new RoomsAuthenticationError("rooms_auth_unavailable");
+        },
+      );
+
+      const result =
+        requestKind === "ordinary request"
+          ? client.getSession()
+          : client.waitForChanges(roomId, { afterSeq: 0, timeoutMs: 1_000 });
+      current = false;
+      resolveResponse(
+        requestKind === "ordinary request"
+          ? response({ contract, status: "ready", principal: null, rooms: [] })
+          : response({
+              contract,
+              room_id: roomId,
+              after_seq: 0,
+              head_seq: 0,
+              changed: false,
+              reason: "timeout",
+            }),
+      );
+
+      await expect(result).rejects.toMatchObject({
+        code: "rooms_auth_unavailable",
+        status: 401,
+      });
+    },
+  );
 });

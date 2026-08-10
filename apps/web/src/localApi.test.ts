@@ -57,6 +57,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("LocalApi", () => {
@@ -114,5 +115,55 @@ describe("LocalApi", () => {
 
     await api.persistence.setClientSettings(settings);
     await expect(api.persistence.getClientSettings()).resolves.toEqual(settings);
+  });
+
+  it("rejects Shared HTTPS outside the signed desktop transport", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { createLocalApi } = await import("./localApi");
+
+    await expect(
+      createLocalApi().roomsHuman!.request({
+        baseUrl: "https://rooms.example.test",
+        path: "/rooms/human/v1/session",
+        method: "GET",
+        bearer: "header.payload.signature",
+      }),
+    ).rejects.toThrow("signed desktop transport");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps browser loopback requests bounded and rejects redirects", async () => {
+    const fetchMock = vi.fn<typeof fetch>(
+      async () =>
+        new Response(null, { status: 302, headers: { location: "https://example.test" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { createLocalApi } = await import("./localApi");
+
+    await expect(
+      createLocalApi().roomsHuman!.request({
+        baseUrl: "http://127.0.0.1:33102",
+        path: "/rooms/human/v1/session",
+        method: "GET",
+        bearer: "header.payload.signature",
+      }),
+    ).rejects.toThrow("redirects are not allowed");
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ credentials: "omit", redirect: "manual" });
+  });
+
+  it("delegates Shared HTTPS to the desktop boundary", async () => {
+    const requestRoomsHuman = vi.fn().mockResolvedValue({ status: 200, headers: {}, body: "{}" });
+    testWindow().desktopBridge = { requestRoomsHuman } as unknown as DesktopBridge;
+    const { createLocalApi } = await import("./localApi");
+    const request = {
+      baseUrl: "https://rooms.example.test",
+      path: "/rooms/human/v1/session",
+      method: "GET" as const,
+      bearer: "header.payload.signature",
+    };
+
+    await createLocalApi().roomsHuman!.request(request);
+    expect(requestRoomsHuman).toHaveBeenCalledWith(request);
   });
 });

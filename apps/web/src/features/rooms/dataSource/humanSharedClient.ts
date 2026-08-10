@@ -1,4 +1,5 @@
 import type { RoomsHumanHttpRequest, RoomsHumanHttpResponse } from "@t3tools/contracts";
+import { normalizeRoomsOrigin } from "@t3tools/shared/roomsTransport";
 import * as Schema from "effect/Schema";
 
 import { readRoomsClerkToken, RoomsAuthenticationError } from "~/cloud/roomsAuth";
@@ -21,11 +22,7 @@ import {
   RoomsHumanWorkspace,
   type RoomsHumanRole,
 } from "./humanSharedContract";
-import {
-  RoomsLocalClientError,
-  type RoomsLocalCommandResult,
-  validateRoomsLocalApiBaseUrl,
-} from "./localChannelsClient";
+import { RoomsLocalClientError, type RoomsLocalCommandResult } from "./localChannelsClient";
 import type {
   RoomsLocalChangeWaitInput,
   RoomsLocalCreateChannelInput,
@@ -212,20 +209,33 @@ export function createRoomsHumanClient(
   configuredBaseUrl: string,
   readToken: () => Promise<string> = readRoomsClerkToken,
   transportFactory: () => RoomsHumanTransport = defaultTransport,
+  assertCurrent: () => void = () => undefined,
 ): RoomsHumanClient {
-  const validation = validateRoomsLocalApiBaseUrl(configuredBaseUrl);
+  const normalizedBaseUrl = normalizeRoomsOrigin("shared", configuredBaseUrl);
+
+  function invalidConfiguration(): RoomsLocalClientError {
+    return new RoomsLocalClientError({
+      kind: "invalid_configuration",
+      code: "invalid_human_api_base_url",
+      message: "Use an HTTPS origin or HTTP loopback origin for Shared Rooms.",
+    });
+  }
+
+  function authenticationFailure(cause: RoomsAuthenticationError): RoomsLocalClientError {
+    return new RoomsLocalClientError({
+      kind: "server",
+      status: 401,
+      code: cause.code,
+      message: cause.message,
+    });
+  }
 
   async function readBearer(): Promise<string> {
     try {
       return await readToken();
     } catch (cause) {
       if (cause instanceof RoomsAuthenticationError) {
-        throw new RoomsLocalClientError({
-          kind: "server",
-          status: 401,
-          code: cause.code,
-          message: cause.message,
-        });
+        throw authenticationFailure(cause);
       }
       throw new RoomsLocalClientError({
         kind: "server",
@@ -241,28 +251,25 @@ export function createRoomsHumanClient(
     method: "GET" | "POST",
     body?: Readonly<Record<string, unknown>>,
   ): Promise<RoomsHumanHttpResponse> {
-    if (!validation.ok) {
-      throw new RoomsLocalClientError({
-        kind: "invalid_configuration",
-        code: "invalid_human_api_base_url",
-        message: validation.message,
-      });
-    }
+    if (normalizedBaseUrl === null) throw invalidConfiguration();
     try {
       const bearer = await readBearer();
-      return await transportFactory().request({
-        baseUrl: validation.value,
+      const response = await transportFactory().request({
+        baseUrl: normalizedBaseUrl,
         path,
         method,
         bearer,
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
+      assertCurrent();
+      return response;
     } catch (cause) {
       if (cause instanceof RoomsLocalClientError) throw cause;
+      if (cause instanceof RoomsAuthenticationError) throw authenticationFailure(cause);
       throw new RoomsLocalClientError({
         kind: "transport",
         code: "human_api_unreachable",
-        message: `Could not reach the authenticated Rooms API at ${validation.value}.`,
+        message: `Could not reach the authenticated Rooms API at ${normalizedBaseUrl}.`,
       });
     }
   }
@@ -271,23 +278,29 @@ export function createRoomsHumanClient(
     roomId: string,
     input: RoomsLocalUploadCasInput,
   ): Promise<RoomsHumanHttpResponse> {
-    if (!validation.ok) {
+    if (normalizedBaseUrl === null) throw invalidConfiguration();
+    try {
+      const bearer = await readBearer();
+      const response = await transportFactory().request({
+        baseUrl: normalizedBaseUrl,
+        path: `/rooms/human/v1/rooms/${encodeURIComponent(roomId)}/cas`,
+        method: "POST",
+        bearer,
+        body: input.bodyBase64,
+        bodyEncoding: "base64",
+        contentType: input.mediaType,
+      });
+      assertCurrent();
+      return response;
+    } catch (cause) {
+      if (cause instanceof RoomsLocalClientError) throw cause;
+      if (cause instanceof RoomsAuthenticationError) throw authenticationFailure(cause);
       throw new RoomsLocalClientError({
-        kind: "invalid_configuration",
-        code: "invalid_human_api_base_url",
-        message: validation.message,
+        kind: "transport",
+        code: "human_api_unreachable",
+        message: `Could not reach the authenticated Rooms API at ${normalizedBaseUrl}.`,
       });
     }
-    const bearer = await readBearer();
-    return transportFactory().request({
-      baseUrl: validation.value,
-      path: `/rooms/human/v1/rooms/${encodeURIComponent(roomId)}/cas`,
-      method: "POST",
-      bearer,
-      body: input.bodyBase64,
-      bodyEncoding: "base64",
-      contentType: input.mediaType,
-    });
   }
 
   const roomPath = (roomId: string) => `/rooms/human/v1/rooms/${encodeURIComponent(roomId)}`;

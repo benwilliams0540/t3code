@@ -1,4 +1,9 @@
 import type { ContextMenuItem, LocalApi } from "@t3tools/contracts";
+import {
+  normalizeRoomsOrigin,
+  resolveRoomsHumanRequestUrl,
+  validateRoomsHumanRequestBody,
+} from "@t3tools/shared/roomsTransport";
 
 import { resetRequestLatencyStateForTests } from "./rpc/requestLatencyState";
 import { showContextMenuFallback } from "./contextMenuFallback";
@@ -91,23 +96,32 @@ function createBrowserLocalApi(): LocalApi {
         if (window.desktopBridge?.requestRoomsHuman) {
           return window.desktopBridge.requestRoomsHuman(request);
         }
-        const target = new URL(request.path, request.baseUrl);
+        const target = resolveRoomsHumanRequestUrl(request);
+        if (normalizeRoomsOrigin("local", request.baseUrl) === null) {
+          throw new Error("Shared Rooms HTTPS requires the signed desktop transport.");
+        }
+        const validatedBody = validateRoomsHumanRequestBody(request);
         const body =
-          request.body === undefined
+          validatedBody === null
             ? undefined
-            : request.bodyEncoding === "base64"
-              ? Uint8Array.from(atob(request.body), (character) => character.charCodeAt(0))
-              : request.body;
+            : validatedBody.bodyEncoding === "base64"
+              ? Uint8Array.from(atob(validatedBody.body), (character) => character.charCodeAt(0))
+              : validatedBody.body;
         const response = await fetch(target, {
           method: request.method,
+          credentials: "omit",
+          redirect: "manual",
           headers: {
             authorization: `Bearer ${request.bearer}`,
             ...(body === undefined
               ? {}
-              : { "content-type": request.contentType ?? "application/json" }),
+              : { "content-type": validatedBody?.contentType ?? "application/json" }),
           },
           ...(body === undefined ? {} : { body }),
         });
+        if (response.status >= 300 && response.status < 400) {
+          throw new Error("Rooms human API redirects are not allowed.");
+        }
         return {
           status: response.status,
           headers: Object.fromEntries(response.headers.entries()),

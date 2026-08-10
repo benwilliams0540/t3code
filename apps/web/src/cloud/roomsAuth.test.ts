@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import {
   __resetRoomsAuthenticationForTests,
   activateRoomsAuthentication,
+  assertRoomsAuthenticationGeneration,
   deactivateRoomsAuthentication,
   readRoomsAuthenticationSnapshot,
   readRoomsClerkToken,
@@ -22,6 +23,7 @@ describe("Rooms authentication", () => {
     deactivateRoomsAuthentication();
     activateRoomsAuthentication("account-b", async () => "token-b");
     await expect(readRoomsClerkToken(generation)).rejects.toThrow("not active");
+    expect(() => assertRoomsAuthenticationGeneration(generation)).toThrow("not active");
   });
 
   it("rejects missing, oversized, and header-breaking credentials", async () => {

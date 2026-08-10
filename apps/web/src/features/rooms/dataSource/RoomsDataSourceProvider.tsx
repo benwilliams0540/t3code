@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import {
+  assertRoomsAuthenticationGeneration,
   readRoomsAuthenticationSnapshot,
   readRoomsClerkToken,
   subscribeRoomsAuthentication,
@@ -251,7 +252,12 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
   const client = useMemo(() => createRoomsLocalChannelsClient(localApiBaseUrl), [localApiBaseUrl]);
   const humanClientForGeneration = useCallback(
     (generation: number) =>
-      createRoomsHumanClient(humanApiBaseUrl, () => readRoomsClerkToken(generation)),
+      createRoomsHumanClient(
+        humanApiBaseUrl,
+        () => readRoomsClerkToken(generation),
+        undefined,
+        () => assertRoomsAuthenticationGeneration(generation),
+      ),
     [humanApiBaseUrl],
   );
   const humanClientForGenerationRef = useRef(humanClientForGeneration);
