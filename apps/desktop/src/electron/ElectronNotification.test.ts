@@ -26,21 +26,25 @@ function testRuntime(overrides: Partial<ElectronNotificationRuntime> = {}) {
 }
 
 describe("ElectronNotification", () => {
-  it("shows once, deduplicates by event id, and reveals on click", async () => {
-    const test = testRuntime();
-    const service = make(test.runtime);
+  it.effect("shows once, deduplicates by event id, and reveals on click", () =>
+    Effect.gen(function* () {
+      const test = testRuntime();
+      const service = make(test.runtime);
 
-    expect(await Effect.runPromise(service.show(request))).toBe("shown");
-    expect(await Effect.runPromise(service.show(request))).toBe("duplicate");
-    expect(test.handle.show).toHaveBeenCalledOnce();
-    test.listeners.get("click")?.();
-    expect(test.runtime.reveal).toHaveBeenCalledOnce();
-  });
+      expect(yield* service.show(request)).toBe("shown");
+      expect(yield* service.show(request)).toBe("duplicate");
+      expect(test.handle.show).toHaveBeenCalledOnce();
+      test.listeners.get("click")?.();
+      expect(test.runtime.reveal).toHaveBeenCalledOnce();
+    }),
+  );
 
-  it("suppresses focused windows and unsupported platforms", async () => {
-    const focused = make(testRuntime({ isFocused: () => true }).runtime);
-    const unsupported = make(testRuntime({ isSupported: () => false }).runtime);
-    assert.strictEqual(await Effect.runPromise(focused.show(request)), "focused");
-    assert.strictEqual(await Effect.runPromise(unsupported.show(request)), "unsupported");
-  });
+  it.effect("suppresses focused windows and unsupported platforms", () =>
+    Effect.gen(function* () {
+      const focused = make(testRuntime({ isFocused: () => true }).runtime);
+      const unsupported = make(testRuntime({ isSupported: () => false }).runtime);
+      assert.strictEqual(yield* focused.show(request), "focused");
+      assert.strictEqual(yield* unsupported.show(request), "unsupported");
+    }),
+  );
 });
