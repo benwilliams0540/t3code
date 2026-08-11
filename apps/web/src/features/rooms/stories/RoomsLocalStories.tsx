@@ -1007,11 +1007,11 @@ function RoomsStoriesBoard({
   const counts = localStoryStageCounts(stories);
   return (
     <div
-      className="grid min-w-[64rem] grid-cols-4 items-start gap-3"
+      className="grid min-h-[28rem] min-w-[64rem] flex-1 grid-cols-4 items-start gap-3"
       data-rooms-stories-layout="board"
     >
       {ROOMS_STORY_STAGE_ORDER.map((stage) => (
-        <section className="min-h-[28rem] rounded-xl border border-border bg-muted/10" key={stage}>
+        <section className="h-full rounded-xl border border-border bg-muted/10" key={stage}>
           <header className="flex items-center gap-2 border-b border-border px-3 py-3">
             <h2 className="text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
               {localStoryStageLabel(stage)}
@@ -1140,7 +1140,13 @@ export function RoomsLocalStoriesSurface({
   const canLinkStories = response?.capabilities["work.link_thread"] ?? false;
 
   return (
-    <section className="mx-auto w-full max-w-5xl p-5 sm:p-8" data-rooms-local-stories="">
+    <section
+      className={cn(
+        "mx-auto w-full p-5 sm:p-8",
+        view === "board" ? "flex min-h-full max-w-[1600px] flex-col" : "max-w-5xl",
+      )}
+      data-rooms-local-stories=""
+    >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
@@ -1183,9 +1189,9 @@ export function RoomsLocalStoriesSurface({
           <RoomsLocalStoriesEmptyState sourceLabel={sourceLabel} />
         </div>
       ) : (
-        <div className="mt-6">
+        <div className={cn("mt-6", view === "board" && "flex min-h-0 flex-1 flex-col")}>
           {view === "board" ? (
-            <div className="overflow-x-auto pb-3">
+            <div className="flex min-h-0 flex-1 overflow-x-auto pb-3">
               <RoomsStoriesBoard
                 currentPrincipalId={currentPrincipalId}
                 displayPrincipal={displayPrincipal}
