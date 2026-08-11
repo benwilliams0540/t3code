@@ -276,7 +276,13 @@ function ActivityMarkdown({
  * The record and excerpt registers: a bordered card that keeps the durable facts visible, because
  * governance and lifecycle items are read as records rather than as speech.
  */
-export function RoomsActivityItem({ activity }: { readonly activity: RoomsProjectedActivity }) {
+export function RoomsActivityItem({
+  activity,
+  currentPrincipalId,
+}: {
+  readonly activity: RoomsProjectedActivity;
+  readonly currentPrincipalId?: string | undefined;
+}) {
   const copy = cardCopy[activity.cardKind];
   const Icon = copy.icon;
   const writer = activity.attribution.writer;
@@ -293,6 +299,11 @@ export function RoomsActivityItem({ activity }: { readonly activity: RoomsProjec
       <div className="min-w-0 flex-1">
         <header className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <span className="font-medium text-foreground">{writer.display_name}</span>
+          {writer.id === currentPrincipalId ? (
+            <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700 uppercase dark:text-blue-300">
+              You
+            </span>
+          ) : null}
           <span
             className={cn(
               "rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase",
@@ -329,9 +340,11 @@ export function RoomsActivityItem({ activity }: { readonly activity: RoomsProjec
  */
 export function RoomsConversationActivity({
   activity,
+  currentPrincipalId,
   showHeader,
 }: {
   readonly activity: RoomsProjectedActivity;
+  readonly currentPrincipalId?: string | undefined;
   readonly showHeader: boolean;
 }) {
   const copy = cardCopy[activity.cardKind];
@@ -365,6 +378,11 @@ export function RoomsConversationActivity({
         {showHeader ? (
           <header className="flex min-w-0 flex-wrap items-baseline gap-x-2">
             <span className="font-semibold text-foreground">{writer.display_name}</span>
+            {writer.id === currentPrincipalId ? (
+              <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-1.5 py-px text-[9px] font-semibold text-blue-700 uppercase dark:text-blue-300">
+                You
+              </span>
+            ) : null}
             {writerPresentation.tone === "human" ? null : (
               <span
                 className={cn(
@@ -414,14 +432,26 @@ export function RoomsActivityDaySeparator({ isoDate }: { readonly isoDate: strin
   );
 }
 
-export function RoomsActivityRowView({ row }: { readonly row: RoomsActivityRow }) {
+export function RoomsActivityRowView({
+  currentPrincipalId,
+  row,
+}: {
+  readonly currentPrincipalId?: string | undefined;
+  readonly row: RoomsActivityRow;
+}) {
   if (row.kind === "day") return <RoomsActivityDaySeparator isoDate={row.isoDate} />;
   if (row.register === "conversation") {
-    return <RoomsConversationActivity activity={row.activity} showHeader={row.showHeader} />;
+    return (
+      <RoomsConversationActivity
+        activity={row.activity}
+        currentPrincipalId={currentPrincipalId}
+        showHeader={row.showHeader}
+      />
+    );
   }
   return (
     <div className="my-3">
-      <RoomsActivityItem activity={row.activity} />
+      <RoomsActivityItem activity={row.activity} currentPrincipalId={currentPrincipalId} />
     </div>
   );
 }

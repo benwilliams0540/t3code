@@ -1,4 +1,6 @@
 import * as Schema from "effect/Schema";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
 import { RoomsHumanWorkspace } from "../dataSource/humanSharedContract";
@@ -6,6 +8,7 @@ import {
   resolveRoomsHumanWorkspaceActions,
   roomsHumanInviteClipboardPayload,
 } from "./RoomsHumanWorkspaceSurface";
+import { RoomsInteractivePresent } from "./RoomsInteractivePresent";
 
 const base = {
   contract: {
@@ -97,5 +100,23 @@ describe("shared Rooms capability UI", () => {
         }),
       ),
     ).toEqual({ room_id: base.room.id, invite_token: "rhi1_opaque" });
+  });
+
+  it("marks exactly the authenticated principal as You", () => {
+    const workspace = decodeWorkspace({
+      ...base,
+      capabilities,
+      principals: [
+        { ...base.principal },
+        {
+          id: "h:0198f7e2-1234-789a-8abc-123456789abd",
+          type: "human",
+          display_name: "Another member",
+          role: "admin",
+        },
+      ],
+    });
+    const markup = renderToStaticMarkup(createElement(RoomsInteractivePresent, { workspace }));
+    expect(markup.match(/>You</g)).toHaveLength(1);
   });
 });

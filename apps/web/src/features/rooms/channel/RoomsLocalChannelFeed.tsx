@@ -90,6 +90,7 @@ export function RoomsLocalFeedItemCard({
   const activity = projectRoomsLocalActivityItem(workspace, item);
   return (
     <RoomsActivityRowView
+      currentPrincipalId={workspace.principal.id}
       row={{
         kind: "activity",
         key: activity.item.id,
@@ -513,6 +514,7 @@ export function RoomsLocalChannelFeed({
             <div className="mt-auto">
               <RoomsActivityFeed
                 activities={activities}
+                currentPrincipalId={workspace.principal.id}
                 label={`Ordered ${roomsChannelDisplayName(channel.name)} messages`}
                 onActivitySelect={(activity) => setSelectedActivityId(activity.item.id)}
                 selectedActivityId={selectedActivityId}

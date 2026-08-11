@@ -59,11 +59,13 @@ export function useRoomsFeedAutoScroll(
  */
 export function RoomsActivityFeed({
   activities,
+  currentPrincipalId,
   label,
   onActivitySelect,
   selectedActivityId,
 }: {
   readonly activities: readonly RoomsProjectedActivity[];
+  readonly currentPrincipalId?: string | undefined;
   readonly label: string;
   readonly onActivitySelect?: ((activity: RoomsProjectedActivity) => void) | undefined;
   readonly selectedActivityId?: string | null | undefined;
@@ -91,7 +93,7 @@ export function RoomsActivityFeed({
               : undefined
           }
         >
-          <RoomsActivityRowView row={row} />
+          <RoomsActivityRowView currentPrincipalId={currentPrincipalId} row={row} />
           {row.kind === "activity" && row.activity.cardKind === "message" && onActivitySelect ? (
             <button
               aria-pressed={row.activity.item.id === selectedActivityId}
