@@ -52,6 +52,33 @@ function advanced(roomId: string, afterSeq: number, headSeq: number): RoomsLocal
 }
 
 describe("Rooms Local single change wait loop", () => {
+  it("marks the first advanced cursor as baseline-only", async () => {
+    const first = deferred<RoomsLocalChangeResponse>();
+    const pending = deferred<RoomsLocalChangeResponse>();
+    const invalidations: RoomsLocalChangeInvalidation[] = [];
+    let calls = 0;
+    const loop = new RoomsLocalChangeLoop({
+      client: {
+        waitForChanges: () => {
+          calls += 1;
+          return calls === 1 ? first.promise : pending.promise;
+        },
+      },
+      onInvalidate: async (invalidation) => {
+        invalidations.push(invalidation);
+      },
+      onStatusChange: vi.fn(),
+    });
+
+    loop.start(ROOM_A);
+    first.resolve(advanced(ROOM_A, 0, 40));
+    await flush();
+    expect(invalidations).toEqual([
+      { roomId: ROOM_A, afterSeq: 0, headSeq: 40, initial: true, reason: "advanced" },
+    ]);
+    loop.stop();
+  });
+
   it("runs one physical wait, reissues timeouts, and advances only after reconciliation", async () => {
     const waits = [
       deferred<RoomsLocalChangeResponse>(),
@@ -80,7 +107,9 @@ describe("Rooms Local single change wait loop", () => {
     expect(requests).toHaveLength(2);
     waits[1]!.resolve(advanced(ROOM_A, 0, 4));
     await flush();
-    expect(invalidations).toEqual([{ roomId: ROOM_A, headSeq: 4, reason: "advanced" }]);
+    expect(invalidations).toEqual([
+      { roomId: ROOM_A, afterSeq: 0, headSeq: 4, initial: false, reason: "advanced" },
+    ]);
     expect(requests[2]).toEqual({ roomId: ROOM_A, afterSeq: 4 });
     loop.stop();
   });
@@ -145,7 +174,9 @@ describe("Rooms Local single change wait loop", () => {
     });
     loop.start(ROOM_A);
     await flush();
-    expect(invalidations).toEqual([{ roomId: ROOM_A, headSeq: 2, reason: "cursor_ahead" }]);
+    expect(invalidations).toEqual([
+      { roomId: ROOM_A, afterSeq: 0, headSeq: 2, initial: true, reason: "cursor_ahead" },
+    ]);
     expect(requests).toEqual([0, 2]);
     loop.stop();
   });

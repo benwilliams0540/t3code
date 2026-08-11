@@ -51,6 +51,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.invoke(IpcChannels.ROOMS_LOCAL_HTTP_REQUEST_CHANNEL, request),
   requestRoomsHuman: (request) =>
     ipcRenderer.invoke(IpcChannels.ROOMS_HUMAN_HTTP_REQUEST_CHANNEL, request),
+  showNotification: (request) => ipcRenderer.invoke(IpcChannels.SHOW_NOTIFICATION_CHANNEL, request),
   getConnectionCatalog: () => ipcRenderer.invoke(IpcChannels.GET_CONNECTION_CATALOG_CHANNEL),
   setConnectionCatalog: (catalog) =>
     ipcRenderer.invoke(IpcChannels.SET_CONNECTION_CATALOG_CHANNEL, catalog),
