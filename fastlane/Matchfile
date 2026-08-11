@@ -1,0 +1,14 @@
+git_url("https://github.com/benwilliams0540/match.git")
+git_branch("main")
+storage_mode("git")
+
+type("developer_id")
+platform("macos")
+username("benwilliams0540@gmail.com")
+team_id("XKUXN9R3RW")
+
+# This fork does not own the upstream com.t3tools.t3code App ID. Developer ID
+# certificate sharing does not require an App ID while provisioning profiles
+# and native passkey entitlements are disabled.
+app_identifier([])
+skip_provisioning_profiles(true)
