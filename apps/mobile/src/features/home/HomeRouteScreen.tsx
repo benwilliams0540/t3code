@@ -88,11 +88,18 @@ export function HomeRouteScreen() {
         <NativeStackScreenOptions options={{ title: "", headerTitle: "" }} />
         <WorkspaceSidebarToolbar
           afterSidebarButton={
-            <NativeHeaderToolbar.Button
-              accessibilityLabel="New task"
-              icon="square.and.pencil"
-              onPress={() => navigation.navigate("NewTaskSheet", { screen: "NewTask" })}
-            />
+            <>
+              <NativeHeaderToolbar.Button
+                accessibilityLabel="Open Rooms"
+                icon="person.2"
+                onPress={() => navigation.navigate("Rooms")}
+              />
+              <NativeHeaderToolbar.Button
+                accessibilityLabel="New task"
+                icon="square.and.pencil"
+                onPress={() => navigation.navigate("NewTaskSheet", { screen: "NewTask" })}
+              />
+            </>
           }
         />
         <WorkspaceEmptyDetail
@@ -120,6 +127,7 @@ export function HomeRouteScreen() {
           onEnvironmentChange={setSelectedEnvironmentId}
           onProjectChange={setSelectedProjectKey}
           onOpenSettings={() => navigation.navigate("SettingsSheet", { screen: "Settings" })}
+          onOpenRooms={() => navigation.navigate("Rooms")}
           onProjectSortOrderChange={setProjectSortOrder}
           onSearchQueryChange={setSearchQuery}
           onStartNewTask={() => navigation.navigate("NewTaskSheet", { screen: "NewTask" })}

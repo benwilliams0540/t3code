@@ -19,7 +19,12 @@ import {
   unregisterAgentAwarenessDeviceForCurrentUser,
 } from "../agent-awareness/remoteRegistration";
 import { clearConnectOnboardingRequest, requestConnectOnboarding } from "./connectOnboarding";
-import { resolveCloudPublicConfig, resolveRelayClerkTokenOptions } from "./publicConfig";
+import {
+  hasCloudPublicConfig,
+  resolveCloudPublicConfig,
+  resolveRelayClerkTokenOptions,
+  shouldMountCloudAuthProvider,
+} from "./publicConfig";
 
 function resetManagedRelayTokenCache() {
   return settleAsyncResult(() =>
@@ -184,13 +189,17 @@ export function CloudAuthProvider(props: { readonly children: ReactNode }) {
     }
   }, [publishableKey, relayUrl]);
 
-  if (!publishableKey || !relayUrl) {
+  if (!publishableKey || !shouldMountCloudAuthProvider()) {
     return props.children;
   }
 
   return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-      <CloudAuthBridge>{props.children}</CloudAuthBridge>
+      {hasCloudPublicConfig() ? (
+        <CloudAuthBridge>{props.children}</CloudAuthBridge>
+      ) : (
+        props.children
+      )}
     </ClerkProvider>
   );
 }

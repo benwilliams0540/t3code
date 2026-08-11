@@ -35,3 +35,14 @@ provides them; otherwise the Vision route explains exactly which capability is u
 
 Loading, empty, unavailable, stale, and stopped states stay visible. Check the source and project
 shown in the Rooms header before acting, especially after changing accounts or environments.
+
+## Mobile
+
+The side-by-side `T3 Code Rooms` mobile build connects directly to the configured private HTTPS
+Human endpoint with a fresh dedicated Clerk token for every request. From the Threads screen, open
+Rooms to review attention items, inspect and advance stories, read or send channel messages, open an
+exact linked T3 thread, and distinguish people, agents, and machines.
+
+The initial mobile surface refreshes when opened and on pull-to-refresh. Evidence upload, story
+creation, vision revision history, invitations, and administration remain desktop actions. Mobile
+shows those limits explicitly instead of substituting local fixtures or browser state.

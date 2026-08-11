@@ -31,6 +31,10 @@ describe("resolveCloudPublicConfig", () => {
       relay: {
         url: null,
       },
+      rooms: {
+        apiUrl: null,
+        jwtTemplate: null,
+      },
       observability: {
         tracesUrl: null,
         tracesDataset: null,
@@ -44,6 +48,10 @@ describe("resolveCloudPublicConfig", () => {
       resolveCloudPublicConfig({
         clerk: { publishableKey: "  pk_test_example  ", jwtTemplate: "  t3-relay  " },
         relay: { url: " https://relay.example.test/// " },
+        rooms: {
+          apiUrl: " https://rooms.tail.example.test/ ",
+          jwtTemplate: " t3-rooms ",
+        },
         observability: {
           tracesUrl: " https://api.axiom.co/v1/traces ",
           tracesDataset: " mobile-traces ",
@@ -57,6 +65,10 @@ describe("resolveCloudPublicConfig", () => {
       },
       relay: {
         url: "https://relay.example.test",
+      },
+      rooms: {
+        apiUrl: "https://rooms.tail.example.test",
+        jwtTemplate: "t3-rooms",
       },
       observability: {
         tracesUrl: "https://api.axiom.co/v1/traces",
@@ -80,12 +92,33 @@ describe("resolveCloudPublicConfig", () => {
       relay: {
         url: null,
       },
+      rooms: {
+        apiUrl: null,
+        jwtTemplate: null,
+      },
       observability: {
         tracesUrl: null,
         tracesDataset: null,
         tracesToken: null,
       },
     });
+  });
+
+  it("enables native Rooms only with a fixed authenticated origin", () => {
+    const configured = resolveCloudPublicConfig({
+      clerk: { publishableKey: "pk_test_example" },
+      rooms: { apiUrl: "https://rooms.tail.example.test", jwtTemplate: "t3-rooms" },
+    });
+    expect(configured.rooms).toEqual({
+      apiUrl: "https://rooms.tail.example.test",
+      jwtTemplate: "t3-rooms",
+    });
+    expect(
+      resolveCloudPublicConfig({
+        clerk: { publishableKey: "pk_test_example" },
+        rooms: { apiUrl: "http://rooms.example.test", jwtTemplate: "t3-rooms" },
+      }).rooms.apiUrl,
+    ).toBeNull();
   });
 
   it("rejects an insecure traces URL", () => {

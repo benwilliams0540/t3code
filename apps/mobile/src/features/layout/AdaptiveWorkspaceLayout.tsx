@@ -233,7 +233,7 @@ function AdaptiveWorkspaceLayoutContent(
   // In split layouts the sidebar IS the thread list — it renders on every
   // route, including Home (which shows an empty-detail pane instead of the
   // compact list).
-  const shouldRenderPrimarySidebar = layout.usesSplitView;
+  const shouldRenderPrimarySidebar = layout.usesSplitView && !pathname.startsWith("/rooms");
   const fileInspector = useMemo(
     () =>
       deriveFileInspectorPaneLayout({
