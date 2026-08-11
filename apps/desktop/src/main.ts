@@ -1,7 +1,7 @@
+import { handleProcessOutputError } from "./app/DesktopProcessStreams.ts";
+
 for (const stream of [process.stdout, process.stderr]) {
-  stream.on("error", (err: NodeJS.ErrnoException) => {
-    if (err.code !== "EPIPE") throw err;
-  });
+  stream.on("error", handleProcessOutputError);
 }
 
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
