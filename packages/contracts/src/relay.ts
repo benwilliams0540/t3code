@@ -841,6 +841,19 @@ export const RelayPublishResponse = Schema.Struct({
 });
 export type RelayPublishResponse = typeof RelayPublishResponse.Type;
 
+export const RelayRoomsMessagePublishRequest = Schema.Struct({
+  eventId: TrimmedNonEmptyString,
+  recipientUserId: TrimmedNonEmptyString,
+  roomId: TrimmedNonEmptyString,
+  channelId: TrimmedNonEmptyString,
+  roomName: TrimmedNonEmptyString,
+  channelName: TrimmedNonEmptyString,
+  senderDisplayName: Schema.NullOr(TrimmedNonEmptyString),
+  occurredAt: TrimmedNonEmptyString,
+  deepLink: TrimmedNonEmptyString,
+});
+export type RelayRoomsMessagePublishRequest = typeof RelayRoomsMessagePublishRequest.Type;
+
 export const RelayHealthResponse = Schema.Struct({
   ok: Schema.Boolean,
   service: Schema.Literal("relay"),
@@ -1052,6 +1065,17 @@ export const RelayServerGroup = HttpApiGroup.make("server")
   .annotate(OpenApi.Description, "Environment-authenticated activity publication.")
   .middleware(RelayEnvironmentAuth);
 
+export const RelayRoomsServerGroup = HttpApiGroup.make("roomsServer")
+  .add(
+    HttpApiEndpoint.post("publishRoomsMessage", "/v1/rooms/messages", {
+      headers: RelayBearerRequestHeaders,
+      payload: RelayRoomsMessagePublishRequest,
+      success: RelayPublishResponse,
+      error: RelayAuthAndInternalErrors,
+    }).annotate(OpenApi.Summary, "Publish a user-targeted Rooms message"),
+  )
+  .annotate(OpenApi.Description, "Authenticated Rooms server notification publication.");
+
 export const RelayApi = HttpApi.make("RelayApi")
   .add(
     RelayHealthGroup,
@@ -1061,6 +1085,7 @@ export const RelayApi = HttpApi.make("RelayApi")
     RelayTokenGroup,
     RelayDpopClientGroup,
     RelayServerGroup,
+    RelayRoomsServerGroup,
   )
   .annotate(OpenApi.Title, "T3 Code Relay API")
   .annotate(OpenApi.Version, "1.0.0")

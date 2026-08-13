@@ -74,6 +74,12 @@ Required `production` environment secrets:
 
 - `CLERK_SECRET_KEY`
 - `APNS_PRIVATE_KEY`
+- `ROOMS_PUBLISH_TOKEN`
+
+The Rooms publisher token is server-to-server only and must match the protected
+T3 Rooms deployment value. The APNs `.p8` token key remains only in the relay
+deployment secret store; it is never copied into a client build or the Rooms
+server.
 
 The account-scoped repository credentials are consumed by Alchemy while provisioning relay stages; they
 are not bound into the relay Worker. The production deployment uses an Axiom personal access token,

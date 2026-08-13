@@ -72,6 +72,7 @@ export class ApnsDeliveryQueue extends Context.Service<
       readonly bundleId?: string | null;
       readonly apsEnvironment?: "sandbox" | "production" | null;
       readonly notification: NonNullable<ApnsDeliveryJobPayload["notification"]>;
+      readonly jobId?: string;
     }) => Effect.Effect<RelayDeliveryResult, ApnsDeliveryQueueError>;
   }
 >()("t3code-relay/agentActivity/ApnsDeliveryQueue") {}
@@ -148,19 +149,21 @@ export const make = Effect.gen(function* () {
           "relay.thread_id": input.notification.threadId,
         });
         const now = yield* DateTime.now;
-        const jobId = yield* crypto.randomUUIDv4.pipe(
-          Effect.mapError(
-            (cause) =>
-              new ApnsDeliveryQueueSendError({
-                operation: "generate-job-id",
-                jobId: null,
-                kind: "push_notification",
-                userId: input.userId,
-                deviceId: input.deviceId,
-                cause,
-              }),
-          ),
-        );
+        const jobId =
+          input.jobId ??
+          (yield* crypto.randomUUIDv4.pipe(
+            Effect.mapError(
+              (cause) =>
+                new ApnsDeliveryQueueSendError({
+                  operation: "generate-job-id",
+                  jobId: null,
+                  kind: "push_notification",
+                  userId: input.userId,
+                  deviceId: input.deviceId,
+                  cause,
+                }),
+            ),
+          ));
         yield* Effect.annotateCurrentSpan({ "relay.delivery.job_id": jobId });
         const payload = makeApnsDeliveryJobPayload({
           kind: "push_notification",
