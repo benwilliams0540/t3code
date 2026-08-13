@@ -145,20 +145,26 @@ The `production` GitHub environment must define these Actions variables:
 - `APNS_TEAM_ID`
 - `APNS_KEY_ID`
 - `APNS_BUNDLE_ID`
+- `ROOMS_APNS_ENVIRONMENT`
+- `ROOMS_APNS_TEAM_ID`
+- `ROOMS_APNS_KEY_ID`
+- `ROOMS_APNS_BUNDLE_ID`
 
 The `production` GitHub environment must define these Actions secrets:
 
 - `CLERK_SECRET_KEY`
 - `APNS_PRIVATE_KEY`
+- `ROOMS_APNS_PRIVATE_KEY`
 - `ROOMS_PUBLISH_TOKEN`
 
 `ROOMS_PUBLISH_TOKEN` authenticates the T3 Rooms server-only
 `POST /v1/rooms/messages` publisher. Store the same value in the protected
 Rooms server runtime environment; never expose it to the mobile app. Keep the
-APNs token key only in this relay deployment. Device registrations supply their
-signed bundle ID and `aps-environment`, so the relay can route Threadspace Alpha
-(`com.brw.threadspace.alpha`, sandbox) independently of its configured legacy
-default topic.
+APNs token keys only in this relay deployment. The Rooms-specific APNs variables
+must name Threadspace Alpha's paid team, key ID, `com.brw.threadspace.alpha`
+topic, and sandbox environment. Device registrations supply their signed bundle
+ID and `aps-environment`; the relay selects the Rooms credential set by exact
+bundle ID without replacing the existing T3 Code APNs credentials.
 
 The account-scoped repository credentials are consumed by Alchemy while provisioning relay stages; they
 are not bound into the relay Worker. The production deployment uses an Axiom personal access token,

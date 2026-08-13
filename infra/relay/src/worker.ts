@@ -132,6 +132,14 @@ export const ApiLive = Api.make(
     const apnsKeyId = yield* Config.string("APNS_KEY_ID");
     const apnsBundleId = yield* Config.string("APNS_BUNDLE_ID");
     const apnsPrivateKey = yield* Config.redacted("APNS_PRIVATE_KEY");
+    const roomsApnsEnvironment = yield* Config.schema(
+      RelayConfiguration.ApnsEnvironment,
+      "ROOMS_APNS_ENVIRONMENT",
+    );
+    const roomsApnsTeamId = yield* Config.string("ROOMS_APNS_TEAM_ID");
+    const roomsApnsKeyId = yield* Config.string("ROOMS_APNS_KEY_ID");
+    const roomsApnsBundleId = yield* Config.string("ROOMS_APNS_BUNDLE_ID");
+    const roomsApnsPrivateKey = yield* Config.redacted("ROOMS_APNS_PRIVATE_KEY");
     const apnsDeliveryJobSigningSecret = yield* randomApnsDeliveryJobSigningSecret;
     const apnsDeliveryQueueSender = yield* Cloudflare.Queues.WriteQueue(apnsDeliveryQueue);
 
@@ -169,6 +177,13 @@ export const ApiLive = Api.make(
           keyId: apnsKeyId,
           bundleId: apnsBundleId,
           privateKey: apnsPrivateKey,
+        },
+        roomsApns: {
+          environment: roomsApnsEnvironment,
+          teamId: roomsApnsTeamId,
+          keyId: roomsApnsKeyId,
+          bundleId: roomsApnsBundleId,
+          privateKey: roomsApnsPrivateKey,
         },
         apnsDeliveryJobSigningSecret: yield* apnsDeliveryJobSigningSecret,
         clerkSecretKey,
