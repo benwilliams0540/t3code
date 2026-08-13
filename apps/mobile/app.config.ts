@@ -396,7 +396,9 @@ const config: ExpoConfig = {
     },
     clerk: {
       publishableKey: repoEnv.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? null,
-      jwtTemplate: repoEnv.EXPO_PUBLIC_CLERK_JWT_TEMPLATE ?? null,
+      jwtTemplate: isThreadspaceAlpha
+        ? (repoEnv.T3CODE_ROOMS_CLERK_JWT_TEMPLATE ?? null)
+        : (repoEnv.EXPO_PUBLIC_CLERK_JWT_TEMPLATE ?? null),
     },
     // Native Google sign-in credentials. @clerk/expo reads these from `extra`
     // under their exact env-var names (not nested), and its config plugin reads
