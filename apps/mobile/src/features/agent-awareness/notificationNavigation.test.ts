@@ -114,6 +114,19 @@ describe("extractAgentNotificationDeepLink", () => {
     ).toBe("/threads/env%201/thread%2F2");
   });
 
+  it("routes Rooms message payloads to the authoritative room and channel", () => {
+    expect(
+      extractAgentNotificationDeepLink(
+        responseWithData({
+          eventId: "019fed3b-e36c-7730-aed8-4a927abc756f",
+          roomId: "room:one",
+          channelId: "channel:general",
+          deepLink: "/rooms/room%3Aone/channel%3Ageneral",
+        }),
+      ),
+    ).toBe("/rooms/room%3Aone/channel%3Ageneral");
+  });
+
   it("falls back to the thread route from environment and thread ids", () => {
     expect(
       extractAgentNotificationDeepLink(

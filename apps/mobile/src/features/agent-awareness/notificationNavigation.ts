@@ -2,8 +2,12 @@ import { useEffect, useRef } from "react";
 import * as Notifications from "expo-notifications";
 import { useLinkTo } from "@react-navigation/native";
 
-import { routeAgentNotificationResponseOnce } from "./notificationPayload";
+import {
+  extractRoomsNotificationEvent,
+  routeAgentNotificationResponseOnce,
+} from "./notificationPayload";
 import { consumeLastAgentNotificationResponse } from "./notificationResponseConsumer";
+import { recordRoomsEvent } from "../rooms/realtimePersistence";
 
 export function useAgentNotificationNavigation(): void {
   const linkTo = useLinkTo();
@@ -11,6 +15,13 @@ export function useAgentNotificationNavigation(): void {
 
   useEffect(() => {
     const handleResponse = (response: Notifications.NotificationResponse): void => {
+      const roomsEvent = extractRoomsNotificationEvent(response);
+      if (roomsEvent) {
+        void recordRoomsEvent({
+          eventId: roomsEvent.eventId,
+          unreadChannel: { roomId: roomsEvent.roomId, channelId: roomsEvent.channelId },
+        });
+      }
       routeAgentNotificationResponseOnce({
         handledResponseIds: handledResponseIds.current,
         response,

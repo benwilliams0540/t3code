@@ -4,7 +4,9 @@ export const ROOMS_MOBILE_CHANGE_WAIT_TIMEOUT_MS = 25_000;
 export const ROOMS_MOBILE_CHANGE_RETRY_INITIAL_MS = 500;
 export const ROOMS_MOBILE_CHANGE_RETRY_MAX_MS = 5_000;
 
-export type RoomsMobileLiveUpdatesStatus = "connected" | "reconnecting";
+import type { RoomsRealtimeEvent } from "./contract";
+
+export type RoomsMobileLiveUpdatesStatus = "stopped" | "catching_up" | "connected" | "reconnecting";
 
 export interface RoomsMobileChangeInvalidation {
   readonly roomId: string;
@@ -12,6 +14,7 @@ export interface RoomsMobileChangeInvalidation {
   readonly headSeq: number;
   readonly initial: boolean;
   readonly reason: "advanced" | "cursor_ahead";
+  readonly realtimeEvents: readonly RoomsRealtimeEvent[];
 }
 
 export interface RoomsMobileChangeLoopOptions {
@@ -22,13 +25,24 @@ export interface RoomsMobileChangeLoopOptions {
         readonly afterSeq: number;
         readonly timeoutMs?: number;
         readonly signal?: AbortSignal;
+        readonly realtime?: boolean;
+        readonly clientId?: string;
       },
-    ) => Promise<{ readonly changed: boolean; readonly head_seq: number }>;
+    ) => Promise<{
+      readonly changed: boolean;
+      readonly head_seq: number;
+      readonly realtime_events?: readonly RoomsRealtimeEvent[];
+    }>;
   };
   readonly onInvalidate: (invalidation: RoomsMobileChangeInvalidation) => Promise<void>;
   readonly onStatusChange?: (status: RoomsMobileLiveUpdatesStatus) => void;
   readonly scheduleRetry?: (callback: () => void, delayMs: number) => () => void;
   readonly waitTimeoutMs?: number;
+  readonly clientId?: string;
+  readonly cursorStore?: {
+    readonly load: (roomId: string) => Promise<number>;
+    readonly save: (roomId: string, cursor: number) => Promise<void>;
+  };
 }
 
 interface ActiveSession {
@@ -50,12 +64,14 @@ export class RoomsMobileChangeLoop {
   private readonly onStatusChange: NonNullable<RoomsMobileChangeLoopOptions["onStatusChange"]>;
   private readonly scheduleRetry: NonNullable<RoomsMobileChangeLoopOptions["scheduleRetry"]>;
   private readonly waitTimeoutMs: number;
+  private readonly clientId: string | undefined;
+  private readonly cursorStore: NonNullable<RoomsMobileChangeLoopOptions["cursorStore"]>;
   private active: ActiveSession | null = null;
   private abortController: AbortController | null = null;
   private cancelRetry: (() => void) | null = null;
   private generation = 0;
   private inFlight = false;
-  private status: RoomsMobileLiveUpdatesStatus = "connected";
+  private status: RoomsMobileLiveUpdatesStatus = "stopped";
 
   constructor(options: RoomsMobileChangeLoopOptions) {
     this.client = options.client;
@@ -63,25 +79,40 @@ export class RoomsMobileChangeLoop {
     this.onStatusChange = options.onStatusChange ?? (() => undefined);
     this.scheduleRetry = options.scheduleRetry ?? defaultScheduleRetry;
     this.waitTimeoutMs = options.waitTimeoutMs ?? ROOMS_MOBILE_CHANGE_WAIT_TIMEOUT_MS;
+    this.clientId = options.clientId;
+    this.cursorStore = options.cursorStore ?? {
+      load: async () => 0,
+      save: async () => undefined,
+    };
   }
 
   start(roomId: string): void {
     this.invalidateSession();
-    this.active = {
+    const session: ActiveSession = {
       generation: this.generation,
       roomId,
       afterSeq: 0,
       initialized: false,
       retryAttempt: 0,
     };
-    this.publishStatus("connected");
-    this.pump();
+    this.active = session;
+    this.publishStatus("catching_up");
+    void this.cursorStore
+      .load(roomId)
+      .then((cursor) => {
+        if (!this.isCurrent(session)) return;
+        session.afterSeq = Number.isSafeInteger(cursor) && cursor >= 0 ? cursor : 0;
+        this.pump();
+      })
+      .catch(() => {
+        if (this.isCurrent(session)) this.pump();
+      });
   }
 
   stop(): void {
     this.invalidateSession();
     this.active = null;
-    this.publishStatus("connected");
+    this.publishStatus("stopped");
   }
 
   private invalidateSession(): void {
@@ -133,8 +164,10 @@ export class RoomsMobileChangeLoop {
     try {
       const response = await this.client.waitForChanges(session.roomId, {
         afterSeq: session.afterSeq,
-        timeoutMs: this.waitTimeoutMs,
+        timeoutMs: session.initialized ? this.waitTimeoutMs : 1_000,
         signal,
+        realtime: session.initialized,
+        ...(this.clientId ? { clientId: this.clientId } : {}),
       });
       if (!this.isCurrent(session)) return;
       if (response.changed) {
@@ -144,10 +177,13 @@ export class RoomsMobileChangeLoop {
           headSeq: response.head_seq,
           initial: !session.initialized,
           reason: "advanced",
+          realtimeEvents: response.realtime_events ?? [],
         });
         if (!this.isCurrent(session)) return;
       }
       session.afterSeq = response.head_seq;
+      await this.cursorStore.save(session.roomId, session.afterSeq);
+      if (!this.isCurrent(session)) return;
       session.initialized = true;
       session.retryAttempt = 0;
       this.publishStatus("connected");
@@ -165,9 +201,12 @@ export class RoomsMobileChangeLoop {
             headSeq: error.headSeq,
             initial: true,
             reason: "cursor_ahead",
+            realtimeEvents: [],
           });
           if (!this.isCurrent(session)) return;
           session.afterSeq = error.headSeq;
+          await this.cursorStore.save(session.roomId, session.afterSeq);
+          if (!this.isCurrent(session)) return;
           session.initialized = true;
           session.retryAttempt = 0;
           this.publishStatus("connected");

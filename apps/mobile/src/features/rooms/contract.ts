@@ -147,11 +147,25 @@ export const RoomsHumanFeed = Schema.Struct({
 });
 export type RoomsHumanFeed = typeof RoomsHumanFeed.Type;
 
+export const RoomsRealtimeEvent = Schema.Struct({
+  event_id: Schema.String,
+  seq: Schema.Int,
+  room_id: Schema.String,
+  channel_id: Schema.String,
+  actor_principal_id: Schema.String,
+  sender_display_name: Schema.NullOr(Schema.String),
+  summary: Schema.String,
+  occurred_at: Schema.String,
+  fallback_published: Schema.Boolean,
+});
+export type RoomsRealtimeEvent = typeof RoomsRealtimeEvent.Type;
+
 const RoomsHumanChangeResponseBase = {
   contract: RoomsHumanContract,
   room_id: Schema.String,
   after_seq: Schema.Int,
   head_seq: Schema.Int,
+  realtime_events: Schema.Array(RoomsRealtimeEvent),
 } as const;
 
 export const RoomsHumanChangeResponse = Schema.Union([
@@ -167,6 +181,12 @@ export const RoomsHumanChangeResponse = Schema.Union([
   }),
 ]);
 export type RoomsHumanChangeResponse = typeof RoomsHumanChangeResponse.Type;
+
+export const RoomsDeliveryAcknowledgementResponse = Schema.Struct({
+  contract: RoomsHumanContract,
+  room_id: Schema.String,
+  acknowledged_event_ids: Schema.Array(Schema.String),
+});
 
 const RoomsStorySourceEvent = Schema.Struct({
   seq: Schema.Int,

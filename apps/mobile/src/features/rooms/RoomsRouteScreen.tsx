@@ -1,11 +1,10 @@
 import { AuthView } from "@clerk/expo/native";
 import { useAuth } from "@clerk/expo";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  AppState,
   Platform,
   Pressable,
   RefreshControl,
@@ -28,8 +27,14 @@ import {
   resolveRoomsClerkTokenOptions,
 } from "../cloud/publicConfig";
 import { WorkspaceSidebarToolbar } from "../layout/workspace-sidebar-toolbar";
-import { RoomsMobileChangeLoop } from "./changeLoop";
 import { createRoomsMobileClient, RoomsMobileClientError } from "./client";
+import { setRoomsVisibleChannel, subscribeRoomsInvalidations } from "./realtimeBridge";
+import {
+  loadRoomsUnread,
+  markRoomsChannelRead,
+  subscribeRoomsUnread,
+  unreadKey,
+} from "./realtimePersistence";
 import {
   isRoomsHumanStoryV2,
   type RoomsHumanFeed,
@@ -568,6 +573,12 @@ export function RoomsRouteScreen() {
 }
 
 function ConfiguredRoomsRouteScreen() {
+  const route = useRoute();
+  const routeParams = route.params as
+    | { readonly roomId?: string; readonly channelId?: string }
+    | undefined;
+  const requestedRoomId = routeParams?.roomId ?? null;
+  const requestedChannelId = routeParams?.channelId ?? null;
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const isKeyboardVisible = useKeyboardState((state) => state.isVisible);
@@ -609,6 +620,7 @@ function ConfiguredRoomsRouteScreen() {
   const selectedChannelIdRef = useRef<string | null>(null);
   selectedChannelIdRef.current = selectedChannelId;
   const [feed, setFeed] = useState<RoomsHumanFeed | null>(null);
+  const [unread, setUnread] = useState<Readonly<Record<string, number>>>({});
   const [feedLoading, setFeedLoading] = useState(false);
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
   const [draft, setDraft] = useState("");
@@ -659,10 +671,14 @@ function ConfiguredRoomsRouteScreen() {
         setStoriesResponse(nextStories);
         const currentChannelId = selectedChannelIdRef.current;
         const nextChannelId =
-          currentChannelId &&
-          nextWorkspace.channels.some((channel) => channel.id === currentChannelId)
-            ? currentChannelId
-            : (nextWorkspace.channels[0]?.id ?? null);
+          requestedRoomId === roomId &&
+          requestedChannelId &&
+          nextWorkspace.channels.some((channel) => channel.id === requestedChannelId)
+            ? requestedChannelId
+            : currentChannelId &&
+                nextWorkspace.channels.some((channel) => channel.id === currentChannelId)
+              ? currentChannelId
+              : (nextWorkspace.channels[0]?.id ?? null);
         selectedChannelIdRef.current = nextChannelId;
         setSelectedChannelId(nextChannelId);
         if (nextChannelId) setFeedLoading(true);
@@ -679,7 +695,7 @@ function ConfiguredRoomsRouteScreen() {
         }
       }
     },
-    [client],
+    [client, requestedChannelId, requestedRoomId],
   );
 
   const loadSession = useCallback(
@@ -694,9 +710,11 @@ function ConfiguredRoomsRouteScreen() {
         setSession(nextSession);
         const currentRoomId = selectedRoomIdRef.current;
         const roomId =
-          currentRoomId && nextSession.rooms.some((room) => room.id === currentRoomId)
-            ? currentRoomId
-            : (nextSession.rooms[0]?.id ?? null);
+          requestedRoomId && nextSession.rooms.some((room) => room.id === requestedRoomId)
+            ? requestedRoomId
+            : currentRoomId && nextSession.rooms.some((room) => room.id === currentRoomId)
+              ? currentRoomId
+              : (nextSession.rooms[0]?.id ?? null);
         if (roomId !== currentRoomId) {
           feedLoadGenerationRef.current += 1;
           setSelectedStoryId(null);
@@ -727,21 +745,7 @@ function ConfiguredRoomsRouteScreen() {
         }
       }
     },
-    [client, loadRoom],
-  );
-
-  const changeLoop = useMemo(
-    () =>
-      new RoomsMobileChangeLoop({
-        client,
-        onInvalidate: async ({ roomId }) => {
-          await loadRoom(roomId, {
-            generation: loadGenerationRef.current,
-            throwOnError: true,
-          });
-        },
-      }),
-    [client, loadRoom],
+    [client, loadRoom, requestedRoomId],
   );
 
   useFocusEffect(
@@ -753,21 +757,37 @@ function ConfiguredRoomsRouteScreen() {
     }, [isLoaded, isSignedIn, loadSession, userId]),
   );
 
+  useEffect(
+    () =>
+      subscribeRoomsInvalidations((roomId) => {
+        if (roomId === selectedRoomIdRef.current) {
+          void loadRoom(roomId, { generation: loadGenerationRef.current });
+        }
+      }),
+    [loadRoom],
+  );
+
+  useEffect(() => {
+    const refresh = () => void loadRoomsUnread().then(setUnread);
+    refresh();
+    return subscribeRoomsUnread(refresh);
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
-      if (!isLoaded || !isSignedIn || !selectedRoomId) return;
-      const start = () => changeLoop.start(selectedRoomId);
-      if (AppState.currentState === "active") start();
-      const subscription = AppState.addEventListener("change", (nextState) => {
-        if (nextState === "active") start();
-        else changeLoop.stop();
-      });
-      return () => {
-        subscription.remove();
-        changeLoop.stop();
-      };
-    }, [changeLoop, isLoaded, isSignedIn, selectedRoomId]),
+      if (section !== "channels" || !selectedRoomId || !selectedChannelId) {
+        setRoomsVisibleChannel(null);
+        return;
+      }
+      setRoomsVisibleChannel({ roomId: selectedRoomId, channelId: selectedChannelId });
+      void markRoomsChannelRead(selectedRoomId, selectedChannelId);
+      return () => setRoomsVisibleChannel(null);
+    }, [section, selectedChannelId, selectedRoomId]),
   );
+
+  useEffect(() => {
+    if (requestedChannelId) setSection("channels");
+  }, [requestedChannelId]);
 
   useEffect(() => {
     if (isSignedIn) return;
@@ -1063,6 +1083,9 @@ function ConfiguredRoomsRouteScreen() {
                         }
                       >
                         {roomsChannelLabel(channel.name)}
+                        {unread[unreadKey(channel.room_id, channel.id)]
+                          ? ` · ${unread[unreadKey(channel.room_id, channel.id)]}`
+                          : ""}
                       </Text>
                     </Pressable>
                   ))}

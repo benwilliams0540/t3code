@@ -21,9 +21,7 @@ function deferred<T>() {
 }
 
 async function flush(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let index = 0; index < 10; index += 1) await Promise.resolve();
 }
 
 describe("Rooms mobile change loop", () => {
@@ -33,12 +31,12 @@ describe("Rooms mobile change loop", () => {
       deferred<{ changed: boolean; head_seq: number }>(),
       deferred<{ changed: boolean; head_seq: number }>(),
     ];
-    const requests: Array<{ roomId: string; afterSeq: number }> = [];
+    const requests: Array<{ roomId: string; afterSeq: number; realtime: boolean | undefined }> = [];
     const invalidations: RoomsMobileChangeInvalidation[] = [];
     const loop = new RoomsMobileChangeLoop({
       client: {
         waitForChanges: (roomId, input) => {
-          requests.push({ roomId, afterSeq: input.afterSeq });
+          requests.push({ roomId, afterSeq: input.afterSeq, realtime: input.realtime });
           return waits[requests.length - 1]!.promise;
         },
       },
@@ -54,9 +52,20 @@ describe("Rooms mobile change loop", () => {
     await flush();
 
     expect(invalidations).toEqual([
-      { roomId: ROOM_A, afterSeq: 0, headSeq: 4, initial: false, reason: "advanced" },
+      {
+        roomId: ROOM_A,
+        afterSeq: 0,
+        headSeq: 4,
+        initial: false,
+        reason: "advanced",
+        realtimeEvents: [],
+      },
     ]);
-    expect(requests[2]).toEqual({ roomId: ROOM_A, afterSeq: 4 });
+    expect(requests).toMatchObject([
+      { realtime: false },
+      { realtime: true },
+      { afterSeq: 4, realtime: true },
+    ]);
     loop.stop();
   });
 
@@ -81,6 +90,7 @@ describe("Rooms mobile change loop", () => {
     });
 
     loop.start(ROOM_A);
+    await flush();
     loop.start(ROOM_B);
     await flush();
 
@@ -116,7 +126,14 @@ describe("Rooms mobile change loop", () => {
     await flush();
 
     expect(invalidations).toEqual([
-      { roomId: ROOM_A, afterSeq: 0, headSeq: 2, initial: true, reason: "cursor_ahead" },
+      {
+        roomId: ROOM_A,
+        afterSeq: 0,
+        headSeq: 2,
+        initial: true,
+        reason: "cursor_ahead",
+        realtimeEvents: [],
+      },
     ]);
     expect(requests).toEqual([0, 2]);
     loop.stop();
@@ -150,8 +167,73 @@ describe("Rooms mobile change loop", () => {
     schedules[0]!.callback();
     await flush();
 
-    expect(statuses).toEqual(["reconnecting", "connected"]);
+    expect(statuses).toEqual(["catching_up", "reconnecting", "connected"]);
     expect(attempt).toBe(3);
+    loop.stop();
+  });
+
+  it("loads and persists the durable cursor before advertising availability", async () => {
+    const requests: Array<{ afterSeq: number; realtime: boolean | undefined }> = [];
+    const saves: number[] = [];
+    const pending = deferred<{ changed: boolean; head_seq: number }>();
+    const loop = new RoomsMobileChangeLoop({
+      clientId: "ios:test",
+      cursorStore: {
+        load: async () => 9,
+        save: async (_roomId, cursor) => {
+          saves.push(cursor);
+        },
+      },
+      client: {
+        waitForChanges: (_roomId, input) => {
+          requests.push({ afterSeq: input.afterSeq, realtime: input.realtime });
+          return requests.length === 1
+            ? Promise.resolve({ changed: false, head_seq: 9 })
+            : pending.promise;
+        },
+      },
+      onInvalidate: async () => undefined,
+    });
+
+    loop.start(ROOM_A);
+    await flush();
+
+    expect(requests).toEqual([
+      { afterSeq: 9, realtime: false },
+      { afterSeq: 9, realtime: true },
+    ]);
+    expect(saves).toEqual([9]);
+    loop.stop();
+  });
+
+  it("does not advertise realtime availability when durable cursor persistence fails", async () => {
+    const requests: Array<{ realtime: boolean | undefined }> = [];
+    const schedules: Array<{ callback: () => void; delayMs: number }> = [];
+    const loop = new RoomsMobileChangeLoop({
+      clientId: "ios:test",
+      cursorStore: {
+        load: async () => 0,
+        save: async () => Promise.reject(new Error("secure storage unavailable")),
+      },
+      client: {
+        waitForChanges: (_roomId, input) => {
+          requests.push({ realtime: input.realtime });
+          return Promise.resolve({ changed: false, head_seq: 0 });
+        },
+      },
+      onInvalidate: async () => undefined,
+      scheduleRetry: (callback, delayMs) => {
+        schedules.push({ callback, delayMs });
+        return vi.fn();
+      },
+    });
+
+    loop.start(ROOM_A);
+    await flush();
+
+    expect(requests).toEqual([{ realtime: false }]);
+    expect(schedules).toHaveLength(1);
+    expect(schedules[0]?.delayMs).toBe(500);
     loop.stop();
   });
 });

@@ -7,6 +7,7 @@ import * as Schema from "effect/Schema";
 
 import {
   RoomsHumanChangeResponse,
+  RoomsDeliveryAcknowledgementResponse,
   RoomsHumanErrorResponse,
   RoomsHumanFeed,
   RoomsHumanMessage,
@@ -46,6 +47,9 @@ const decodeStories = Schema.decodeUnknownSync(RoomsHumanStoriesResponse);
 const decodeFeed = Schema.decodeUnknownSync(RoomsHumanFeed);
 const decodeMessage = Schema.decodeUnknownSync(RoomsHumanMessage);
 const decodeChange = Schema.decodeUnknownSync(RoomsHumanChangeResponse);
+const decodeDeliveryAcknowledgement = Schema.decodeUnknownSync(
+  RoomsDeliveryAcknowledgementResponse,
+);
 const decodeStoryV2 = Schema.decodeUnknownSync(RoomsHumanStoryV2);
 const decodeError = Schema.decodeUnknownSync(RoomsHumanErrorResponse);
 
@@ -200,12 +204,16 @@ export function createRoomsMobileClient(options: {
         readonly afterSeq: number;
         readonly timeoutMs?: number;
         readonly signal?: AbortSignal;
+        readonly realtime?: boolean;
+        readonly clientId?: string;
       },
     ) => {
       const query = new URLSearchParams({
         after_seq: String(input.afterSeq),
         timeout_ms: String(input.timeoutMs ?? 25_000),
+        realtime: input.realtime ? "1" : "0",
       });
+      if (input.clientId) query.set("client_id", input.clientId);
       const change = await request(
         `${roomPath(roomId)}/changes?${query.toString()}`,
         "GET",
@@ -224,6 +232,21 @@ export function createRoomsMobileClient(options: {
         );
       }
       return change;
+    },
+    acknowledgeDeliveries: async (roomId: string, eventIds: readonly string[]) => {
+      const acknowledgement = await request(
+        `${roomPath(roomId)}/delivery-acknowledgements`,
+        "POST",
+        decodeDeliveryAcknowledgement,
+        { event_ids: [...eventIds] },
+      );
+      if (acknowledgement.room_id !== roomId) {
+        throw new RoomsMobileClientError(
+          "rooms_delivery_ack_mismatch",
+          "The Rooms acknowledgement does not match the requested room.",
+        );
+      }
+      return acknowledgement;
     },
     transitionStory: (
       roomId: string,

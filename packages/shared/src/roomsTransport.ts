@@ -76,6 +76,7 @@ function exactHumanRouteMethods(pathname: string): readonly ("GET" | "POST")[] {
     [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/channels/${CHANNEL_ID}/feed$`), ["GET"]],
     [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/channels/${CHANNEL_ID}/messages$`), ["POST"]],
     [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/changes$`), ["GET"]],
+    [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/delivery-acknowledgements$`), ["POST"]],
     [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/stories$`), ["GET", "POST"]],
     [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/stories/${STORY_ID}$`), ["GET"]],
     [
@@ -95,7 +96,7 @@ function hasValidHumanQuery(target: URL): boolean {
   const allowed = decodedPath.endsWith("/feed")
     ? new Set(["after_seq", "limit", "snapshot_head_seq"])
     : decodedPath.endsWith("/changes")
-      ? new Set(["after_seq", "timeout_ms"])
+      ? new Set(["after_seq", "timeout_ms", "realtime", "client_id"])
       : new Set<string>();
   return [...target.searchParams.keys()].every((key) => allowed.has(key));
 }

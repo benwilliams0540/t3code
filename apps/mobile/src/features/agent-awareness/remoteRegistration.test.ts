@@ -280,10 +280,10 @@ describe("makeRelayDeviceRegistrationRequest", () => {
     });
   });
 
-  it("routes development builds to the APNs sandbox", () => {
-    expect(resolveApsEnvironment("development")).toBe("sandbox");
-    expect(resolveApsEnvironment("preview")).toBe("production");
+  it("routes from the native APNs entitlement input instead of the app variant", () => {
+    expect(resolveApsEnvironment("sandbox")).toBe("sandbox");
     expect(resolveApsEnvironment("production")).toBe("production");
+    expect(resolveApsEnvironment("development")).toBe("production");
     expect(resolveApsEnvironment(undefined)).toBe("production");
   });
 

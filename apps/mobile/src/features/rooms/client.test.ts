@@ -95,6 +95,7 @@ describe("Rooms native mobile client", () => {
         head_seq: 7,
         changed: true,
         reason: "advanced",
+        realtime_events: [],
       }),
     );
     const client = createRoomsMobileClient({
@@ -107,8 +108,43 @@ describe("Rooms native mobile client", () => {
       client.waitForChanges(roomId, { afterSeq: 4, timeoutMs: 12_000 }),
     ).resolves.toMatchObject({ changed: true, head_seq: 7 });
     expect(fetchRequest).toHaveBeenCalledWith(
-      `${baseUrl}/rooms/human/v1/rooms/${encodeURIComponent(roomId)}/changes?after_seq=4&timeout_ms=12000`,
+      `${baseUrl}/rooms/human/v1/rooms/${encodeURIComponent(roomId)}/changes?after_seq=4&timeout_ms=12000&realtime=0`,
       expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("advertises an active request and acknowledges durable event ids", async () => {
+    const eventId = "019fed3b-e36c-7730-aed8-4a927abc756f";
+    const fetchRequest = vi.fn(async (input: string, _init?: RequestInit) =>
+      input.endsWith("delivery-acknowledgements")
+        ? jsonResponse({ contract, room_id: roomId, acknowledged_event_ids: [eventId] })
+        : jsonResponse({
+            contract,
+            room_id: roomId,
+            after_seq: 7,
+            head_seq: 7,
+            changed: false,
+            reason: "timeout",
+            realtime_events: [],
+          }),
+    );
+    const client = createRoomsMobileClient({
+      baseUrl,
+      readToken: async () => "fresh-bearer",
+      fetch: fetchRequest,
+    });
+
+    await client.waitForChanges(roomId, {
+      afterSeq: 7,
+      realtime: true,
+      clientId: "ios:test",
+    });
+    await expect(client.acknowledgeDeliveries(roomId, [eventId])).resolves.toMatchObject({
+      acknowledged_event_ids: [eventId],
+    });
+    expect(fetchRequest.mock.calls[0]?.[0]).toContain("realtime=1&client_id=ios%3Atest");
+    expect(fetchRequest.mock.calls[1]?.[1]).toEqual(
+      expect.objectContaining({ body: JSON.stringify({ event_ids: [eventId] }) }),
     );
   });
 
