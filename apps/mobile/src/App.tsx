@@ -40,6 +40,7 @@ const appLinking = {
     "t3code-dev://",
     "t3code-preview://",
     "t3code-rooms://",
+    "threadspace-alpha://",
   ],
   // The Expo dev client launches the app via
   // <scheme>://expo-development-client/?url=<packager> — that URL addresses
