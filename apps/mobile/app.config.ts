@@ -238,10 +238,13 @@ const config: ExpoConfig = {
     // Fork builds supply their paid team explicitly; otherwise Xcode may derive
     // the team from the selected signing configuration.
     appleTeamId: isIosPersonalTeamBuild ? undefined : iosTeamId,
-    associatedDomains:
-      isIosPersonalTeamBuild || isThreadspaceAlpha
-        ? []
-        : [`applinks:${variant.relyingParty}`, `webcredentials:${variant.relyingParty}`],
+    ...(isThreadspaceAlpha
+      ? {}
+      : {
+          associatedDomains: isIosPersonalTeamBuild
+            ? []
+            : [`applinks:${variant.relyingParty}`, `webcredentials:${variant.relyingParty}`],
+        }),
     infoPlist: {
       NSAppTransportSecurity: {
         NSAllowsArbitraryLoads: true,
