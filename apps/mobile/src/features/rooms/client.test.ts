@@ -86,6 +86,56 @@ describe("Rooms native mobile client", () => {
     );
   });
 
+  it("waits on the room change cursor through the native transport policy", async () => {
+    const fetchRequest = vi.fn(async () =>
+      jsonResponse({
+        contract,
+        room_id: roomId,
+        after_seq: 4,
+        head_seq: 7,
+        changed: true,
+        reason: "advanced",
+      }),
+    );
+    const client = createRoomsMobileClient({
+      baseUrl,
+      readToken: async () => "fresh-bearer",
+      fetch: fetchRequest,
+    });
+
+    await expect(
+      client.waitForChanges(roomId, { afterSeq: 4, timeoutMs: 12_000 }),
+    ).resolves.toMatchObject({ changed: true, head_seq: 7 });
+    expect(fetchRequest).toHaveBeenCalledWith(
+      `${baseUrl}/rooms/human/v1/rooms/${encodeURIComponent(roomId)}/changes?after_seq=4&timeout_ms=12000`,
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("preserves cursor details when the server rejects an ahead cursor", async () => {
+    const client = createRoomsMobileClient({
+      baseUrl,
+      readToken: async () => "fresh-bearer",
+      fetch: async () =>
+        jsonResponse(
+          {
+            error: "change_cursor_ahead",
+            message: "Cursor is ahead of the room head.",
+            after_seq: 44,
+            head_seq: 2,
+          },
+          409,
+        ),
+    });
+
+    await expect(client.waitForChanges(roomId, { afterSeq: 44 })).rejects.toMatchObject({
+      code: "change_cursor_ahead",
+      status: 409,
+      afterSeq: 44,
+      headSeq: 2,
+    });
+  });
+
   it("fails closed before fetch for an invalid origin or missing token", async () => {
     const fetchRequest = vi.fn();
     const invalid = createRoomsMobileClient({

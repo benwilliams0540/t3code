@@ -5,6 +5,7 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   Platform,
   Pressable,
   RefreshControl,
@@ -27,6 +28,7 @@ import {
   resolveRoomsClerkTokenOptions,
 } from "../cloud/publicConfig";
 import { WorkspaceSidebarToolbar } from "../layout/workspace-sidebar-toolbar";
+import { RoomsMobileChangeLoop } from "./changeLoop";
 import { createRoomsMobileClient, RoomsMobileClientError } from "./client";
 import {
   isRoomsHumanStoryV2,
@@ -631,7 +633,11 @@ function ConfiguredRoomsRouteScreen() {
   const loadRoom = useCallback(
     async (
       roomId: string,
-      options: { readonly asRefresh?: boolean; readonly generation?: number } = {},
+      options: {
+        readonly asRefresh?: boolean;
+        readonly generation?: number;
+        readonly throwOnError?: boolean;
+      } = {},
     ) => {
       const generation = options.generation ?? ++loadGenerationRef.current;
       const asRefresh = options.asRefresh === true;
@@ -662,7 +668,10 @@ function ConfiguredRoomsRouteScreen() {
         if (nextChannelId) setFeedLoading(true);
         setFeedRefreshKey((current) => current + 1);
       } catch (cause) {
-        if (generation === loadGenerationRef.current) setError(errorPresentation(cause));
+        if (generation === loadGenerationRef.current) {
+          setError(errorPresentation(cause));
+          if (options.throwOnError) throw cause;
+        }
       } finally {
         if (generation === loadGenerationRef.current) {
           setLoading(false);
@@ -721,6 +730,20 @@ function ConfiguredRoomsRouteScreen() {
     [client, loadRoom],
   );
 
+  const changeLoop = useMemo(
+    () =>
+      new RoomsMobileChangeLoop({
+        client,
+        onInvalidate: async ({ roomId }) => {
+          await loadRoom(roomId, {
+            generation: loadGenerationRef.current,
+            throwOnError: true,
+          });
+        },
+      }),
+    [client, loadRoom],
+  );
+
   useFocusEffect(
     useCallback(() => {
       if (isLoaded && isSignedIn) void loadSession();
@@ -728,6 +751,22 @@ function ConfiguredRoomsRouteScreen() {
         loadGenerationRef.current += 1;
       };
     }, [isLoaded, isSignedIn, loadSession, userId]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isLoaded || !isSignedIn || !selectedRoomId) return;
+      const start = () => changeLoop.start(selectedRoomId);
+      if (AppState.currentState === "active") start();
+      const subscription = AppState.addEventListener("change", (nextState) => {
+        if (nextState === "active") start();
+        else changeLoop.stop();
+      });
+      return () => {
+        subscription.remove();
+        changeLoop.stop();
+      };
+    }, [changeLoop, isLoaded, isSignedIn, selectedRoomId]),
   );
 
   useEffect(() => {

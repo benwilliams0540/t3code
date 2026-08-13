@@ -6,6 +6,7 @@ import {
 import * as Schema from "effect/Schema";
 
 import {
+  RoomsHumanChangeResponse,
   RoomsHumanErrorResponse,
   RoomsHumanFeed,
   RoomsHumanMessage,
@@ -19,12 +20,21 @@ import {
 export class RoomsMobileClientError extends Error {
   readonly code: string;
   readonly status: number | null;
+  readonly afterSeq: number | null;
+  readonly headSeq: number | null;
 
-  constructor(code: string, message: string, status: number | null = null) {
+  constructor(
+    code: string,
+    message: string,
+    status: number | null = null,
+    cursors: { readonly afterSeq?: number; readonly headSeq?: number } = {},
+  ) {
     super(message);
     this.name = "RoomsMobileClientError";
     this.code = code;
     this.status = status;
+    this.afterSeq = cursors.afterSeq ?? null;
+    this.headSeq = cursors.headSeq ?? null;
   }
 }
 
@@ -35,6 +45,7 @@ const decodeWorkspace = Schema.decodeUnknownSync(RoomsHumanWorkspace);
 const decodeStories = Schema.decodeUnknownSync(RoomsHumanStoriesResponse);
 const decodeFeed = Schema.decodeUnknownSync(RoomsHumanFeed);
 const decodeMessage = Schema.decodeUnknownSync(RoomsHumanMessage);
+const decodeChange = Schema.decodeUnknownSync(RoomsHumanChangeResponse);
 const decodeStoryV2 = Schema.decodeUnknownSync(RoomsHumanStoryV2);
 const decodeError = Schema.decodeUnknownSync(RoomsHumanErrorResponse);
 
@@ -52,7 +63,10 @@ async function parseResponse<T>(response: Response, decoder: (input: unknown) =>
   if (!response.ok) {
     try {
       const failure = decodeError(body);
-      throw new RoomsMobileClientError(failure.error, failure.message, response.status);
+      throw new RoomsMobileClientError(failure.error, failure.message, response.status, {
+        ...(failure.after_seq === undefined ? {} : { afterSeq: failure.after_seq }),
+        ...(failure.head_seq === undefined ? {} : { headSeq: failure.head_seq }),
+      });
     } catch (cause) {
       if (cause instanceof RoomsMobileClientError) throw cause;
       throw new RoomsMobileClientError(
@@ -86,6 +100,7 @@ export function createRoomsMobileClient(options: {
     method: "GET" | "POST",
     decoder: (input: unknown) => T,
     body?: Readonly<Record<string, unknown>>,
+    requestOptions: { readonly signal?: AbortSignal } = {},
   ): Promise<T> => {
     const bearer = await options.readToken();
     if (!bearer) {
@@ -121,6 +136,7 @@ export function createRoomsMobileClient(options: {
         ...(validatedBody ? { body: validatedBody.body } : {}),
         credentials: "omit",
         redirect: "error",
+        ...(requestOptions.signal === undefined ? {} : { signal: requestOptions.signal }),
       });
       options.assertCurrent?.();
     } catch (cause) {
@@ -178,6 +194,37 @@ export function createRoomsMobileClient(options: {
         decodeMessage,
         { request_id: requestId, body_markdown: bodyMarkdown },
       ),
+    waitForChanges: async (
+      roomId: string,
+      input: {
+        readonly afterSeq: number;
+        readonly timeoutMs?: number;
+        readonly signal?: AbortSignal;
+      },
+    ) => {
+      const query = new URLSearchParams({
+        after_seq: String(input.afterSeq),
+        timeout_ms: String(input.timeoutMs ?? 25_000),
+      });
+      const change = await request(
+        `${roomPath(roomId)}/changes?${query.toString()}`,
+        "GET",
+        decodeChange,
+        undefined,
+        { signal: input.signal },
+      );
+      const matchesRequest = change.room_id === roomId && change.after_seq === input.afterSeq;
+      const validOutcome = change.changed
+        ? change.head_seq > change.after_seq
+        : change.head_seq === change.after_seq;
+      if (!matchesRequest || !validOutcome) {
+        throw new RoomsMobileClientError(
+          "rooms_change_contract_mismatch",
+          "The Rooms change response contradicts its requested cursor.",
+        );
+      }
+      return change;
+    },
     transitionStory: (
       roomId: string,
       storyId: string,

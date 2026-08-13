@@ -147,6 +147,27 @@ export const RoomsHumanFeed = Schema.Struct({
 });
 export type RoomsHumanFeed = typeof RoomsHumanFeed.Type;
 
+const RoomsHumanChangeResponseBase = {
+  contract: RoomsHumanContract,
+  room_id: Schema.String,
+  after_seq: Schema.Int,
+  head_seq: Schema.Int,
+} as const;
+
+export const RoomsHumanChangeResponse = Schema.Union([
+  Schema.Struct({
+    ...RoomsHumanChangeResponseBase,
+    changed: Schema.Literal(true),
+    reason: Schema.Literal("advanced"),
+  }),
+  Schema.Struct({
+    ...RoomsHumanChangeResponseBase,
+    changed: Schema.Literal(false),
+    reason: Schema.Literal("timeout"),
+  }),
+]);
+export type RoomsHumanChangeResponse = typeof RoomsHumanChangeResponse.Type;
+
 const RoomsStorySourceEvent = Schema.Struct({
   seq: Schema.Int,
   event_id: Schema.String,
@@ -292,6 +313,8 @@ export type RoomsHumanStoriesResponse = typeof RoomsHumanStoriesResponse.Type;
 export const RoomsHumanErrorResponse = Schema.Struct({
   error: Schema.String,
   message: Schema.String,
+  after_seq: Schema.optionalKey(Schema.Int),
+  head_seq: Schema.optionalKey(Schema.Int),
 });
 
 export function isRoomsHumanStoryV2(story: RoomsHumanStory): story is RoomsHumanStoryV2 {
