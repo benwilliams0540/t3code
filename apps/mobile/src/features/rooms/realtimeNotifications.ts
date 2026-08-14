@@ -2,7 +2,9 @@ import * as Notifications from "expo-notifications";
 
 import type { RoomsRealtimeEvent } from "./contract";
 import { getRoomsVisibleChannel } from "./realtimeBridge";
-import { hasSeenRoomsEvent, recordRoomsEvent } from "./realtimePersistence";
+import { recordRoomsEvent } from "./realtimePersistence";
+
+const FOREGROUND_REALTIME_PRESENTATION = "foreground-realtime";
 
 export async function presentRoomsRealtimeNotification(event: RoomsRealtimeEvent): Promise<void> {
   await Notifications.scheduleNotificationAsync({
@@ -14,6 +16,7 @@ export async function presentRoomsRealtimeNotification(event: RoomsRealtimeEvent
         roomId: event.room_id,
         channelId: event.channel_id,
         deepLink: `/rooms/${encodeURIComponent(event.room_id)}/${encodeURIComponent(event.channel_id)}`,
+        roomsPresentation: FOREGROUND_REALTIME_PRESENTATION,
       },
     },
     trigger: null,
@@ -30,8 +33,23 @@ export async function roomsNotificationBehavior(
   if (eventId && roomId && channelId) {
     const visible = getRoomsVisibleChannel();
     const isVisible = visible?.roomId === roomId && visible.channelId === channelId;
-    if ((await hasSeenRoomsEvent(eventId)) || isVisible) {
-      if (isVisible) await recordRoomsEvent({ eventId });
+    if (data.roomsPresentation === FOREGROUND_REALTIME_PRESENTATION) {
+      return {
+        shouldPlaySound: !isVisible,
+        shouldSetBadge: false,
+        shouldShowBanner: !isVisible,
+        shouldShowList: !isVisible,
+      };
+    }
+
+    // Record before deciding whether to present. This makes the decision atomic
+    // with the durable dedup store when APNs races foreground realtime. A
+    // has-then-record sequence lets both paths observe the event as unseen.
+    const isNew = await recordRoomsEvent({
+      eventId,
+      ...(isVisible ? {} : { unreadChannel: { roomId, channelId } }),
+    });
+    if (!isNew || isVisible) {
       return {
         shouldPlaySound: false,
         shouldSetBadge: false,
@@ -39,7 +57,6 @@ export async function roomsNotificationBehavior(
         shouldShowList: false,
       };
     }
-    await recordRoomsEvent({ eventId, unreadChannel: { roomId, channelId } });
   }
   return {
     shouldPlaySound: true,

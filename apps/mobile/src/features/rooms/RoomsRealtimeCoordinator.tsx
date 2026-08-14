@@ -12,15 +12,20 @@ import {
 import { RoomsMobileChangeLoop } from "./changeLoop";
 import { createRoomsMobileClient } from "./client";
 import { emitRoomsInvalidation, getRoomsVisibleChannel } from "./realtimeBridge";
-import { presentRoomsRealtimeNotification } from "./realtimeNotifications";
 import {
-  hasSeenRoomsEvent,
-  markRoomsChannelRead,
-  recordRoomsEvent,
-  roomsCursorStore,
-} from "./realtimePersistence";
+  presentRoomsRealtimeNotification,
+  roomsNotificationBehavior,
+} from "./realtimeNotifications";
+import { markRoomsChannelRead, recordRoomsEvent, roomsCursorStore } from "./realtimePersistence";
 
 const REALTIME_CLIENT_ID = `ios:${uuidv7()}`;
+
+// Install this at module evaluation rather than after React effects run. APNs
+// can arrive during initial render or session restoration, and the global
+// handler must already own the presentation decision in that window.
+Notifications.setNotificationHandler({
+  handleNotification: roomsNotificationBehavior,
+});
 
 export function RoomsRealtimeCoordinator(): null {
   const { getToken, isLoaded, isSignedIn, userId } = useAuth({ treatPendingAsSignedOut: false });
@@ -67,17 +72,14 @@ export function RoomsRealtimeCoordinator(): null {
               const visible = getRoomsVisibleChannel();
               const isVisible =
                 visible?.roomId === event.room_id && visible.channelId === event.channel_id;
-              const isNew = !(await hasSeenRoomsEvent(event.event_id));
+              const isNew = await recordRoomsEvent({
+                eventId: event.event_id,
+                ...(isVisible
+                  ? {}
+                  : { unreadChannel: { roomId: event.room_id, channelId: event.channel_id } }),
+              });
               if (isNew && !isVisible && !event.fallback_published) {
                 await presentRoomsRealtimeNotification(event);
-              }
-              if (isNew) {
-                await recordRoomsEvent({
-                  eventId: event.event_id,
-                  ...(isVisible
-                    ? {}
-                    : { unreadChannel: { roomId: event.room_id, channelId: event.channel_id } }),
-                });
               }
               if (isVisible) await markRoomsChannelRead(event.room_id, event.channel_id);
             }
@@ -107,13 +109,6 @@ export function RoomsRealtimeCoordinator(): null {
       stop();
     };
   }, [client, isLoaded, isSignedIn, userId]);
-
-  useEffect(() => {
-    Notifications.setNotificationHandler({
-      handleNotification: async (notification) =>
-        (await import("./realtimeNotifications")).roomsNotificationBehavior(notification),
-    });
-  }, []);
 
   return null;
 }

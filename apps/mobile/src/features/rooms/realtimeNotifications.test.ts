@@ -36,6 +36,16 @@ function notification(eventId: string): Notification {
   } as unknown as Notification;
 }
 
+function realtimeNotification(eventId: string): Notification {
+  return {
+    request: {
+      content: {
+        data: { eventId, roomId, channelId, roomsPresentation: "foreground-realtime" },
+      },
+    },
+  } as unknown as Notification;
+}
+
 describe("Rooms notification behavior", () => {
   beforeEach(() => {
     secureStoreControl.failWrites = false;
@@ -66,6 +76,36 @@ describe("Rooms notification behavior", () => {
     await expect(loadRoomsUnread()).resolves.toMatchObject({
       [unreadKey(roomId, channelId)]: 1,
     });
+  });
+
+  it("presents an intentional foreground realtime alert after recording its durable ID", async () => {
+    const eventId = "019fdb59-05c2-7a75-9455-c89f280b62eb";
+    await recordRoomsEvent({ eventId });
+
+    await expect(roomsNotificationBehavior(realtimeNotification(eventId))).resolves.toMatchObject({
+      shouldShowBanner: true,
+      shouldShowList: true,
+    });
+
+    setRoomsVisibleChannel({ roomId, channelId });
+    await expect(roomsNotificationBehavior(realtimeNotification(eventId))).resolves.toMatchObject({
+      shouldShowBanner: false,
+      shouldShowList: false,
+    });
+  });
+
+  it("atomically records an APNs event so a concurrent replay stays silent", async () => {
+    const eventId = "019fdb59-05c2-7a75-9455-c89f280b62ec";
+    const key = unreadKey(roomId, channelId);
+    const unreadBefore = (await loadRoomsUnread())[key] ?? 0;
+
+    const [first, second] = await Promise.all([
+      roomsNotificationBehavior(notification(eventId)),
+      roomsNotificationBehavior(notification(eventId)),
+    ]);
+
+    expect([first.shouldShowBanner, second.shouldShowBanner].sort()).toEqual([false, true]);
+    await expect(loadRoomsUnread()).resolves.toMatchObject({ [key]: unreadBefore + 1 });
   });
 
   it("requires a durable cursor write and recovers the serialized mutation queue", async () => {
