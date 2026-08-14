@@ -53,7 +53,7 @@ describe("Rooms shell navigation", () => {
 
     expect(buildRoomsBreadcrumbs(room, threadSurface).map((crumb) => crumb.label)).toEqual([
       "Rooms",
-      "Your Threads",
+      "Threads",
       "T3 Thread",
     ]);
     expect(roomsSurfaceSourceLabel(threadSurface, "sample")).toBe("Local T3 thread");
@@ -61,8 +61,10 @@ describe("Rooms shell navigation", () => {
       roomsSurfaceSourceLabel({ kind: "native-draft", draftId: "draft-native" }, "sample"),
     ).toBe("Local T3 thread");
     expect(roomsSurfaceSourceLabel({ kind: "threads" }, "sample")).toBe("Local T3 projects");
-    expect(roomsSurfaceSourceLabel({ kind: "dashboard" }, "local")).toBe("Local T3 only");
-    expect(roomsSurfaceSourceLabel({ kind: "dashboard" }, "shared")).toBe("Shared Rooms");
+    expect(roomsSurfaceSourceLabel({ kind: "dashboard" }, "local")).toBe("Local · live workspace");
+    expect(roomsSurfaceSourceLabel({ kind: "dashboard" }, "shared")).toBe(
+      "Shared · live workspace",
+    );
   });
 
   it("keeps web routes path-based and adapts internal links to Electron hash history", () => {

@@ -181,7 +181,7 @@ function readLegacySampleRoomId(): string | null {
   try {
     return getLocalStorageItem(ROOMS_SELECTED_ROOM_STORAGE_KEY, Schema.String);
   } catch (error) {
-    console.error("Could not read the legacy Rooms sample selection.", error);
+    console.error("Could not read the legacy Threadspace sample selection.", error);
     return null;
   }
 }
@@ -190,7 +190,7 @@ function sourceNotReadyError(): RoomsLocalClientError {
   return new RoomsLocalClientError({
     kind: "transport",
     code: "rooms_source_not_ready",
-    message: "The active Rooms workspace is not ready for this account.",
+    message: "The active Threadspace workspace is not ready for this account.",
   });
 }
 
@@ -499,7 +499,7 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
         throw new RoomsLocalClientError({
           kind: "transport",
           code: "local_change_reconciliation_failed",
-          message: "Live Rooms state changed, but its workspace could not be reconciled yet.",
+          message: "Live Threadspace state changed, but its workspace could not be reconciled yet.",
         });
       }
       setLocalFeedSync((current) =>
@@ -556,7 +556,7 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
             }
           }
         } catch (error) {
-          console.warn("Could not deliver a Shared Rooms desktop notification.", error);
+          console.warn("Could not deliver a Shared Threadspace desktop notification.", error);
         }
       }
       setLocalFeedSync((current) =>

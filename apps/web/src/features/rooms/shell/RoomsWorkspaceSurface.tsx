@@ -25,8 +25,8 @@ function SurfacePlaceholder({ surface }: { readonly surface: RoomsWorkspaceSurfa
     switch (surface.kind) {
       case "dashboard":
         return {
-          title: "Dashboard",
-          description: "The fixture-backed dashboard projection mounts in this slot.",
+          title: "Status",
+          description: "The fixture-backed room status projection mounts in this slot.",
           icon: LayoutDashboardIcon,
         };
       case "channel":
@@ -61,8 +61,8 @@ function SurfacePlaceholder({ surface }: { readonly surface: RoomsWorkspaceSurfa
         };
       case "present":
         return {
-          title: "Present",
-          description: "Humans, agents, and machines mount in this slot.",
+          title: "Network",
+          description: "People, agents, and machines mount in this slot.",
           icon: CircleUserRoundIcon,
         };
     }
@@ -122,10 +122,13 @@ function PresentSurface({
   return (
     <div className="mx-auto w-full max-w-5xl p-5 sm:p-8">
       <header>
-        <h1 className="text-2xl font-semibold text-foreground">People and machines</h1>
+        <p className="threadspace-technical font-mono text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+          Fig. 01 · Room topology · declared fixture identities
+        </p>
+        <h1 className="mt-1 text-2xl font-semibold text-foreground">People and machines</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           People, agents, and machine registrations stay distinct. Matching machine names never
-          collapse separate IDs.
+          collapse separate IDs. Presence here is declared fixture data, not inferred reachability.
         </p>
       </header>
       <div className="mt-6 grid gap-6 lg:grid-cols-3">

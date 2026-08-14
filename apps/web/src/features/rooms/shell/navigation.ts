@@ -67,13 +67,13 @@ export function roomsSurfaceSourceLabel(
   surface: RoomsWorkspaceSurface,
   sourceMode: RoomsDataSourceMode,
 ): string {
-  if (sourceMode === "local") return "Local T3 only";
-  if (sourceMode === "shared") return "Shared Rooms";
+  if (sourceMode === "local") return "Local · live workspace";
+  if (sourceMode === "shared") return "Shared · live workspace";
   return surface.kind === "native-thread" || surface.kind === "native-draft"
     ? "Local T3 thread"
     : surface.kind === "threads"
       ? "Local T3 projects"
-      : "Fixture · workspace-read v2";
+      : "Sample · declared data";
 }
 
 export function buildRoomsBreadcrumbs(
@@ -83,21 +83,17 @@ export function buildRoomsBreadcrumbs(
   const roomCrumb = { label: room.name, target: { kind: "dashboard" } as const };
   switch (surface.kind) {
     case "dashboard":
-      return [roomCrumb, { label: "Dashboard" }];
+      return [roomCrumb, { label: "Status" }];
     case "channel":
       return [roomCrumb, { label: "Channels" }, { label: `# ${surface.channelSlug}` }];
     case "threads":
-      return [roomCrumb, { label: "Your Threads" }];
+      return [roomCrumb, { label: "Threads" }];
     case "native-thread":
-      return [
-        roomCrumb,
-        { label: "Your Threads", target: { kind: "threads" } },
-        { label: "T3 Thread" },
-      ];
+      return [roomCrumb, { label: "Threads", target: { kind: "threads" } }, { label: "T3 Thread" }];
     case "native-draft":
       return [
         roomCrumb,
-        { label: "Your Threads", target: { kind: "threads" } },
+        { label: "Threads", target: { kind: "threads" } },
         { label: "New T3 Thread" },
       ];
     case "project": {
@@ -120,7 +116,7 @@ export function buildRoomsBreadcrumbs(
       ];
     }
     case "present":
-      return [roomCrumb, { label: "Present" }];
+      return [roomCrumb, { label: "Network" }, { label: "People and machines" }];
   }
 }
 

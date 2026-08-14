@@ -272,8 +272,9 @@ export function RoomsNativeThreadNavItem({
     <button
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex w-full min-w-0 items-center gap-2 overflow-hidden rounded-md px-2 py-1.5 text-left text-sm text-sidebar-muted-foreground transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
-        active && "bg-sidebar-row-selected text-sidebar-foreground",
+        "flex w-full min-w-0 items-center gap-2 overflow-hidden rounded-sm border-l-2 border-transparent px-2 py-1.5 text-left text-sm text-sidebar-muted-foreground transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
+        active &&
+          "border-l-[var(--threadspace-cyan)] bg-sidebar-row-selected text-sidebar-foreground",
       )}
       data-rooms-native-thread-id={thread.threadId}
       onClick={() =>
@@ -315,10 +316,10 @@ export function RoomsYourThreadsNavigation({
   );
 
   return (
-    <section aria-label="Your Threads" className="min-w-0" data-rooms-native-threads="">
+    <section aria-label="Threads" className="min-w-0" data-rooms-native-threads="">
       <div className="mb-1 mt-5 flex items-center gap-1 px-2">
         <p className="min-w-0 flex-1 text-[10px] font-semibold tracking-[0.12em] text-sidebar-muted-foreground/65 uppercase">
-          Your Threads
+          Threads
         </p>
         <NewThreadControl boundProjects={boundProjects} compact roomSlug={room.slug} />
         <RoomsProjectBindingMenu compact roomId={room.id} sourceMode={sourceMode} />
@@ -392,8 +393,8 @@ export function RoomsThreadsSurface({
           <FolderPlusIcon aria-hidden className="mx-auto size-6 text-muted-foreground" />
           <h1 className="mt-4 text-lg font-semibold text-foreground">Add a T3 project</h1>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Your Threads comes from real T3 project state. This association is local to this app
-            instance and is not shared room data.
+            Threads come from real T3 project state. This association is local to this app instance
+            and is not shared room data.
           </p>
           <div className="mt-4 flex justify-center">
             <RoomsProjectBindingMenu compact={false} roomId={room.id} sourceMode={sourceMode} />
@@ -408,7 +409,7 @@ export function RoomsThreadsSurface({
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-            Your Threads
+            Thread index
           </p>
           <h1 className="mt-1 text-xl font-semibold text-foreground">Native T3 threads</h1>
           <p className="mt-1 text-sm text-muted-foreground">

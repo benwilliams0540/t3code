@@ -131,7 +131,7 @@ function defaultTransport(): RoomsHumanTransport {
     throw new RoomsLocalClientError({
       kind: "transport",
       code: "human_transport_unavailable",
-      message: "This app shell cannot reach the authenticated Rooms API.",
+      message: "This app shell cannot reach the authenticated Threadspace API.",
     });
   }
   return transport;
@@ -142,7 +142,7 @@ export function validateRoomsHumanOpaqueCredential(value: string): string {
     throw new RoomsLocalClientError({
       kind: "invalid_configuration",
       code: "invalid_human_credential",
-      message: "The one-time Rooms credential is missing or invalid.",
+      message: "The one-time Threadspace credential is missing or invalid.",
     });
   }
   return value;
@@ -162,7 +162,7 @@ function parseBody(response: RoomsHumanHttpResponse): unknown {
       kind: "invalid_response",
       status: response.status,
       code: "human_invalid_json_response",
-      message: "The authenticated Rooms API returned invalid JSON.",
+      message: "The authenticated Threadspace API returned invalid JSON.",
     });
   }
 }
@@ -184,7 +184,7 @@ function decode<T>(response: RoomsHumanHttpResponse, parser: (body: unknown) => 
         kind: "invalid_response",
         status: response.status,
         code: "human_invalid_error_response",
-        message: `The authenticated Rooms API returned HTTP ${response.status}.`,
+        message: `The authenticated Threadspace API returned HTTP ${response.status}.`,
       });
     }
   }
@@ -217,7 +217,7 @@ export function createRoomsHumanClient(
     return new RoomsLocalClientError({
       kind: "invalid_configuration",
       code: "invalid_human_api_base_url",
-      message: "Use an HTTPS origin or HTTP loopback origin for Shared Rooms.",
+      message: "Use an HTTPS origin or HTTP loopback origin for Shared Threadspace.",
     });
   }
 
@@ -241,7 +241,7 @@ export function createRoomsHumanClient(
         kind: "server",
         status: 401,
         code: "rooms_auth_unavailable",
-        message: "Rooms authentication is unavailable.",
+        message: "Threadspace authentication is unavailable.",
       });
     }
   }
@@ -269,7 +269,7 @@ export function createRoomsHumanClient(
       throw new RoomsLocalClientError({
         kind: "transport",
         code: "human_api_unreachable",
-        message: `Could not reach the authenticated Rooms API at ${normalizedBaseUrl}.`,
+        message: `Could not reach the authenticated Threadspace API at ${normalizedBaseUrl}.`,
       });
     }
   }
@@ -298,7 +298,7 @@ export function createRoomsHumanClient(
       throw new RoomsLocalClientError({
         kind: "transport",
         code: "human_api_unreachable",
-        message: `Could not reach the authenticated Rooms API at ${normalizedBaseUrl}.`,
+        message: `Could not reach the authenticated Threadspace API at ${normalizedBaseUrl}.`,
       });
     }
   }

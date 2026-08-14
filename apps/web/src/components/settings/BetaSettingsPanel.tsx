@@ -153,7 +153,7 @@ function RoomsLocalApiBaseUrlInput({
     <div className="grid w-full gap-1.5 py-3">
       <Input
         aria-invalid={!validation.ok}
-        aria-label="Rooms Local API address"
+        aria-label="Threadspace Local API address"
         onBlur={commit}
         onChange={(event) => setDraft(event.target.value)}
         onKeyDown={(event) => {
@@ -189,7 +189,7 @@ export function BetaSettingsPanel() {
     Schema.NullOr(Schema.String),
   );
   const { copyToClipboard, isCopied } = useCopyToClipboard({
-    target: "Rooms diagnostics",
+    target: "Threadspace diagnostics",
   });
   const sidebarAutoSettleAfterDays = useClientSettings(
     (settings) => settings.sidebarAutoSettleAfterDays,
@@ -208,7 +208,7 @@ export function BetaSettingsPanel() {
       <SettingsSection title="Beta features">
         <SettingsRow
           title="Sidebar version"
-          description="Choose one navigation model. Version 1, Version 2, and Rooms never render at the same time."
+          description="Choose one navigation model. Version 1, Version 2, and Threadspace never render at the same time."
         >
           <RadioGroup
             aria-label="Sidebar version"
@@ -229,7 +229,7 @@ export function BetaSettingsPanel() {
               [
                 ["v1", "Version 1", "Original project and thread tree."],
                 ["v2", "Version 2", "Flat, lifecycle-oriented thread list."],
-                ["v3", "Version 3", "Rooms workspaces, channels, and project context."],
+                ["v3", "Threadspace", "Room navigation, channels, Stories, and native T3 context."],
               ] as const
             ).map(([value, title, description]) => (
               <label
@@ -282,7 +282,7 @@ export function BetaSettingsPanel() {
           <>
             <SettingsRow
               title="Channel send shortcut"
-              description="Choose when Enter sends messages in Local Rooms channels."
+              description="Choose when Enter sends messages in local Threadspace channels."
             >
               <ComposerSendShortcutControl
                 label="Channel send shortcut"
@@ -301,20 +301,24 @@ export function BetaSettingsPanel() {
               />
             </SettingsRow>
             <SettingsRow
-              title="Rooms content"
+              title="Threadspace content"
               description="Sample is certified demonstration data. Local is the development-only fallback. Shared uses T3 Connect and server-backed human membership."
             >
               <RadioGroup
-                aria-label="Rooms content"
+                aria-label="Threadspace content"
                 className="grid gap-2 py-3 sm:grid-cols-3"
                 onValueChange={(value) => setMode(value as RoomsDataSourceMode)}
                 value={mode}
               >
                 {(
                   [
-                    ["sample", "Sample workspace", "Certified Rooms data for evaluation."],
+                    ["sample", "Sample workspace", "Certified Threadspace data for evaluation."],
                     ["local", "Local workspace", "Actual local T3 projects and threads only."],
-                    ["shared", "Shared Rooms", "Authenticated multiplayer through T3 Connect."],
+                    [
+                      "shared",
+                      "Shared Threadspace",
+                      "Authenticated multiplayer through T3 Connect.",
+                    ],
                   ] as const
                 ).map(([value, title, description]) => (
                   <label
@@ -333,8 +337,8 @@ export function BetaSettingsPanel() {
               </RadioGroup>
             </SettingsRow>
             <SettingsRow
-              title="Shared Rooms"
-              description="Build-time, non-secret status for the dedicated Rooms Clerk template and supervised loopback transport. Credentials are requested just in time and are never stored here."
+              title="Shared Threadspace"
+              description="Build-time, non-secret status for the dedicated Threadspace Clerk template and supervised loopback transport. Credentials are requested just in time and are never stored here."
             >
               <div className="grid gap-1 py-3 text-xs text-muted-foreground">
                 <p>
@@ -342,14 +346,14 @@ export function BetaSettingsPanel() {
                   {humanRoomsConfig.clerkPublishableKey ? "configured" : "not configured"}
                 </p>
                 <p>
-                  Rooms JWT template:{" "}
+                  Threadspace JWT template:{" "}
                   {humanRoomsConfig.roomsClerkJwtTemplate ? "configured" : "not configured"}
                 </p>
-                <p>Rooms loopback API: {humanRoomsConfig.roomsApiUrl ?? "not configured"}</p>
+                <p>Threadspace loopback API: {humanRoomsConfig.roomsApiUrl ?? "not configured"}</p>
               </div>
             </SettingsRow>
             <SettingsRow
-              title="Local Rooms API"
+              title="Local Threadspace API"
               description="Development-only loopback service for one durable Local workspace. This is not remote or multiplayer connectivity."
             >
               <RoomsLocalApiBaseUrlInput
@@ -363,8 +367,8 @@ export function BetaSettingsPanel() {
               </p>
             </SettingsRow>
             <SettingsRow
-              title="Rooms diagnostics"
-              description="Copy a redacted snapshot of the Rooms mode, selected IDs, project references, source state, and last Rooms route."
+              title="Threadspace diagnostics"
+              description="Copy a redacted snapshot of the Threadspace mode, selected IDs, project references, source state, and last Threadspace route."
               control={
                 <Button
                   onClick={() =>
@@ -385,16 +389,16 @@ export function BetaSettingsPanel() {
                   size="sm"
                   variant="outline"
                 >
-                  {isCopied ? "Copied" : "Copy Rooms diagnostics"}
+                  {isCopied ? "Copied" : "Copy Threadspace diagnostics"}
                 </Button>
               }
             />
             <SettingsRow
-              title="Reset Rooms beta settings"
-              description="Return Rooms to Sample and clear only Rooms source, selection, project-binding, and V3 sidebar preferences. T3 projects and threads are never removed."
+              title="Reset Threadspace beta settings"
+              description="Return Threadspace to Sample and clear only Threadspace source, selection, project-binding, and navigation preferences. T3 projects and threads are never removed."
               control={
                 <Button onClick={() => setResetRoomsOpen(true)} size="sm" variant="outline">
-                  Reset Rooms…
+                  Reset Threadspace…
                 </Button>
               }
             />
@@ -405,9 +409,9 @@ export function BetaSettingsPanel() {
         <AlertDialog open={resetRoomsOpen} onOpenChange={setResetRoomsOpen}>
           <AlertDialogPopup>
             <AlertDialogHeader>
-              <AlertDialogTitle>Reset Rooms beta settings?</AlertDialogTitle>
+              <AlertDialogTitle>Reset Threadspace beta settings?</AlertDialogTitle>
               <AlertDialogDescription>
-                This clears only Rooms source, room selection, local bindings, and V3 sidebar
+                This clears only Threadspace source, room selection, local bindings, and navigation
                 layout. It does not delete T3 projects, threads, prompts, credentials, or app
                 settings.
               </AlertDialogDescription>
@@ -422,7 +426,7 @@ export function BetaSettingsPanel() {
                 }}
                 variant="destructive"
               >
-                Reset Rooms settings
+                Reset Threadspace settings
               </Button>
             </AlertDialogFooter>
           </AlertDialogPopup>

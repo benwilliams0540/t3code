@@ -59,9 +59,9 @@ export function formatRoomsActivityDay(value: string, now: Date = new Date()): s
 function principalClasses(tone: ReturnType<typeof principalPresentation>["tone"]): string {
   switch (tone) {
     case "human":
-      return "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300";
+      return "border-border bg-muted/45 text-foreground";
     case "agent":
-      return "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300";
+      return "border-[var(--threadspace-cyan-edge)] bg-[var(--threadspace-cyan-soft)] text-[var(--threadspace-cyan)]";
     case "machine":
       return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
     case "unknown":
@@ -77,7 +77,6 @@ function PrincipalMark({ activity }: { readonly activity: RoomsProjectedActivity
       aria-hidden
       className={cn(
         "flex size-9 shrink-0 items-center justify-center border text-xs font-semibold",
-        tone === "human" ? "rounded-full" : "rounded-xl",
         principalClasses(tone),
       )}
     >
@@ -99,7 +98,7 @@ function AttributionFacts({ activity }: { readonly activity: RoomsProjectedActiv
   if (attribution.mode === "explicit_principal") {
     return (
       <p className="mt-1 text-xs text-muted-foreground">
-        Explicit Rooms write · actor {attribution.actor?.display_name ?? "unresolved"}
+        Explicit Threadspace write · actor {attribution.actor?.display_name ?? "unresolved"}
       </p>
     );
   }
@@ -123,9 +122,9 @@ function AttributionFacts({ activity }: { readonly activity: RoomsProjectedActiv
 }
 
 /**
- * Durable provenance stays in the DOM for every item, but only the record register keeps it on the
- * reading surface. Conversation rows fold it behind a disclosure so a channel reads as speech
- * without discarding the ledger facts that make it trustworthy.
+ * Durable provenance stays reachable for every item. Conversation rows fold it behind a compact
+ * disclosure so a channel reads as speech without discarding the ledger facts that make it
+ * trustworthy.
  */
 function ActivityProvenance({ activity }: { readonly activity: RoomsProjectedActivity }) {
   const { attribution, item } = activity;
@@ -143,7 +142,7 @@ function ActivityProvenance({ activity }: { readonly activity: RoomsProjectedAct
       </button>
       <div
         className={cn(
-          "mt-1.5 grid gap-0.5 rounded-lg border border-border/60 bg-muted/25 p-2.5 font-mono text-[10px] text-muted-foreground",
+          "mt-1.5 grid gap-0.5 border border-border/60 bg-muted/25 p-2.5 font-mono text-[10px] text-muted-foreground",
           open ? "" : "hidden",
         )}
         data-rooms-activity-provenance=""
@@ -175,14 +174,14 @@ function ActivityDetails({ activity }: { readonly activity: RoomsProjectedActivi
       );
     case "run":
       return (
-        <div className="mt-2 rounded-lg border border-violet-500/20 bg-violet-500/[0.06] p-3">
+        <div className="mt-2 border-l-2 border-[var(--threadspace-cyan-edge)] bg-[var(--threadspace-cyan-soft)] px-3 py-2.5">
           <p className="font-medium text-foreground">{activity.thread?.title}</p>
           <p className="mt-1 text-sm text-muted-foreground">
             {activity.thread?.provider} · {activity.thread?.environment_id} · {activity.status}
           </p>
           {activity.threadHref ? (
             <a
-              className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-violet-700 hover:underline dark:text-violet-300"
+              className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--threadspace-cyan)] hover:underline"
               href={resolveRoomsInternalHref(activity.threadHref)}
             >
               Open detailed T3 thread <ExternalLinkIcon aria-hidden className="size-3" />
@@ -192,7 +191,7 @@ function ActivityDetails({ activity }: { readonly activity: RoomsProjectedActivi
       );
     case "story":
       return (
-        <div className="mt-2 rounded-lg border border-sky-500/20 bg-sky-500/[0.06] p-3">
+        <div className="mt-2 border-l-2 border-[var(--threadspace-cyan-edge)] bg-[var(--threadspace-cyan-soft)] px-3 py-2.5">
           <p className="font-medium text-foreground">{activity.story?.title}</p>
           <p className="mt-1 text-xs text-muted-foreground">
             {activity.stage?.name} · {activity.item.summary}
@@ -201,7 +200,7 @@ function ActivityDetails({ activity }: { readonly activity: RoomsProjectedActivi
       );
     case "evidence":
       return (
-        <div className="mt-2 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.06] p-3">
+        <div className="mt-2 border-l-2 border-emerald-500/45 bg-emerald-500/[0.06] px-3 py-2.5">
           <p className="font-medium text-foreground">{activity.evidence?.kind}</p>
           <p className="mt-1 text-xs text-muted-foreground">
             {activity.story?.title} · sha256:{activity.evidence?.cas.hash.slice(0, 12)}…
@@ -210,7 +209,7 @@ function ActivityDetails({ activity }: { readonly activity: RoomsProjectedActivi
       );
     case "approval":
       return (
-        <div className="mt-2 rounded-lg border border-amber-500/25 bg-amber-500/[0.07] p-3">
+        <div className="mt-2 border-l-2 border-amber-500/45 bg-amber-500/[0.07] px-3 py-2.5">
           <p className="font-medium text-foreground">
             {activity.approval?.state.replaceAll("_", " ")} · {activity.approval?.scope}
           </p>
@@ -219,7 +218,7 @@ function ActivityDetails({ activity }: { readonly activity: RoomsProjectedActivi
       );
     case "gate":
       return (
-        <div className="mt-2 rounded-lg border border-amber-500/25 bg-amber-500/[0.07] p-3">
+        <div className="mt-2 border-l-2 border-amber-500/45 bg-amber-500/[0.07] px-3 py-2.5">
           <p className="font-medium text-foreground">{activity.gate?.state.replaceAll("_", " ")}</p>
           <p className="mt-1 text-xs text-muted-foreground">
             {activity.story?.title} · {activity.gate?.requiredEvidenceCount} required evidence ·{" "}
@@ -229,7 +228,7 @@ function ActivityDetails({ activity }: { readonly activity: RoomsProjectedActivi
       );
     case "unknown":
       return (
-        <div className="mt-2 rounded-lg border border-dashed border-border p-3">
+        <div className="mt-2 border-l-2 border-border bg-muted/20 px-3 py-2.5">
           <p className="font-medium text-foreground">Unknown schema retained</p>
           <p className="mt-1 text-xs text-muted-foreground">
             {activity.unknownSchema?.eventType} · schema {activity.unknownSchema?.eventSchema}
@@ -238,7 +237,7 @@ function ActivityDetails({ activity }: { readonly activity: RoomsProjectedActivi
       );
     case "unavailable":
       return (
-        <div className="mt-2 rounded-lg border border-destructive/25 bg-destructive/[0.04] p-3">
+        <div className="mt-2 border-l-2 border-destructive/40 bg-destructive/[0.04] px-3 py-2.5">
           <p className="font-medium text-foreground">
             {activity.unavailable?.resourceKind} unavailable
           </p>
@@ -272,9 +271,24 @@ function ActivityMarkdown({
   );
 }
 
+function RecordProvenance({ activity }: { readonly activity: RoomsProjectedActivity }) {
+  return (
+    <details className="mt-3 border-t border-border/70 pt-2 text-muted-foreground">
+      <summary className="cursor-pointer font-mono text-[9px] tracking-[0.06em] uppercase hover:text-foreground">
+        Provenance · seq {activity.item.source_event.seq}
+      </summary>
+      <AttributionFacts activity={activity} />
+      <div className="mt-2 flex flex-wrap gap-2 font-mono text-[9px] text-muted-foreground/75">
+        <span>{activity.item.source_event.type}</span>
+        <span>schema {activity.item.source_event.schema}</span>
+        <span>event {activity.item.source_event.event_id}</span>
+      </div>
+    </details>
+  );
+}
+
 /**
- * The record and excerpt registers: a bordered card that keeps the durable facts visible, because
- * governance and lifecycle items are read as records rather than as speech.
+ * The record and excerpt registers: a compact technical strip with provenance one disclosure away.
  */
 export function RoomsActivityItem({
   activity,
@@ -290,7 +304,7 @@ export function RoomsActivityItem({
   return (
     <article
       aria-label={`${copy.label} written by ${writer.display_name}, source sequence ${activity.item.source_event.seq}`}
-      className="flex gap-3 rounded-xl border border-border/75 bg-card/75 p-4 shadow-sm/5"
+      className="flex gap-3 border-l-2 border-[var(--threadspace-cyan-edge)] bg-card/60 px-3 py-3"
       data-rooms-activity-kind={activity.cardKind}
       data-rooms-attribution-mode={activity.attribution.mode}
       data-source-seq={activity.item.source_event.seq}
@@ -300,17 +314,17 @@ export function RoomsActivityItem({
         <header className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <span className="font-medium text-foreground">{writer.display_name}</span>
           {writer.id === currentPrincipalId ? (
-            <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700 uppercase dark:text-blue-300">
+            <span className="border border-[var(--threadspace-cyan-edge)] bg-[var(--threadspace-cyan-soft)] px-1.5 py-0.5 text-[9px] font-semibold text-[var(--threadspace-cyan)] uppercase">
               You
             </span>
           ) : null}
           <span
             className={cn(
-              "rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase",
+              "border px-1.5 py-0.5 text-[9px] font-semibold uppercase",
               principalClasses(writerPresentation.tone),
             )}
           >
-            Rooms writer · {writerPresentation.label}
+            Threadspace writer · {writerPresentation.label}
           </span>
           <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
             <Icon aria-hidden className="size-3" /> {copy.label}
@@ -322,13 +336,8 @@ export function RoomsActivityItem({
             {formatTime(activity.item.occurred_at)}
           </time>
         </header>
-        <AttributionFacts activity={activity} />
         <ActivityDetails activity={activity} />
-        <footer className="mt-3 flex flex-wrap gap-2 font-mono text-[9px] text-muted-foreground/75">
-          <span>seq {activity.item.source_event.seq}</span>
-          <span>{activity.item.source_event.type}</span>
-          <span>schema {activity.item.source_event.schema}</span>
-        </footer>
+        <RecordProvenance activity={activity} />
       </div>
     </article>
   );
@@ -355,7 +364,7 @@ export function RoomsConversationActivity({
     <article
       aria-label={`${copy.label} written by ${writer.display_name}, source sequence ${activity.item.source_event.seq}`}
       className={cn(
-        "group/row relative flex gap-3 rounded-lg px-2 py-px hover:bg-muted/25",
+        "group/row relative flex gap-3 px-2 py-px hover:bg-muted/25",
         showHeader ? "mt-3 first:mt-0" : "",
       )}
       data-rooms-activity-kind={activity.cardKind}
@@ -379,14 +388,14 @@ export function RoomsConversationActivity({
           <header className="flex min-w-0 flex-wrap items-baseline gap-x-2">
             <span className="font-semibold text-foreground">{writer.display_name}</span>
             {writer.id === currentPrincipalId ? (
-              <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-1.5 py-px text-[9px] font-semibold text-blue-700 uppercase dark:text-blue-300">
+              <span className="border border-[var(--threadspace-cyan-edge)] bg-[var(--threadspace-cyan-soft)] px-1.5 py-px text-[9px] font-semibold text-[var(--threadspace-cyan)] uppercase">
                 You
               </span>
             ) : null}
             {writerPresentation.tone === "human" ? null : (
               <span
                 className={cn(
-                  "rounded-full border px-1.5 py-px text-[9px] font-semibold uppercase",
+                  "border px-1.5 py-px text-[9px] font-semibold uppercase",
                   principalClasses(writerPresentation.tone),
                 )}
               >
@@ -422,7 +431,7 @@ export function RoomsActivityDaySeparator({ isoDate }: { readonly isoDate: strin
     <div className="my-4 flex items-center gap-3" data-rooms-activity-day="">
       <span className="h-px flex-1 bg-border" />
       <time
-        className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+        className="border border-border bg-background px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground"
         dateTime={isoDate}
       >
         {formatRoomsActivityDay(isoDate)}

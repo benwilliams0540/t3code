@@ -3,11 +3,14 @@ import { describe, expect, it } from "vite-plus/test";
 import type { RoomsHumanStoryV2 } from "./contract";
 import {
   roomsApprovedEvidence,
+  roomsBlockingGroupLabel,
   roomsChannelLabel,
   roomsReviewEvidenceSatisfied,
   roomsStageLabel,
+  roomsStoryBlockingGroup,
   roomsStoryCanApproveAndComplete,
   roomsStoryNeedsHuman,
+  roomsStoryNextAction,
   roomsStoryOwnerId,
 } from "./presentation";
 
@@ -101,7 +104,8 @@ describe("Rooms mobile presentation", () => {
         gate: { ...story.gate!, completion_ready: false },
       }),
     ).toBe(false);
-    expect(roomsStageLabel("human-qa")).toBe("Needs review");
+    expect(roomsStageLabel("human-qa")).toBe("Awaiting review");
+    expect(roomsStageLabel("done")).toBe("Complete");
   });
 
   it("only enables combined review and completion for an eligible reviewer", () => {
@@ -150,5 +154,52 @@ describe("Rooms mobile presentation", () => {
         ],
       }),
     ).toBe(true);
+  });
+
+  it("keeps stage and blocking as separate durable dimensions", () => {
+    const pendingReview = {
+      ...story,
+      gate: { ...story.gate!, approved_review_id: null },
+    };
+    expect(roomsStoryBlockingGroup(pendingReview, "h:reviewer")).toBe("you");
+    expect(
+      roomsStoryBlockingGroup({ ...story, stage: "in-progress", gate: null }, "h:reviewer"),
+    ).toBe("other");
+    expect(roomsStoryBlockingGroup({ ...story, stage: "done" }, "h:reviewer")).toBe("none");
+    expect(roomsStoryBlockingGroup({ ...story, stage: "backlog", gate: null }, "h:reviewer")).toBe(
+      "unknown",
+    );
+    expect(roomsBlockingGroupLabel("unknown")).toBe("Blocking unknown");
+  });
+
+  it("puts the next supported human action ahead of decorative status", () => {
+    expect(roomsStoryNextAction(story, "h:reviewer")).toBe("Complete the approved Story.");
+    expect(
+      roomsStoryNextAction(
+        { ...story, gate: { ...story.gate!, approved_review_id: null } },
+        "h:reviewer",
+      ),
+    ).toBe("Review the attached evidence, then approve and complete.");
+    expect(
+      roomsStoryNextAction(
+        {
+          ...story,
+          stage: "in-progress",
+          gate: null,
+          evidence: [],
+          allowed_next_transitions: [
+            {
+              from: "in-progress",
+              to: "human-qa",
+              label: "Request review",
+              terminal: false,
+              allowed: true,
+              unavailable_reason: null,
+            },
+          ],
+        },
+        "h:owner",
+      ),
+    ).toBe("Attach qualifying evidence from desktop before requesting review.");
   });
 });

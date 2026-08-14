@@ -188,7 +188,7 @@ describe("Rooms native mobile client", () => {
       fetch: fetchRequest,
     });
     await expect(signedOut.getSession()).rejects.toEqual(
-      new RoomsMobileClientError("rooms_signed_out", "Sign in to open Shared Rooms.", 401),
+      new RoomsMobileClientError("rooms_signed_out", "Sign in to open Shared Threadspace.", 401),
     );
   });
 });

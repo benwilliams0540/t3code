@@ -9,6 +9,27 @@ export type RoomsStoriesView = typeof RoomsStoriesView.Type;
 
 export const ROOMS_STORY_STAGE_ORDER = ["backlog", "in-progress", "human-qa", "done"] as const;
 
+export type RoomsStoryBlockingGroup =
+  | "waiting-on-you"
+  | "waiting-on-someone-else"
+  | "not-blocked"
+  | "unknown";
+
+export const ROOMS_STORY_BLOCKING_GROUPS = [
+  { key: "waiting-on-you", label: "Waiting on you", detail: "Your next action is available" },
+  {
+    key: "waiting-on-someone-else",
+    label: "Waiting on someone else",
+    detail: "Another person or agent owns the next action",
+  },
+  { key: "not-blocked", label: "Not blocked", detail: "No human blocker is declared" },
+  { key: "unknown", label: "Unknown", detail: "The current contract cannot identify a blocker" },
+] as const satisfies readonly {
+  readonly key: RoomsStoryBlockingGroup;
+  readonly label: string;
+  readonly detail: string;
+}[];
+
 export function localStoryStageLabel(stage: string): string {
   return (
     {
@@ -121,8 +142,29 @@ export function localStoryNeedsCurrentHuman(
   return localStoryOwnerId(story) === currentPrincipalId;
 }
 
+export function localStoryBlockingGroup(
+  story: RoomsLocalStory,
+  currentPrincipalId: string | null,
+): RoomsStoryBlockingGroup {
+  if (story.stage === "done") return "not-blocked";
+  if (!currentPrincipalId || !isRoomsLocalStoryV2(story)) return "unknown";
+  if (localStoryNeedsCurrentHuman(story, currentPrincipalId)) return "waiting-on-you";
+  if (story.stage === "human-qa") return "waiting-on-someone-else";
+  const ownerId = localStoryOwnerId(story);
+  if (ownerId === currentPrincipalId) return "waiting-on-you";
+  if (ownerId) return "waiting-on-someone-else";
+  return story.stage === "backlog" ? "not-blocked" : "unknown";
+}
+
+export function localStoryBlockingGroupLabel(group: RoomsStoryBlockingGroup): string {
+  return (
+    ROOMS_STORY_BLOCKING_GROUPS.find((candidate) => candidate.key === group)?.label ?? "Unknown"
+  );
+}
+
 export function localStoryNextAction(story: RoomsLocalStory): string {
-  if (!isRoomsLocalStoryV2(story)) return "Upgrade the Rooms producer to continue this workflow";
+  if (!isRoomsLocalStoryV2(story))
+    return "Upgrade the Threadspace producer to continue this workflow";
   if (story.stage === "backlog") return "Claim and start";
   if (story.stage === "in-progress") {
     const gate = localStoryEvidenceGate(story);

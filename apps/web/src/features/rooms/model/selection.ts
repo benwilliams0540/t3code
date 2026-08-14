@@ -17,7 +17,7 @@ export function resolveSelectedRoom(
     rooms.find((room) => room.id === fallbackRoomId) ??
     rooms[0] ??
     (() => {
-      throw new Error("The Rooms fixture does not declare any rooms.");
+      throw new Error("The Threadspace fixture does not declare any rooms.");
     })()
   );
 }

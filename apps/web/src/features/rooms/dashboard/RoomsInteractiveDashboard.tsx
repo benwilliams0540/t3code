@@ -110,15 +110,12 @@ export function RoomsInteractiveDashboard({
     >
       <header className="flex flex-wrap items-start gap-4">
         <div>
-          <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-            {room.sourceMode === "shared" ? "Shared room" : "Local workspace"}
+          <p className="threadspace-technical font-mono text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+            Sheet 01 · Room status · {room.sourceMode === "shared" ? "shared" : "local"}
           </p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
-            {room.name}
-          </h1>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Status</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {needsYou.length} {needsYou.length === 1 ? "thing needs" : "things need"} you ·{" "}
-            {counts.get("done")} done · {activity.length} recent durable events
+            {room.name} · what is healthy, what changed, and what needs your decision next.
           </p>
         </div>
         <Button
@@ -130,8 +127,41 @@ export function RoomsInteractiveDashboard({
         </Button>
       </header>
 
+      <section className="threadspace-panel mt-6" data-threadspace-status-strip="">
+        <header className="threadspace-module-header flex items-center">
+          Module 00 · Available room state
+          <span className="ml-auto">Current contract</span>
+        </header>
+        <dl className="grid sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            ["Source", room.sourceMode === "shared" ? "Shared" : "Local"],
+            ["Stories", String(stories.length)],
+            ["Native threads", String(threads.length)],
+            ["Awaiting you", String(needsYou.length)],
+          ].map(([label, value], index) => (
+            <div
+              className="border-b border-border px-4 py-4 sm:border-r sm:[&:nth-child(2n)]:border-r-0 xl:border-b-0 xl:[&:nth-child(2n)]:border-r xl:last:border-r-0"
+              key={label}
+            >
+              <dt className="font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+                {label}
+              </dt>
+              <dd
+                className={
+                  index === 3 && needsYou.length > 0
+                    ? "mt-2 text-lg font-semibold text-[var(--threadspace-amber)]"
+                    : "mt-2 text-lg font-semibold text-foreground"
+                }
+              >
+                {value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
       {boundProjects.length === 0 ? (
-        <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+        <div className="mt-5 flex flex-wrap items-center gap-3 border border-amber-500/30 bg-amber-500/10 px-4 py-3">
           <p className="min-w-0 flex-1 text-sm text-amber-800 dark:text-amber-200">
             Bind a T3 project to resolve native threads and execution status in this room.
           </p>
@@ -140,22 +170,22 @@ export function RoomsInteractiveDashboard({
       ) : null}
 
       {error ? (
-        <div className="mt-5 rounded-xl border border-destructive/30 bg-destructive/8 p-4 text-sm text-destructive">
+        <div className="mt-5 border border-destructive/30 bg-destructive/8 p-4 text-sm text-destructive">
           {error.message} <code className="text-[10px]">{error.code}</code>
         </div>
       ) : null}
       {loading && stories.length === 0 ? (
         <p className="mt-8 text-sm text-muted-foreground" role="status">
-          Loading dashboard…
+          Loading status…
         </p>
       ) : (
         <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.8fr)]">
           <div className="grid content-start gap-5">
-            <section className="overflow-hidden rounded-2xl border border-amber-500/30 bg-amber-500/[0.04]">
-              <header className="flex items-center gap-2 border-b border-amber-500/20 px-4 py-3">
+            <section className="threadspace-panel overflow-hidden border-amber-500/30 bg-amber-500/[0.04]">
+              <header className="threadspace-module-header flex items-center gap-2 border-amber-500/20">
                 <CircleAlertIcon className="size-4 text-amber-500" />
                 <h2 className="text-xs font-semibold tracking-[0.1em] text-amber-700 uppercase dark:text-amber-300">
-                  Needs you
+                  Module 01 · Waiting for you
                 </h2>
                 <span className="ml-auto text-xs text-amber-700 dark:text-amber-300">
                   {needsYou.length}
@@ -185,7 +215,7 @@ export function RoomsInteractiveDashboard({
                   All stories →
                 </button>
               </div>
-              <div className="overflow-hidden rounded-2xl border border-border bg-card">
+              <div className="threadspace-panel overflow-hidden">
                 {active.length > 0 ? (
                   active.map((story) => {
                     const ownerId = localStoryOwnerId(story);
@@ -229,18 +259,18 @@ export function RoomsInteractiveDashboard({
           </div>
 
           <div className="grid content-start gap-5">
-            <section className="rounded-2xl border border-border bg-card p-5">
+            <section className="threadspace-panel p-5">
               <div className="flex items-center gap-2">
                 <FileTextIcon className="size-4 text-muted-foreground" />
                 <h2 className="text-xs font-semibold tracking-[0.1em] text-muted-foreground uppercase">
-                  Current vision
+                  Module 02 · Current vision
                 </h2>
               </div>
               <h3 className="mt-3 font-semibold text-foreground">Revision data unavailable</h3>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                 The current {room.sourceMode === "shared" ? "human-shared" : "local"} contract does
-                not expose vision revisions, provenance, or freshness. Rooms will not substitute a
-                bundled document for server truth.
+                not expose vision revisions, provenance, or freshness. Threadspace will not
+                substitute a bundled document for server truth.
               </p>
               <Button
                 className="mt-4"
@@ -252,11 +282,11 @@ export function RoomsInteractiveDashboard({
               </Button>
             </section>
 
-            <section className="rounded-2xl border border-border bg-card p-5">
+            <section className="threadspace-panel p-5">
               <div className="flex items-center gap-2">
                 <LayoutDashboardIcon className="size-4 text-muted-foreground" />
                 <h2 className="text-xs font-semibold tracking-[0.1em] text-muted-foreground uppercase">
-                  Momentum
+                  Module 03 · Story stages
                 </h2>
               </div>
               <dl className="mt-4 grid gap-3 text-sm">
@@ -269,11 +299,11 @@ export function RoomsInteractiveDashboard({
               </dl>
             </section>
 
-            <section className="rounded-2xl border border-border bg-card p-5">
+            <section className="threadspace-panel p-5">
               <div className="flex items-center gap-2">
                 <HistoryIcon className="size-4 text-muted-foreground" />
                 <h2 className="text-xs font-semibold tracking-[0.1em] text-muted-foreground uppercase">
-                  Recent activity
+                  Module 04 · Event log
                 </h2>
               </div>
               <ol className="mt-3 grid gap-3">
