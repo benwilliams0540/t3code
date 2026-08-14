@@ -10,10 +10,12 @@ interface InteractivePrincipal {
 }
 
 function PrincipalGroup({
+  currentPrincipalId,
   icon: Icon,
   label,
   principals,
 }: {
+  readonly currentPrincipalId: string;
   readonly icon: LucideIcon;
   readonly label: string;
   readonly principals: readonly InteractivePrincipal[];
@@ -27,9 +29,16 @@ function PrincipalGroup({
         {principals.length > 0 ? (
           principals.map((principal) => (
             <article className="rounded-xl border border-border bg-card p-4" key={principal.id}>
-              <p className="font-medium text-foreground">
-                {principal.display_name ?? "Name unavailable"}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="font-medium text-foreground">
+                  {principal.display_name ?? "Name unavailable"}
+                </p>
+                {principal.id === currentPrincipalId ? (
+                  <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700 uppercase dark:text-blue-300">
+                    You
+                  </span>
+                ) : null}
+              </div>
               <p className="mt-1 text-xs capitalize text-muted-foreground">
                 {principal.type} · {principal.role ?? "no room role"}
               </p>
@@ -66,16 +75,19 @@ export function RoomsInteractivePresent({
       </header>
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <PrincipalGroup
+          currentPrincipalId={workspace.principal.id}
           icon={CircleUserRoundIcon}
           label="People"
           principals={principals.filter((principal) => principal.type === "human")}
         />
         <PrincipalGroup
+          currentPrincipalId={workspace.principal.id}
           icon={BotIcon}
           label="Agents"
           principals={principals.filter((principal) => principal.type === "agent")}
         />
         <PrincipalGroup
+          currentPrincipalId={workspace.principal.id}
           icon={MonitorIcon}
           label="Machines"
           principals={principals.filter((principal) => principal.type === "machine")}

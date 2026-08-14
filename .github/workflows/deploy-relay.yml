@@ -34,6 +34,10 @@ jobs:
       APNS_TEAM_ID: ${{ vars.APNS_TEAM_ID }}
       APNS_KEY_ID: ${{ vars.APNS_KEY_ID }}
       APNS_BUNDLE_ID: ${{ vars.APNS_BUNDLE_ID }}
+      ROOMS_APNS_ENVIRONMENT: ${{ vars.ROOMS_APNS_ENVIRONMENT }}
+      ROOMS_APNS_TEAM_ID: ${{ vars.ROOMS_APNS_TEAM_ID }}
+      ROOMS_APNS_KEY_ID: ${{ vars.ROOMS_APNS_KEY_ID }}
+      ROOMS_APNS_BUNDLE_ID: ${{ vars.ROOMS_APNS_BUNDLE_ID }}
       ALCHEMY_TELEMETRY_DISABLED: "1"
     steps:
       - name: Checkout
@@ -56,6 +60,8 @@ jobs:
           AXIOM_TOKEN: ${{ secrets.AXIOM_TOKEN }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
           APNS_PRIVATE_KEY: ${{ secrets.APNS_PRIVATE_KEY }}
+          ROOMS_APNS_PRIVATE_KEY: ${{ secrets.ROOMS_APNS_PRIVATE_KEY }}
+          ROOMS_PUBLISH_TOKEN: ${{ secrets.ROOMS_PUBLISH_TOKEN }}
 
       - name: Publish relay deploy commit status
         uses: actions/github-script@v8

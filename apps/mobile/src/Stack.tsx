@@ -35,6 +35,7 @@ import { ConnectionsRouteScreen } from "./features/connection/ConnectionsRouteSc
 import { ConnectionsNewRouteScreen } from "./features/connection/ConnectionsNewRouteScreen";
 import { HomeRouteScreen } from "./features/home/HomeRouteScreen";
 import { RoomsRouteScreen } from "./features/rooms/RoomsRouteScreen";
+import { RoomsRealtimeCoordinator } from "./features/rooms/RoomsRealtimeCoordinator";
 import { AddProjectDestinationRoute } from "./features/projects/AddProjectDestinationRoute";
 import { AddProjectLocalRoute } from "./features/projects/AddProjectLocalRoute";
 import { AddProjectRepositoryRoute } from "./features/projects/AddProjectRepositoryRoute";
@@ -321,6 +322,7 @@ function RootStackLayout(props: {
 
   return (
     <HardwareKeyboardCommandProvider pathname={pathname}>
+      <RoomsRealtimeCoordinator />
       <ShowcaseCaptureCoordinator pathname={pathname} />
       <ClerkSettingsSheetDetentProvider initiallyExpanded={false}>
         <AdaptiveWorkspaceLayout pathname={workspacePathname}>
@@ -395,6 +397,14 @@ export const RootStack = createNativeStackNavigator({
     Rooms: createNativeStackScreen({
       screen: RoomsRouteScreen,
       linking: "rooms",
+      options: {
+        ...GLASS_HEADER_OPTIONS,
+        title: "Rooms",
+      },
+    }),
+    RoomsChannel: createNativeStackScreen({
+      screen: RoomsRouteScreen,
+      linking: "rooms/:roomId/:channelId",
       options: {
         ...GLASS_HEADER_OPTIONS,
         title: "Rooms",

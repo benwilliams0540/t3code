@@ -9,7 +9,9 @@ export type RoomsLocalChangeRefreshReason = "advanced" | "cursor_ahead";
 
 export interface RoomsLocalChangeInvalidation {
   readonly roomId: string;
+  readonly afterSeq: number;
   readonly headSeq: number;
+  readonly initial: boolean;
   readonly reason: RoomsLocalChangeRefreshReason;
 }
 
@@ -33,6 +35,7 @@ interface ActiveSession {
   readonly generation: number;
   readonly roomId: string;
   afterSeq: number;
+  initialized: boolean;
   retryAttempt: number;
 }
 
@@ -67,6 +70,7 @@ export class RoomsLocalChangeLoop {
       generation: this.generation,
       roomId,
       afterSeq: 0,
+      initialized: false,
       retryAttempt: 0,
     };
     this.publishStatus("connected");
@@ -129,12 +133,15 @@ export class RoomsLocalChangeLoop {
       if (response.changed) {
         await this.onInvalidate({
           roomId: session.roomId,
+          afterSeq: session.afterSeq,
           headSeq: response.head_seq,
+          initial: !session.initialized,
           reason: "advanced",
         });
         if (!this.isCurrent(session)) return;
       }
       session.afterSeq = response.head_seq;
+      session.initialized = true;
       session.retryAttempt = 0;
       this.publishStatus("connected");
     } catch (error) {
@@ -147,11 +154,14 @@ export class RoomsLocalChangeLoop {
         try {
           await this.onInvalidate({
             roomId: session.roomId,
+            afterSeq: session.afterSeq,
             headSeq: error.headSeq,
+            initial: true,
             reason: "cursor_ahead",
           });
           if (!this.isCurrent(session)) return;
           session.afterSeq = error.headSeq;
+          session.initialized = true;
           session.retryAttempt = 0;
           this.publishStatus("connected");
           return;

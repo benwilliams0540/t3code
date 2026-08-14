@@ -100,6 +100,7 @@ describe("Rooms Local channel feed", () => {
     );
     expect(humanMarkup).toContain("<strong>Hello</strong>");
     expect(humanMarkup).toContain(workspace.principal.display_name);
+    expect(humanMarkup).toContain("You");
     expect(humanMarkup).toContain(workspace.principal.id);
     expect(unknownMarkup).toContain("Unknown schema retained");
     expect(unknownMarkup).toContain("channel.notice · schema 2");

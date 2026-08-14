@@ -69,14 +69,40 @@ function normalizeThreadDeepLink(value: string): string | null {
   }
 }
 
+function encodeRoomsDeepLink(input: { readonly roomId: string; readonly channelId: string }) {
+  if (!input.roomId || !input.channelId) return null;
+  return `/rooms/${encodeURIComponent(input.roomId)}/${encodeURIComponent(input.channelId)}`;
+}
+
+function normalizeRoomsDeepLink(value: string): string | null {
+  if (value.trim() !== value || value.includes("?") || value.includes("#")) return null;
+  const parts = value.split("/");
+  if (parts.length !== 4 || parts[0] !== "" || parts[1] !== "rooms") return null;
+  try {
+    return encodeRoomsDeepLink({
+      roomId: decodeURIComponent(parts[2] ?? ""),
+      channelId: decodeURIComponent(parts[3] ?? ""),
+    });
+  } catch {
+    return null;
+  }
+}
+
 export function extractAgentNotificationDeepLink(response: unknown): string | null {
   const data = dataFromNotificationResponse(response);
   const deepLink = data?.deepLink;
   if (typeof deepLink === "string") {
-    const normalizedDeepLink = normalizeThreadDeepLink(deepLink);
+    const normalizedDeepLink =
+      normalizeThreadDeepLink(deepLink) ?? normalizeRoomsDeepLink(deepLink);
     if (normalizedDeepLink) {
       return normalizedDeepLink;
     }
+  }
+
+  const roomId = data?.roomId;
+  const channelId = data?.channelId;
+  if (typeof roomId === "string" && typeof channelId === "string") {
+    return encodeRoomsDeepLink({ roomId, channelId });
   }
 
   const environmentId = data?.environmentId;
@@ -85,6 +111,19 @@ export function extractAgentNotificationDeepLink(response: unknown): string | nu
     return encodeThreadDeepLink({ environmentId, threadId });
   }
   return null;
+}
+
+export function extractRoomsNotificationEvent(response: unknown): {
+  readonly eventId: string;
+  readonly roomId: string;
+  readonly channelId: string;
+} | null {
+  const data = dataFromNotificationResponse(response);
+  return typeof data?.eventId === "string" &&
+    typeof data.roomId === "string" &&
+    typeof data.channelId === "string"
+    ? { eventId: data.eventId, roomId: data.roomId, channelId: data.channelId }
+    : null;
 }
 
 export function routeAgentNotificationResponseOnce(input: {

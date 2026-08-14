@@ -989,6 +989,21 @@ export type RoomsHumanHttpRequest = typeof RoomsHumanHttpRequestSchema.Type;
 export const RoomsHumanHttpResponseSchema = RoomsLocalHttpResponseSchema;
 export type RoomsHumanHttpResponse = typeof RoomsHumanHttpResponseSchema.Type;
 
+export const DesktopNotificationRequestSchema = Schema.Struct({
+  id: Schema.String.check(Schema.isTrimmed(), Schema.isNonEmpty(), Schema.isMaxLength(128)),
+  title: Schema.String.check(Schema.isTrimmed(), Schema.isNonEmpty(), Schema.isMaxLength(120)),
+  body: Schema.String.check(Schema.isTrimmed(), Schema.isNonEmpty(), Schema.isMaxLength(240)),
+});
+export type DesktopNotificationRequest = typeof DesktopNotificationRequestSchema.Type;
+
+export const DesktopNotificationResultSchema = Schema.Literals([
+  "shown",
+  "duplicate",
+  "focused",
+  "unsupported",
+]);
+export type DesktopNotificationResult = typeof DesktopNotificationResultSchema.Type;
+
 export interface DesktopBridge {
   getAppBranding: () => DesktopAppBranding | null;
   // One bootstrap per pool instance currently registered with bootstrap
@@ -1000,6 +1015,7 @@ export interface DesktopBridge {
   setClientSettings: (settings: ClientSettings) => Promise<void>;
   requestRoomsLocal?: (request: RoomsLocalHttpRequest) => Promise<RoomsLocalHttpResponse>;
   requestRoomsHuman?: (request: RoomsHumanHttpRequest) => Promise<RoomsHumanHttpResponse>;
+  showNotification?: (request: DesktopNotificationRequest) => Promise<DesktopNotificationResult>;
   getConnectionCatalog?: () => Promise<string | null>;
   setConnectionCatalog?: (catalog: string) => Promise<boolean>;
   clearConnectionCatalog?: () => Promise<void>;

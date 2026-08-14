@@ -3,11 +3,10 @@ import type { RelayDeviceRegistrationRequest } from "@t3tools/contracts/relay";
 import type { Preferences } from "../../persistence/mobile-preferences";
 import { supportsAgentAwarenessPush } from "./capabilities";
 
-// Development builds are Xcode-signed and receive sandbox APNs tokens;
-// preview and production builds are distribution-signed and use production
-// APNs. The relay routes each device's pushes accordingly.
-export function resolveApsEnvironment(appVariant: unknown): "sandbox" | "production" {
-  return appVariant === "development" ? "sandbox" : "production";
+// This value is emitted from the same build input that configures the native
+// aps-environment entitlement. Never infer routing from a marketing variant.
+export function resolveApsEnvironment(value: unknown): "sandbox" | "production" {
+  return value === "sandbox" ? "sandbox" : "production";
 }
 
 export function makeRelayDeviceRegistrationRequest(input: {

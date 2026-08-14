@@ -1,7 +1,7 @@
+import { handleProcessOutputError } from "./app/DesktopProcessStreams.ts";
+
 for (const stream of [process.stdout, process.stderr]) {
-  stream.on("error", (err: NodeJS.ErrnoException) => {
-    if (err.code !== "EPIPE") throw err;
-  });
+  stream.on("error", handleProcessOutputError);
 }
 
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
@@ -24,6 +24,7 @@ import * as DesktopIpc from "./ipc/DesktopIpc.ts";
 import * as ElectronApp from "./electron/ElectronApp.ts";
 import * as ElectronDialog from "./electron/ElectronDialog.ts";
 import * as ElectronMenu from "./electron/ElectronMenu.ts";
+import * as ElectronNotification from "./electron/ElectronNotification.ts";
 import * as ElectronPowerMonitor from "./electron/ElectronPowerMonitor.ts";
 import * as ElectronProtocol from "./electron/ElectronProtocol.ts";
 import * as ElectronSafeStorage from "./electron/ElectronSafeStorage.ts";
@@ -115,6 +116,7 @@ const electronLayer = Layer.mergeAll(
   ElectronApp.layer,
   ElectronDialog.layer,
   ElectronMenu.layer,
+  ElectronNotification.layer,
   ElectronPowerMonitor.layer,
   ElectronProtocol.layer,
   ElectronSafeStorage.layer,

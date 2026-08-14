@@ -22,6 +22,7 @@ import { useClientSettings } from "~/hooks/useSettings";
 import { getLocalStorageItem, useLocalStorage } from "~/hooks/useLocalStorage";
 
 import { ROOMS_SELECTED_ROOM_STORAGE_KEY } from "../model/selection";
+import { selectRoomsDesktopNotifications } from "../notifications/roomsDesktopNotifications";
 import {
   connectingLocalRoomsDataSourceState,
   failedLocalRoomsDataSourceState,
@@ -522,6 +523,42 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       }));
       const workspace = await loadHumanSession(invalidation.roomId, true);
       if (!workspace) throw sourceNotReadyError();
+      if (!invalidation.initial && invalidation.reason === "advanced") {
+        try {
+          const current = humanStateRef.current;
+          const showNotification = window.desktopBridge?.showNotification;
+          if (current.status === "ready" && showNotification) {
+            const notificationClient = humanClientForGenerationRef.current(
+              current.authenticationGeneration,
+            );
+            for (const channel of workspace.channels) {
+              let afterSeq = invalidation.afterSeq;
+              let hasMore = true;
+              while (hasMore) {
+                const feed = await notificationClient.getFeed(workspace.room.id, channel.id, {
+                  afterSeq,
+                  snapshotHeadSeq: invalidation.headSeq,
+                  limit: 100,
+                });
+                for (const notification of selectRoomsDesktopNotifications({
+                  workspace,
+                  channel,
+                  items: feed.items,
+                  afterSeq: invalidation.afterSeq,
+                  headSeq: invalidation.headSeq,
+                })) {
+                  await showNotification(notification);
+                }
+                hasMore = feed.page_info.has_more;
+                if (!hasMore || feed.page_info.next_cursor <= afterSeq) break;
+                afterSeq = feed.page_info.next_cursor;
+              }
+            }
+          }
+        } catch (error) {
+          console.warn("Could not deliver a Shared Rooms desktop notification.", error);
+        }
+      }
       setLocalFeedSync((current) =>
         current.invalidationGeneration === invalidationGeneration
           ? { ...current, refreshGeneration: invalidationGeneration }
