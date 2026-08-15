@@ -1,0 +1,38 @@
+/*
+ * Threadspace v3 provisional design tokens.
+ * Design-reference only: do not import into production until the web/mobile
+ * token drift documented in DECISIONS.md is resolved.
+ */
+
+:root {
+  --ts-edge-width: 1px;
+  --ts-radius-internal: 2px;
+  --ts-target: 44px;
+  --ts-row-compact: 48px;
+  --ts-row-descriptive: 58px;
+  --ts-section-header: 36px;
+  --ts-grid: 32px;
+
+  --ts-paper-page: #f1eee6;
+  --ts-paper-chrome: #e8e4db;
+  --ts-paper-surface: #f8f5ed;
+  --ts-paper-edge: #aeb7ba;
+  --ts-paper-ink: #1e2529;
+  --ts-paper-muted: #68747b;
+  --ts-paper-relationship: #126f77;
+  --ts-paper-status: #316d3a;
+  --ts-paper-attention: #9a5b0d;
+  --ts-paper-error: #a64635;
+
+  --ts-dark-page: #0d1013;
+  --ts-dark-chrome: #101419;
+  --ts-dark-surface: #14181d;
+  --ts-dark-edge: #303943;
+  --ts-dark-ink: #ebe9e3;
+  --ts-dark-muted: #8e999f;
+  --ts-dark-relationship: #68cbd0;
+  --ts-dark-status: #78c27c;
+  --ts-dark-attention: #efad3c;
+  --ts-dark-error: #df7563;
+}
+
