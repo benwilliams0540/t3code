@@ -28,6 +28,7 @@ import {
   type AgentDeliveryPage,
   toInboundEvent,
 } from "./deliveryClient.ts";
+import { collectResidentHostHealth } from "./health.ts";
 
 export interface SafeHostLog {
   readonly event: string;
@@ -223,6 +224,11 @@ export class ResidentConnectorHost {
       agentId: input.config.openClaw.agentId,
       clientVersion: "1.0.0",
       platform: "linux-arm64",
+      getTrustedContext: () =>
+        collectResidentHostHealth({
+          roomsBaseUrl: input.config.rooms.baseUrl,
+          fetch: this.#fetch,
+        }),
     });
     const connector = new RoomsResidentAgentConnector({
       store: this.#connectorStore,
