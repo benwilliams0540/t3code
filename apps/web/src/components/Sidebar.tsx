@@ -205,6 +205,12 @@ import {
   type SidebarProjectGroupMember,
   type SidebarProjectSnapshot,
 } from "../sidebarProjectGrouping";
+import {
+  ProjectImpactPrototypePanel,
+  ProjectImpactPrototypeSwitcher,
+  type ProjectImpactPrototypeVariant,
+  useProjectImpactPrototypeVariant,
+} from "./prototypes/ProjectImpactSidebarPrototype";
 const SIDEBAR_SORT_LABELS: Record<SidebarProjectSortOrder, string> = {
   updated_at: "Last user message",
   created_at: "Created at",
@@ -1054,6 +1060,7 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
 
 interface SidebarProjectItemProps {
   project: SidebarProjectSnapshot;
+  impactPrototypeVariant: ProjectImpactPrototypeVariant | null;
   isThreadListExpanded: boolean;
   activeRouteThreadKey: string | null;
   newThreadShortcutLabel: string | null;
@@ -1074,6 +1081,7 @@ interface SidebarProjectItemProps {
 const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjectItemProps) {
   const {
     project,
+    impactPrototypeVariant,
     isThreadListExpanded,
     activeRouteThreadKey,
     newThreadShortcutLabel,
@@ -2320,6 +2328,13 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         </Tooltip>
       </div>
 
+      {impactPrototypeVariant ? (
+        <ProjectImpactPrototypePanel
+          projectKey={project.projectKey}
+          variant={impactPrototypeVariant}
+        />
+      ) : null}
+
       <SidebarProjectThreadList
         projectKey={project.projectKey}
         projectExpanded={projectExpanded}
@@ -2594,7 +2609,6 @@ function ProjectSortMenu({
     },
     [onThreadPreviewCountChange, threadPreviewCount],
   );
-
   return (
     <Menu>
       <Tooltip>
@@ -2819,6 +2833,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
     },
     [updateSettings],
   );
+  const impactPrototypeVariant = useProjectImpactPrototypeVariant();
 
   return (
     <SidebarContent
@@ -2922,6 +2937,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                     {(dragHandleProps) => (
                       <SidebarProjectItem
                         project={project}
+                        impactPrototypeVariant={impactPrototypeVariant}
                         isThreadListExpanded={expandedThreadListsByProject.has(project.projectKey)}
                         activeRouteThreadKey={
                           activeRouteProjectKey === project.projectKey ? routeThreadKey : null
@@ -2954,6 +2970,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
               <SidebarProjectListRow
                 key={project.projectKey}
                 project={project}
+                impactPrototypeVariant={impactPrototypeVariant}
                 isThreadListExpanded={expandedThreadListsByProject.has(project.projectKey)}
                 activeRouteThreadKey={
                   activeRouteProjectKey === project.projectKey ? routeThreadKey : null
@@ -2982,6 +2999,9 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
           </div>
         )}
       </SidebarGroup>
+      {impactPrototypeVariant ? (
+        <ProjectImpactPrototypeSwitcher variant={impactPrototypeVariant} />
+      ) : null}
     </SidebarContent>
   );
 });
