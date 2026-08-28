@@ -5,7 +5,7 @@
 From the Kanban/project list, show how many agents are active in each project, what they are doing,
 and what impact that project is having on its execution host: CPU, memory, heat/thermal pressure, and
 other useful resource metrics. A project entry in the left sidebar can grow vertically to carry a
-compact summary, with a deeper task-manager view and optional charts.
+compact, configurable summary without covering the Kanban.
 
 ## Prototype
 
@@ -20,17 +20,19 @@ The existing project sidebar accepts a development-only query parameter:
 Arrow keys or the floating prototype switcher cycle between the variants. All displayed values are
 synthetic and explicitly marked as such. The prototype does not render in production builds.
 
+### Revised UX direction
+
+![Revised project-impact sidebar mock](https://raw.githubusercontent.com/benwilliams0540/t3code/prototype/rooms-project-impact/reports/assets/2026-08-28-19-02-39-rooms-project-impact-ux-v2.png)
+
+The revised direction removes the right-side detail drawer as out of scope. The Kanban keeps its
+full width. The expanded project entry contains the agent roster, current work, compact metrics,
+and exactly one configurable sparkline.
+
 ## Recommended product shape
 
-Use a two-level disclosure model:
-
-1. A compact project row shows active agent count, current project CPU/RAM, thermal tone, and the
-   highest-priority active task.
-2. Clicking the impact summary opens a project task-manager view with an agent/process roster,
-   current work, charts, attribution confidence, and a selectable time window.
-
-The compact summary should remain scannable. Full process trees and long histories belong in the
-detail view, not permanently in the sidebar.
+Use one expanded project row. It shows active agent count and current work, followed by selected
+resource fields and no more than one small graph. Full process trees, a dedicated task-manager
+drawer, stop/pause controls, and multi-chart history are not part of this feature.
 
 ## Existing foundation
 
@@ -50,17 +52,28 @@ rule.
 - Active/resting/waiting agent count per project.
 - Concise current-work label for active agents.
 - Current CPU, resident memory, and host thermal tone.
+- Exactly one optional sparkline selected by configuration.
+- Compact shared/unattributed resource line.
 - Stale/unavailable state when telemetry is missing.
 - User preference to hide the impact row or show it only for active projects.
 
-### Project task-manager view
+### Display configuration
 
-- Agent roster with provider, thread/story, status, elapsed time, and current operation.
-- CPU, memory, I/O, process count, and project share of the host.
-- Charts for useful windows such as 1 minute, 15 minutes, 1 hour, and session lifetime.
-- Machine identity and local/remote scope when a project spans environments.
-- Attribution confidence and an explicit “shared/unattributed” bucket.
-- Read-only first release. Stop/pause/limit controls are a separate authorization-sensitive story.
+Keep the first version configurable through the normal `settings.json` path rather than adding a
+settings screen. Proposed shape (final names should follow the existing settings schema):
+
+```json
+{
+  "projectImpact": {
+    "enabled": true,
+    "show": ["activeAgents", "currentWork", "cpu", "memory", "hostThermal", "shared"],
+    "graph": "cpu"
+  }
+}
+```
+
+`graph` accepts one supported metric or `null`. `show` controls row order and visibility. Invalid
+or unsupported fields should be ignored with a diagnostic rather than breaking the sidebar.
 
 ### Attribution model
 
@@ -73,8 +86,9 @@ rule.
 ### Performance
 
 - Reuse the existing resource telemetry sampling stream.
-- Subscribe/render only when the project summary or detail view is visible.
-- Bucket chart history server-side; do not push raw high-frequency samples to every client.
+- Subscribe/render only when the project summary is visible.
+- Bucket the single sparkline history server-side; do not push raw high-frequency samples to every
+  client.
 - Avoid continuous animations and unnecessary sidebar-wide rerenders.
 
 ## Acceptance criteria
@@ -85,16 +99,15 @@ rule.
   owned by another project.
 - Shared overhead appears as shared/unattributed rather than being silently assigned.
 - Thermal state is labeled as host-level context, not falsely presented as a project temperature.
-- The detail view charts at least CPU and memory over a selectable recent window.
+- The expanded entry renders no more than one graph.
+- `settings.json` can choose the visible fields, their order, and which single metric is graphed.
+- Disabling the feature in `settings.json` restores the normal compact project row.
 - Telemetry unavailable/stale states are visible and do not display plausible-looking zeroes.
 - Collapsing or hiding the panel stops its UI subscription/render cost.
-- Web and desktop behavior is defined; mobile receives a separate compact/detail treatment rather
-  than inheriting a desktop sidebar assumption.
+- Web and desktop behavior is defined; mobile is explicitly out of scope for this sidebar-first
+  feature.
 
 ## Prototype verdict to seek
 
-Choose the default information hierarchy, not the colors:
-
-- Is the pulse strip enough for the always-visible row?
-- Does the agent roster deserve the most space?
-- Are trend charts useful in the sidebar, or should they live only in the deeper task-manager view?
+Validate the revised sidebar-only hierarchy and choose the default graph. The right-side drawer and
+multi-chart task-manager view are deliberately out of scope.
