@@ -1,21 +1,12 @@
 name: Rooms Focused
 
-# The main CI workflow targets Blacksmith runners that this fork cannot use, so
-# its jobs queue for 24 hours and are cancelled. This workflow gives the Rooms
-# integration line a check that actually completes, on GitHub-hosted runners,
-# scoped to the Rooms packages and client surfaces.
+# Manual only. The main CI workflow targets Blacksmith runners that this fork
+# cannot use, so this workflow exists as a runnable recipe for the Rooms test
+# and typecheck scope on GitHub-hosted runners. It does not run on its own:
+# trigger it from the Actions tab when a run is worth the runner time.
 
 on:
-  pull_request:
-    branches:
-      - integrate/rooms-current
-  push:
-    branches:
-      - integrate/rooms-current
-
-concurrency:
-  group: rooms-focused-${{ github.ref }}
-  cancel-in-progress: true
+  workflow_dispatch:
 
 jobs:
   rooms:
