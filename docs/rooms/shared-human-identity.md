@@ -65,7 +65,8 @@ policies and does not expose Rails on a LAN, tailnet, or public address to work 
 
 The source represents `signed-out`, `authenticating`, `authenticated-nonmember`, `invited`,
 `ready`, expired-session, authorization-failure, invalid-configuration, and transport/error states
-separately. First-admin bootstrap and invite credentials live only in the current form. Successful
+separately. The `signed-out` and expired-session panels offer the same T3 Connect sign-in action as
+the app sidebar, because the Rooms workspace replaces that sidebar with its own rail. First-admin bootstrap and invite credentials live only in the current form. Successful
 redemption clears them. An issued invite may remain in the current admin view or clipboard until
 the admin clears it; it is never a durable client setting.
 
