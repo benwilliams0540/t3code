@@ -2,7 +2,7 @@
 
 Shared Rooms is the authenticated, server-backed multiplayer source in the Version 3 sidebar. It
 is additive to the certified Sample source and the explicit development-only Local fallback. It
-does not change T3 Connect managed Relay minting, native T3 thread ownership, or mobile Rooms UI.
+does not change T3 Connect managed Relay minting or native T3 thread ownership.
 
 ## Immutable producer contract
 
@@ -19,6 +19,32 @@ The later server documentation commit is not the producer pin. A shared workspac
 after the server returns the current human principal, replayed role, capability matrix, channels,
 and room-scoped principal directory. Message writers resolve through that directory. An unknown ID
 stays visibly unresolved and is never replaced with the current reader.
+
+The immutable v1 route remains available. Agent lifecycle is additive through the feed-only v2
+contract:
+
+```text
+t3rooms producer: 0147f353190f2568dd42032677229a0d74eb5610
+contract: rooms.human-shared
+version: 2
+schema: contracts/rooms/human-shared/v2/schema.json
+route: GET /rooms/human/v2/rooms/:room_id/channels/:channel_id/feed
+```
+
+The v2 feed preserves v1 cursor and pinned-snapshot behavior and adds typed
+`agent_invocation_update` items. Each update carries the invocation ID and the exact source event
+for the triggering human message. A delivery receipt carries the recorded reply event reference.
+Human clients never infer correlation from adjacent messages or matching display names.
+
+Web, desktop, and mobile consume one shared projection that folds the append-only start, finish,
+and receipt updates plus the correlated Agent reply into one conversational turn. An unfinished
+turn becomes delayed after 30 seconds; a server-recorded failure keeps only the safe error
+vocabulary. Protocol rejection maps to `provider_request_rejected` instead of the generic
+`connector_internal`. Automatic retry is intentionally excluded because the invocation protocol
+does not yet define idempotency and double-execution rules.
+
+The OpenClaw transport sends `modelRun: true` whenever it sends `promptMode: "none"`, as required
+by the OpenClaw 2026.8.2 agent protocol. The connector regression test freezes that request shape.
 
 ## Client configuration
 
@@ -49,7 +75,7 @@ settings, local storage, project bindings, diagnostics, serialized source state,
 Electron sends a narrow typed request to the main process. The main process:
 
 - accepts only HTTP loopback with no URL credentials, path, query, or fragment in the base origin;
-- owns the exact `/rooms/human/v1` route and method allow-list;
+- owns the exact `/rooms/human/v1` route and method allow-list plus the single v2 feed route;
 - constructs the only `Authorization` header itself;
 - accepts no renderer-controlled header map;
 - rejects blank, CR/LF-bearing, or oversized bearers;
@@ -98,7 +124,7 @@ request ID. Message submission preserves its stable request ID across retry.
 | Electron desktop         | Required product surface; implemented through the main-process loopback boundary.                      |
 | Locally hosted web       | Implemented through fixed client paths when browser CORS/private-network policy permits.               |
 | Hosted web               | Clerk can mount, but mixed-content/CORS/private-network policy may block loopback; no bypass is added. |
-| Mobile                   | No Rooms UI in M6B; existing T3 Connect mobile authentication is unchanged.                            |
+| Mobile                   | Native Shared Rooms channels consume the same v2 Agent-turn projection and safe status copy.           |
 | T3 Connect managed Relay | Existing configuration, template, minting, and UI requirements remain unchanged.                       |
 
 ## Acceptance boundary

@@ -11,9 +11,11 @@ import type {
   RoomsWorkspaceReadFixture,
 } from "../model/workspace";
 import { assertNever } from "../model/workspace";
+import type { RoomsAgentTurn } from "@t3tools/client-runtime/rooms/agent-turns";
 
 export type RoomsActivityCardKind =
   | "message"
+  | "agent_turn"
   | "reaction"
   | "run"
   | "story"
@@ -34,6 +36,7 @@ export type RoomsActivityRegister = "conversation" | "excerpt" | "record";
 export function roomsActivityRegister(cardKind: RoomsActivityCardKind): RoomsActivityRegister {
   switch (cardKind) {
     case "message":
+    case "agent_turn":
     case "reaction":
       return "conversation";
     case "run":
@@ -116,6 +119,7 @@ export interface RoomsProjectedActivity {
     readonly reason: string;
     readonly retryable: boolean;
   } | null;
+  readonly agentTurn?: RoomsAgentTurn | null;
 }
 
 export function principalPresentation(

@@ -486,6 +486,7 @@ describe("Rooms resident-agent server consumer", () => {
       normalizeRoomsFailure(result("unavailable", "gateway_unavailable")),
       normalizeRoomsFailure(result("cancelled", "connector_disabled")),
       normalizeRoomsFailure(result("failed", "provider_rate_limited")),
+      normalizeRoomsFailure(result("failed", "gateway_request_rejected")),
       normalizeRoomsFailure(result("failed", "unknown-provider-secret")),
     ];
     expect(mapped).toEqual([
@@ -493,6 +494,7 @@ describe("Rooms resident-agent server consumer", () => {
       "provider_unavailable",
       "connector_cancelled",
       "provider_rate_limited",
+      "provider_request_rejected",
       "connector_internal",
     ]);
     expect(new Set(mapped)).toEqual(new Set(ROOMS_SAFE_FAILURE_CODES));

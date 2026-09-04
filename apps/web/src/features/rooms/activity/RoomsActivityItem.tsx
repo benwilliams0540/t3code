@@ -17,6 +17,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { cn } from "~/lib/utils";
+import { roomsAgentTurnCopy } from "@t3tools/client-runtime/rooms/agent-turns";
 
 import { resolveRoomsInternalHref } from "../shell/internalHref";
 import type { RoomsActivityRow } from "./grouping";
@@ -24,6 +25,7 @@ import { principalPresentation, type RoomsProjectedActivity } from "./projection
 
 const cardCopy = {
   message: { label: "Message", icon: MessageCircleIcon },
+  agent_turn: { label: "Agent turn", icon: BotIcon },
   reaction: { label: "Reaction", icon: SmileIcon },
   run: { label: "Agent run", icon: BotIcon },
   story: { label: "Story update", icon: ListChecksIcon },
@@ -351,6 +353,9 @@ export function RoomsConversationActivity({
   const writer = activity.attribution.writer;
   const writerPresentation = principalPresentation(writer);
   const isReaction = activity.cardKind === "reaction";
+  const agentTurnCopy = activity.agentTurn
+    ? roomsAgentTurnCopy(activity.agentTurn, writer.display_name)
+    : null;
   return (
     <article
       aria-label={`${copy.label} written by ${writer.display_name}, source sequence ${activity.item.source_event.seq}`}
@@ -401,7 +406,18 @@ export function RoomsConversationActivity({
             </time>
           </header>
         ) : null}
-        {isReaction ? (
+        {agentTurnCopy ? (
+          activity.agentTurn?.status === "replied" ? (
+            <ActivityMarkdown markdown={activity.bodyMarkdown} />
+          ) : (
+            <div className="py-1" data-rooms-agent-turn-status={activity.agentTurn?.status}>
+              <p className="text-sm font-medium text-foreground">{agentTurnCopy.title}</p>
+              {agentTurnCopy.detail ? (
+                <p className="mt-1 text-sm text-muted-foreground">{agentTurnCopy.detail}</p>
+              ) : null}
+            </div>
+          )
+        ) : isReaction ? (
           <p className="text-sm text-foreground">
             <span className="mr-2 rounded-full border border-border bg-muted/45 px-2.5 py-1">
               {activity.emoji}

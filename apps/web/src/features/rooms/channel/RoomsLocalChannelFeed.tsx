@@ -8,6 +8,10 @@ import {
   XIcon,
 } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  nextRoomsAgentTurnTransitionAt,
+  roomsAgentTurnAnnouncement,
+} from "@t3tools/client-runtime/rooms/agent-turns";
 
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -26,12 +30,12 @@ import {
 } from "./localActivityProjection";
 import { useRoomsDataSource } from "../dataSource";
 import { isRoomsLocalClientError, RoomsLocalClientError } from "../dataSource/localChannelsClient";
+import type { RoomsLocalChannel, RoomsLocalFeedItem } from "../dataSource/localChannelsContract";
 import type {
-  RoomsLocalChannel,
-  RoomsLocalFeed,
-  RoomsLocalFeedItem,
-} from "../dataSource/localChannelsContract";
-import type { RoomsInteractiveWorkspace } from "../dataSource/humanSharedContract";
+  RoomsHumanFeedItem,
+  RoomsInteractiveFeed,
+  RoomsInteractiveWorkspace,
+} from "../dataSource/humanSharedContract";
 import type { RoomsProjectedActivity } from "../activity/projection";
 import { createLowercaseUuidV7 } from "../dataSource/uuidV7";
 import {
@@ -42,11 +46,13 @@ import {
   type StableRoomsCommand,
 } from "./stableCommand";
 
-export function mergeRoomsLocalFeedPages(pages: readonly RoomsLocalFeed[]): RoomsLocalFeed | null {
+export function mergeRoomsLocalFeedPages(
+  pages: readonly RoomsInteractiveFeed[],
+): RoomsInteractiveFeed | null {
   const first = pages[0];
   if (!first) return null;
   const itemIds = new Set<string>();
-  const items: RoomsLocalFeedItem[] = [];
+  const items: RoomsHumanFeedItem[] = [];
   for (const page of pages) {
     if (
       page.room_id !== first.room_id ||
@@ -67,6 +73,22 @@ export function mergeRoomsLocalFeedPages(pages: readonly RoomsLocalFeed[]): Room
   }
   const last = pages.at(-1)!;
   return { ...last, items };
+}
+
+export function RoomsAgentTurnLiveStatus({
+  activities,
+}: {
+  readonly activities: readonly RoomsProjectedActivity[];
+}) {
+  const latest = activities.toReversed().find((activity) => activity.agentTurn)?.agentTurn;
+  if (!latest) return null;
+  const writer = activities.find((activity) => activity.agentTurn?.id === latest.id)?.attribution
+    .writer.display_name;
+  return (
+    <p aria-atomic="true" aria-live="polite" className="sr-only">
+      {roomsAgentTurnAnnouncement(latest, writer ?? "Agent")}
+    </p>
+  );
 }
 
 export function isCurrentRoomsLocalFeedRequest(
@@ -361,7 +383,8 @@ export function RoomsLocalChannelFeed({
 }) {
   const { loadLocalFeed, localFeedInvalidationGeneration, localFeedRefreshGeneration } =
     useRoomsDataSource();
-  const [feed, setFeed] = useState<RoomsLocalFeed | null>(null);
+  const [feed, setFeed] = useState<RoomsInteractiveFeed | null>(null);
+  const [agentTurnNow, setAgentTurnNow] = useState(() => Date.now());
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [feedInvalidated, setFeedInvalidated] = useState(false);
@@ -370,12 +393,24 @@ export function RoomsLocalChannelFeed({
   const loadGeneration = useRef(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const activities = useMemo(
-    () => projectRoomsLocalActivityItems(workspace, feed?.items ?? []),
-    [feed?.items, workspace],
+    () => projectRoomsLocalActivityItems(workspace, feed?.items ?? [], agentTurnNow),
+    [agentTurnNow, feed?.items, workspace],
   );
   const selectedActivity =
     activities.find((activity) => activity.item.id === selectedActivityId) ?? null;
   useRoomsFeedAutoScroll(scrollRef, activities.length);
+
+  useEffect(() => {
+    const transitionAt = nextRoomsAgentTurnTransitionAt(
+      activities.flatMap((activity) => (activity.agentTurn ? [activity.agentTurn] : [])),
+    );
+    if (transitionAt === null) return;
+    const timeout = window.setTimeout(
+      () => setAgentTurnNow(Date.now()),
+      Math.max(0, transitionAt - Date.now() + 1),
+    );
+    return () => window.clearTimeout(timeout);
+  }, [activities]);
 
   const reload = useCallback(
     async (loadCompleteSnapshot = false) => {
@@ -383,7 +418,7 @@ export function RoomsLocalChannelFeed({
       setLoading(true);
       setError(null);
       try {
-        const pages: RoomsLocalFeed[] = [
+        const pages: RoomsInteractiveFeed[] = [
           await loadLocalFeed(workspace.room.id, channel.id, { limit: 100 }),
         ];
         if (loadCompleteSnapshot) {
@@ -519,6 +554,7 @@ export function RoomsLocalChannelFeed({
                 onActivitySelect={(activity) => setSelectedActivityId(activity.item.id)}
                 selectedActivityId={selectedActivityId}
               />
+              <RoomsAgentTurnLiveStatus activities={activities} />
             </div>
           )}
 

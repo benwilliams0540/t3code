@@ -85,7 +85,7 @@ async function parseResponse<T>(response: Response, decoder: (input: unknown) =>
   } catch {
     throw new RoomsMobileClientError(
       "rooms_contract_mismatch",
-      "The Rooms response does not match rooms.human-shared v1.",
+      "The Rooms response does not match the supported rooms.human-shared contract.",
       response.status,
     );
   }
@@ -154,6 +154,7 @@ export function createRoomsMobileClient(options: {
   };
 
   const roomPath = (roomId: string) => `/rooms/human/v1/rooms/${encodeURIComponent(roomId)}`;
+  const roomFeedPath = (roomId: string) => `/rooms/human/v2/rooms/${encodeURIComponent(roomId)}`;
 
   return {
     getSession: () => request("/rooms/human/v1/session", "GET", decodeSession),
@@ -179,7 +180,7 @@ export function createRoomsMobileClient(options: {
     },
     getFeed: async (roomId: string, channelId: string) => {
       const feed = await request(
-        `${roomPath(roomId)}/channels/${encodeURIComponent(channelId)}/feed?limit=100`,
+        `${roomFeedPath(roomId)}/channels/${encodeURIComponent(channelId)}/feed?limit=100`,
         "GET",
         decodeFeed,
       );

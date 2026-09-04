@@ -1,5 +1,9 @@
-import type { RoomsHumanPrincipal, RoomsHumanWorkspace } from "../dataSource/humanSharedContract";
-import type { RoomsLocalChannel, RoomsLocalFeedItem } from "../dataSource/localChannelsContract";
+import type {
+  RoomsHumanFeedItem,
+  RoomsHumanPrincipal,
+  RoomsHumanWorkspace,
+} from "../dataSource/humanSharedContract";
+import type { RoomsLocalChannel } from "../dataSource/localChannelsContract";
 
 export interface RoomsDesktopNotificationCandidate {
   readonly id: string;
@@ -33,7 +37,7 @@ function writerName(principal: RoomsHumanPrincipal | undefined, principalId: str
 export function selectRoomsDesktopNotifications(input: {
   readonly workspace: RoomsHumanWorkspace;
   readonly channel: RoomsLocalChannel;
-  readonly items: readonly RoomsLocalFeedItem[];
+  readonly items: readonly RoomsHumanFeedItem[];
   readonly afterSeq: number;
   readonly headSeq: number;
 }): readonly RoomsDesktopNotificationCandidate[] {

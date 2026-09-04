@@ -74,6 +74,7 @@ function exactHumanRouteMethods(pathname: string): readonly ("GET" | "POST")[] {
     [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/invites$`), ["POST"]],
     [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/channels$`), ["POST"]],
     [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/channels/${CHANNEL_ID}/feed$`), ["GET"]],
+    [new RegExp(`^/rooms/human/v2/rooms/${ROOM_ID}/channels/${CHANNEL_ID}/feed$`), ["GET"]],
     [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/channels/${CHANNEL_ID}/messages$`), ["POST"]],
     [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/changes$`), ["GET"]],
     [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/delivery-acknowledgements$`), ["POST"]],

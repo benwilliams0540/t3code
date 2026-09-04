@@ -39,6 +39,10 @@
       "types": "./src/relay/index.ts",
       "default": "./src/relay/index.ts"
     },
+    "./rooms/agent-turns": {
+      "types": "./src/rooms/agentTurns.ts",
+      "default": "./src/rooms/agentTurns.ts"
+    },
     "./state/auth": {
       "types": "./src/state/auth.ts",
       "default": "./src/state/auth.ts"

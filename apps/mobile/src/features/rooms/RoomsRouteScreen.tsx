@@ -1,6 +1,12 @@
 import { AuthView } from "@clerk/expo/native";
 import { useAuth } from "@clerk/expo";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import {
+  nextRoomsAgentTurnTransitionAt,
+  projectRoomsAgentTurns,
+  roomsAgentTurnAnnouncement,
+  roomsAgentTurnCopy,
+} from "@t3tools/client-runtime/rooms/agent-turns";
 import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -620,6 +626,7 @@ function ConfiguredRoomsRouteScreen() {
   const selectedChannelIdRef = useRef<string | null>(null);
   selectedChannelIdRef.current = selectedChannelId;
   const [feed, setFeed] = useState<RoomsHumanFeed | null>(null);
+  const [agentTurnNow, setAgentTurnNow] = useState(() => Date.now());
   const [unread, setUnread] = useState<Readonly<Record<string, number>>>({});
   const [feedLoading, setFeedLoading] = useState(false);
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
@@ -633,6 +640,24 @@ function ConfiguredRoomsRouteScreen() {
   const requestIds = useRef(new Map<string, string>());
   const loadGenerationRef = useRef(0);
   const feedLoadGenerationRef = useRef(0);
+  const projectedFeed = useMemo(
+    () => projectRoomsAgentTurns(feed?.items ?? [], agentTurnNow),
+    [agentTurnNow, feed?.items],
+  );
+  const latestAgentTurnId = projectedFeed.toReversed().find((entry) => entry.kind === "agent_turn")
+    ?.turn.id;
+
+  useEffect(() => {
+    const transitionAt = nextRoomsAgentTurnTransitionAt(
+      projectedFeed.flatMap((entry) => (entry.kind === "agent_turn" ? [entry.turn] : [])),
+    );
+    if (transitionAt === null) return;
+    const timeout = setTimeout(
+      () => setAgentTurnNow(Date.now()),
+      Math.max(0, transitionAt - Date.now() + 1),
+    );
+    return () => clearTimeout(timeout);
+  }, [projectedFeed]);
 
   const readRequestId = useCallback((key: string) => {
     const existing = requestIds.current.get(key);
@@ -1160,7 +1185,7 @@ function ConfiguredRoomsRouteScreen() {
                       title="Channel unavailable"
                       detail="Pull to refresh and try loading this channel again."
                     />
-                  ) : feed.items.length === 0 ? (
+                  ) : projectedFeed.length === 0 ? (
                     <EmptyState
                       variant="card"
                       title="No messages yet"
@@ -1168,36 +1193,70 @@ function ConfiguredRoomsRouteScreen() {
                     />
                   ) : (
                     <View className="gap-3">
-                      {feed.items.map((item) => {
+                      {projectedFeed.map((entry) => {
+                        const item = entry.kind === "feed_item" ? entry.item : null;
+                        const agentTurn = entry.kind === "agent_turn" ? entry.turn : null;
+                        const writerId =
+                          agentTurn?.agentPrincipalId ??
+                          item?.attribution.writer_principal_id ??
+                          "";
                         const writer = workspace.principals.find(
-                          (principal) => principal.id === item.attribution.writer_principal_id,
+                          (principal) => principal.id === writerId,
                         );
+                        const writerName = writer?.display_name ?? writerId;
+                        const agentCopy = agentTurn
+                          ? roomsAgentTurnCopy(agentTurn, writerName)
+                          : null;
                         return (
                           <View
+                            accessibilityLabel={
+                              agentTurn
+                                ? roomsAgentTurnAnnouncement(agentTurn, writerName)
+                                : undefined
+                            }
+                            accessibilityLiveRegion={
+                              agentTurn?.id === latestAgentTurnId ? "polite" : "none"
+                            }
+                            accessible={agentTurn !== null}
                             className="rounded-[20px] border border-border bg-card p-4"
-                            key={item.id}
+                            key={agentTurn?.id ?? item?.id}
                           >
                             <View className="flex-row items-center gap-2">
                               <Text className="flex-1 font-t3-bold text-foreground">
-                                {writer?.display_name ?? item.attribution.writer_principal_id}
+                                {writerName}
                               </Text>
                               <Text className="text-xs text-foreground-muted">
-                                {formatDate(item.occurred_at)}
+                                {formatDate(agentTurn?.startedAt ?? item?.occurred_at ?? "")}
                               </Text>
                             </View>
-                            {item.kind === "human_message" ? (
+                            {agentTurn?.status === "replied" ? (
+                              <View className="mt-2">
+                                <MarkdownContent markdown={agentTurn.replyMarkdown ?? ""} />
+                              </View>
+                            ) : agentCopy ? (
+                              <View className="mt-2">
+                                <Text className="font-t3-bold text-foreground">
+                                  {agentCopy.title}
+                                </Text>
+                                {agentCopy.detail ? (
+                                  <Text className="mt-1 text-sm text-foreground-muted">
+                                    {agentCopy.detail}
+                                  </Text>
+                                ) : null}
+                              </View>
+                            ) : item?.kind === "human_message" ? (
                               <View className="mt-2">
                                 <MarkdownContent markdown={item.payload.body_markdown} />
                               </View>
-                            ) : (
+                            ) : item ? (
                               <Text
                                 selectable
                                 className="mt-2 text-base leading-relaxed text-foreground"
                               >
                                 {item.summary}
                               </Text>
-                            )}
-                            {item.kind === "unknown_schema" ? (
+                            ) : null}
+                            {item?.kind === "unknown_schema" ? (
                               <Text className="mt-2 text-xs text-amber-700 dark:text-amber-300">
                                 Unsupported {item.payload.event_type} schema{" "}
                                 {item.payload.event_schema} retained.

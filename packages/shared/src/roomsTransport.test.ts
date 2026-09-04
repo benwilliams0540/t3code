@@ -54,6 +54,9 @@ describe("Shared Rooms request policy", () => {
         path: `/rooms/human/v1/rooms/${encodeURIComponent(room)}/channels/${encodeURIComponent(channel)}/feed?after_seq=3&limit=100`,
       }),
       request({
+        path: `/rooms/human/v2/rooms/${encodeURIComponent(room)}/channels/${encodeURIComponent(channel)}/feed?after_seq=3&limit=100`,
+      }),
+      request({
         path: `/rooms/human/v1/rooms/${encodeURIComponent(room)}/changes?after_seq=3&timeout_ms=25000&realtime=1&client_id=ios%3Atest`,
       }),
       request({
@@ -76,6 +79,7 @@ describe("Shared Rooms request policy", () => {
         path: `/rooms/human/v1/rooms/${encodeURIComponent(room)}/changes?relay_token=forbidden`,
       }),
       request({ path: "/rooms/human/v1/session#fragment" }),
+      request({ path: `/rooms/human/v2/rooms/${encodeURIComponent(room)}/workspace` }),
       request({ path: "//rooms.example.test/rooms/human/v1/session" }),
       request({ path: "/events" }),
     ]) {
