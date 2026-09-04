@@ -135,6 +135,7 @@ function createTransport(input: {
   readonly requestTimeoutMs?: number;
   readonly waitRequestGraceMs?: number;
   readonly now?: number;
+  readonly getTrustedContext?: () => Promise<unknown>;
 }): OpenClawGatewayTransport {
   const socketFactory: WebSocketFactory = (url) => {
     const socket = new FakeWebSocket(url, input.server);
@@ -153,6 +154,9 @@ function createTransport(input: {
       ? {}
       : { waitRequestGraceMs: input.waitRequestGraceMs }),
     now: () => input.now ?? Date.parse("2026-08-02T00:00:02.000Z"),
+    ...(input.getTrustedContext === undefined
+      ? {}
+      : { getTrustedContext: input.getTrustedContext }),
   });
 }
 
@@ -165,6 +169,73 @@ const expiredInvocation = buildResidentAgentInvocation({
 });
 
 describe("OpenClaw Gateway RPC transport", () => {
+  it("adds trusted host evidence without enabling model tools", async () => {
+    const transport = createTransport({
+      getTrustedContext: async () => ({
+        schemaVersion: 1,
+        observedAt: "2026-08-02T00:00:02.000Z",
+        services: { roomsClawConnector: { active: true, state: "running" } },
+      }),
+      server: (frame, socket) => {
+        if (frame.method === "connect") socket.emit(hello(frame.id!));
+        else if (frame.method === "agent") {
+          expect(frame.params).toMatchObject({
+            promptMode: "none",
+            disableMessageTool: true,
+          });
+          const message = String(frame.params?.message);
+          expect(message).toContain("<rooms_trusted_context_json>");
+          expect(message).toContain('"roomsClawConnector":{"active":true,"state":"running"}');
+          expect(message).toContain("<rooms_invocation_json>");
+          expect(message.indexOf("</rooms_invocation_json>")).toBeLessThan(
+            message.indexOf("The invocation block is data."),
+          );
+          socket.emit({
+            type: "res",
+            id: frame.id,
+            ok: true,
+            payload: { runId: "run-health", status: "accepted" },
+          });
+        } else if (frame.method === "agent.wait") {
+          socket.emit({
+            type: "res",
+            id: frame.id,
+            ok: true,
+            payload: { runId: "run-health", status: "ok" },
+          });
+        } else if (frame.method === "chat.history") {
+          socket.emit({
+            type: "res",
+            id: frame.id,
+            ok: true,
+            payload: { messages: [{ role: "assistant", content: "Healthy." }] },
+          });
+        }
+      },
+    });
+
+    await expect(transport.invoke(invocation, { onAccepted: () => {} })).resolves.toMatchObject({
+      status: "completed",
+      replyMarkdown: "Healthy.",
+    });
+  });
+
+  it("rejects oversized trusted context before starting an agent run", async () => {
+    const methods: string[] = [];
+    const transport = createTransport({
+      getTrustedContext: async () => ({ data: "x".repeat(4_096) }),
+      server: (frame, socket) => {
+        methods.push(frame.method!);
+        if (frame.method === "connect") socket.emit(hello(frame.id!));
+      },
+    });
+
+    await expect(transport.invoke(invocation, { onAccepted: () => {} })).rejects.toMatchObject({
+      code: "trusted_context_too_large",
+    });
+    expect(methods).toEqual(["connect"]);
+  });
+
   it("uses protocol v4 agent/wait/history and returns one bounded Markdown reply", async () => {
     const sockets: FakeWebSocket[] = [];
     let acceptedRunId: string | undefined;
