@@ -195,7 +195,7 @@ function decode<T>(response: RoomsHumanHttpResponse, parser: (body: unknown) => 
       kind: "invalid_response",
       status: response.status,
       code: "human_contract_decode_failed",
-      message: "The response does not match rooms.human-shared v1.",
+      message: "The response does not match the supported rooms.human-shared contract.",
     });
   }
 }
@@ -304,6 +304,7 @@ export function createRoomsHumanClient(
   }
 
   const roomPath = (roomId: string) => `/rooms/human/v1/rooms/${encodeURIComponent(roomId)}`;
+  const roomFeedPath = (roomId: string) => `/rooms/human/v2/rooms/${encodeURIComponent(roomId)}`;
   const command = async <T>(
     response: Promise<RoomsHumanHttpResponse>,
     parser: (body: unknown) => T,
@@ -404,7 +405,7 @@ export function createRoomsHumanClient(
       const suffix = query.size === 0 ? "" : `?${query.toString()}`;
       const feed = decode(
         await request(
-          `${roomPath(roomId)}/channels/${encodeURIComponent(channelId)}/feed${suffix}`,
+          `${roomFeedPath(roomId)}/channels/${encodeURIComponent(channelId)}/feed${suffix}`,
           "GET",
         ),
         decoders.feed,

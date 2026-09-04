@@ -11,12 +11,22 @@ import { RoomsLocalCasTuple, RoomsLocalStory, RoomsLocalStoryV2 } from "./localS
 export const ROOMS_HUMAN_CONTRACT_ID = "rooms.human-shared" as const;
 export const ROOMS_HUMAN_CONTRACT_VERSION = 1 as const;
 export const ROOMS_HUMAN_SCHEMA_URI = "contracts/rooms/human-shared/v1/schema.json" as const;
+export const ROOMS_HUMAN_FEED_CONTRACT_VERSION = 2 as const;
+export const ROOMS_HUMAN_FEED_SCHEMA_URI = "contracts/rooms/human-shared/v2/schema.json" as const;
 export const ROOMS_HUMAN_SERVER_PRODUCER_SHA = "ee381424993ec4a892a9a722e44ced593b2e35e9" as const;
+export const ROOMS_HUMAN_FEED_SERVER_PRODUCER_SHA =
+  "0147f353190f2568dd42032677229a0d74eb5610" as const;
 
 export const RoomsHumanContract = Schema.Struct({
   id: Schema.Literal(ROOMS_HUMAN_CONTRACT_ID),
   version: Schema.Literal(ROOMS_HUMAN_CONTRACT_VERSION),
   schema_uri: Schema.Literal(ROOMS_HUMAN_SCHEMA_URI),
+});
+
+export const RoomsHumanFeedContract = Schema.Struct({
+  id: Schema.Literal(ROOMS_HUMAN_CONTRACT_ID),
+  version: Schema.Literal(ROOMS_HUMAN_FEED_CONTRACT_VERSION),
+  schema_uri: Schema.Literal(ROOMS_HUMAN_FEED_SCHEMA_URI),
 });
 
 export const RoomsHumanRole = Schema.Literals(["observer", "operator", "admin"]);
@@ -117,8 +127,46 @@ export const RoomsHumanMembershipRedemption = Schema.Struct({
 });
 export type RoomsHumanMembershipRedemption = typeof RoomsHumanMembershipRedemption.Type;
 
+export const RoomsHumanAgentInvocationUpdate = Schema.Struct({
+  id: Schema.String,
+  room_id: Schema.String,
+  channel_id: Schema.String,
+  kind: Schema.Literal("agent_invocation_update"),
+  occurred_at: Schema.String,
+  summary: Schema.String,
+  source_event: RoomsLocalSourceEvent,
+  attribution: Schema.Struct({
+    mode: Schema.Literal("explicit_principal"),
+    writer_principal_id: Schema.String,
+    actor_principal_id: Schema.String,
+  }),
+  payload: Schema.Struct({
+    invocation_id: Schema.String,
+    triggering_message: RoomsLocalSourceEvent,
+    status: Schema.Literals(["running", "succeeded", "failed"]),
+    safe_error_code: Schema.NullOr(
+      Schema.Literals([
+        "connector_cancelled",
+        "connector_internal",
+        "provider_rate_limited",
+        "provider_request_rejected",
+        "provider_timeout",
+        "provider_unavailable",
+      ]),
+    ),
+    reply_source_event: Schema.NullOr(RoomsLocalSourceEvent),
+  }),
+});
+export type RoomsHumanAgentInvocationUpdate = typeof RoomsHumanAgentInvocationUpdate.Type;
+
+export const RoomsHumanFeedItem = Schema.Union([
+  RoomsLocalFeedItem,
+  RoomsHumanAgentInvocationUpdate,
+]);
+export type RoomsHumanFeedItem = typeof RoomsHumanFeedItem.Type;
+
 export const RoomsHumanFeed = Schema.Struct({
-  contract: RoomsHumanContract,
+  contract: RoomsHumanFeedContract,
   room_id: Schema.String,
   channel_id: Schema.String,
   page_info: Schema.Struct({
@@ -128,7 +176,7 @@ export const RoomsHumanFeed = Schema.Struct({
     next_cursor: Schema.Int,
     has_more: Schema.Boolean,
   }),
-  items: Schema.Array(RoomsLocalFeedItem),
+  items: Schema.Array(RoomsHumanFeedItem),
 });
 export type RoomsHumanFeed = typeof RoomsHumanFeed.Type;
 
@@ -158,7 +206,6 @@ export const RoomsHumanErrorResponse = Schema.Struct({
 export {
   RoomsLocalCasTuple as RoomsHumanCasTuple,
   RoomsLocalChannel as RoomsHumanChannel,
-  RoomsLocalFeedItem as RoomsHumanFeedItem,
   RoomsLocalHumanMessage as RoomsHumanMessage,
   RoomsLocalSourceEvent as RoomsHumanSourceEvent,
   RoomsLocalStory as RoomsHumanStory,
@@ -168,3 +215,7 @@ export {
 export type RoomsInteractiveWorkspace =
   | import("./localChannelsContract").RoomsLocalWorkspace
   | RoomsHumanWorkspace;
+
+export type RoomsInteractiveFeed = Omit<RoomsHumanFeed, "contract"> & {
+  readonly contract?: RoomsHumanFeed["contract"];
+};

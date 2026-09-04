@@ -1,7 +1,11 @@
 import type { RoomsActivityPrincipal, RoomsProjectedActivity } from "../activity/projection";
+import { projectRoomsAgentTurns } from "@t3tools/client-runtime/rooms/agent-turns";
 import type { RoomsPrincipalId } from "../model/workspace";
 import type { RoomsLocalFeedItem } from "../dataSource/localChannelsContract";
-import type { RoomsInteractiveWorkspace } from "../dataSource/humanSharedContract";
+import type {
+  RoomsHumanFeedItem,
+  RoomsInteractiveWorkspace,
+} from "../dataSource/humanSharedContract";
 
 function principalId(id: string): RoomsPrincipalId | null {
   if (id.startsWith("h:") || id.startsWith("a:") || id.startsWith("m:")) {
@@ -83,7 +87,48 @@ export function projectRoomsLocalActivityItem(
 
 export function projectRoomsLocalActivityItems(
   workspace: RoomsInteractiveWorkspace,
-  items: readonly RoomsLocalFeedItem[],
+  items: readonly RoomsHumanFeedItem[],
+  nowMs: number = Date.now(),
 ): readonly RoomsProjectedActivity[] {
-  return items.map((item) => projectRoomsLocalActivityItem(workspace, item));
+  return projectRoomsAgentTurns(items, nowMs).map((entry) => {
+    if (entry.kind === "feed_item") {
+      if (entry.item.kind === "agent_invocation_update") {
+        throw new Error("Agent invocation updates must be folded before activity projection.");
+      }
+      return projectRoomsLocalActivityItem(workspace, entry.item);
+    }
+    const turn = entry.turn;
+    return {
+      item: {
+        id: turn.id,
+        kind: "agent_turn",
+        occurred_at: turn.startedAt,
+        summary: `Agent invocation ${turn.status}`,
+        source_event: turn.sourceEvent,
+      },
+      cardKind: "agent_turn",
+      attribution: {
+        mode: "explicit_principal",
+        writer: resolveRoomsLocalPrincipal(workspace, turn.agentPrincipalId),
+        actor: resolveRoomsLocalPrincipal(workspace, turn.agentPrincipalId),
+        upstream: null,
+        delegatedAgent: null,
+        machine: null,
+      },
+      bodyMarkdown: turn.replyMarkdown,
+      emoji: null,
+      targetItemId: null,
+      story: null,
+      stage: null,
+      thread: null,
+      threadHref: null,
+      status: turn.status,
+      evidence: null,
+      approval: null,
+      gate: null,
+      unknownSchema: null,
+      unavailable: null,
+      agentTurn: turn,
+    } satisfies RoomsProjectedActivity;
+  });
 }

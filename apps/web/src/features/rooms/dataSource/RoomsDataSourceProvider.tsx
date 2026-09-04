@@ -37,6 +37,7 @@ import {
 import { createRoomsHumanClient } from "./humanSharedClient";
 import type {
   RoomsHumanInviteInspection,
+  RoomsInteractiveFeed,
   RoomsHumanInviteIssuance,
   RoomsHumanMembershipRedemption,
   RoomsHumanRole,
@@ -52,7 +53,6 @@ import type {
   RoomsLocalChannel,
   RoomsLocalCreateChannelInput,
   RoomsLocalCreateMessageInput,
-  RoomsLocalFeed,
   RoomsLocalFeedPageInput,
   RoomsLocalHumanMessage,
   RoomsLocalWorkspace,
@@ -131,7 +131,7 @@ interface RoomsDataSourceContextValue {
     roomId: string,
     channelId: string,
     input?: RoomsLocalFeedPageInput,
-  ) => Promise<RoomsLocalFeed>;
+  ) => Promise<RoomsInteractiveFeed>;
   readonly sendLocalMessage: (
     roomId: string,
     channelId: string,

@@ -181,6 +181,7 @@ describe("OpenClaw Gateway RPC transport", () => {
         else if (frame.method === "agent") {
           expect(frame.params).toMatchObject({
             promptMode: "none",
+            modelRun: true,
             disableMessageTool: true,
           });
           const message = String(frame.params?.message);
@@ -236,7 +237,7 @@ describe("OpenClaw Gateway RPC transport", () => {
     expect(methods).toEqual(["connect"]);
   });
 
-  it("uses protocol v4 agent/wait/history and returns one bounded Markdown reply", async () => {
+  it("uses the OpenClaw 2026.8.2 model-run protocol and returns one bounded Markdown reply", async () => {
     const sockets: FakeWebSocket[] = [];
     let acceptedRunId: string | undefined;
     const transport = createTransport({
@@ -250,6 +251,7 @@ describe("OpenClaw Gateway RPC transport", () => {
             agentId: "rooms",
             deliver: false,
             promptMode: "none",
+            modelRun: true,
             disableMessageTool: true,
             idempotencyKey: invocation.invocationId,
           });

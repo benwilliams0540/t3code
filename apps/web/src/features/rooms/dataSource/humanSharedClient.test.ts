@@ -128,6 +128,42 @@ describe("authenticated shared Rooms client", () => {
     expect(result.replayed).toBe(true);
   });
 
+  it("loads the v2 feed while leaving other human routes on v1", async () => {
+    const paths: string[] = [];
+    const channelId = "channel:0198f7e2-1234-789a-8abc-123456789abc";
+    const client = createRoomsHumanClient(
+      "https://rooms.example.test",
+      async () => "bearer",
+      () => ({
+        request: async (request) => {
+          paths.push(request.path);
+          return response({
+            contract: {
+              id: "rooms.human-shared",
+              version: 2,
+              schema_uri: "contracts/rooms/human-shared/v2/schema.json",
+            },
+            room_id: roomId,
+            channel_id: channelId,
+            page_info: {
+              after_seq: 0,
+              limit: 100,
+              snapshot_head_seq: 0,
+              next_cursor: 0,
+              has_more: false,
+            },
+            items: [],
+          });
+        },
+      }),
+    );
+
+    await client.getFeed(roomId, channelId, { limit: 100 });
+    expect(paths).toEqual([
+      `/rooms/human/v2/rooms/${encodeURIComponent(roomId)}/channels/${encodeURIComponent(channelId)}/feed?limit=100`,
+    ]);
+  });
+
   it("rejects form credentials that could become headers or unbounded state", () => {
     expect(validateRoomsHumanOpaqueCredential("rhb1_valid")).toBe("rhb1_valid");
     expect(() => validateRoomsHumanOpaqueCredential("invite\r\nnext")).toThrow(

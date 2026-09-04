@@ -3,11 +3,19 @@ import * as Schema from "effect/Schema";
 export const ROOMS_HUMAN_CONTRACT_ID = "rooms.human-shared" as const;
 export const ROOMS_HUMAN_CONTRACT_VERSION = 1 as const;
 export const ROOMS_HUMAN_SCHEMA_URI = "contracts/rooms/human-shared/v1/schema.json" as const;
+export const ROOMS_HUMAN_FEED_CONTRACT_VERSION = 2 as const;
+export const ROOMS_HUMAN_FEED_SCHEMA_URI = "contracts/rooms/human-shared/v2/schema.json" as const;
 
 const RoomsHumanContract = Schema.Struct({
   id: Schema.Literal(ROOMS_HUMAN_CONTRACT_ID),
   version: Schema.Literal(ROOMS_HUMAN_CONTRACT_VERSION),
   schema_uri: Schema.Literal(ROOMS_HUMAN_SCHEMA_URI),
+});
+
+const RoomsHumanFeedContract = Schema.Struct({
+  id: Schema.Literal(ROOMS_HUMAN_CONTRACT_ID),
+  version: Schema.Literal(ROOMS_HUMAN_FEED_CONTRACT_VERSION),
+  schema_uri: Schema.Literal(ROOMS_HUMAN_FEED_SCHEMA_URI),
 });
 
 export const RoomsHumanRole = Schema.Literals(["observer", "operator", "admin"]);
@@ -129,11 +137,42 @@ const RoomsUnknownFeedItem = Schema.Struct({
   }),
 });
 
-export const RoomsHumanFeedItem = Schema.Union([RoomsHumanMessage, RoomsUnknownFeedItem]);
+export const RoomsAgentInvocationUpdate = Schema.Struct({
+  id: Schema.String,
+  room_id: Schema.String,
+  channel_id: Schema.String,
+  kind: Schema.Literal("agent_invocation_update"),
+  occurred_at: Schema.String,
+  summary: Schema.String,
+  source_event: RoomsSourceEvent,
+  attribution: RoomsFeedAttribution,
+  payload: Schema.Struct({
+    invocation_id: Schema.String,
+    triggering_message: RoomsSourceEvent,
+    status: Schema.Literals(["running", "succeeded", "failed"]),
+    safe_error_code: Schema.NullOr(
+      Schema.Literals([
+        "connector_cancelled",
+        "connector_internal",
+        "provider_rate_limited",
+        "provider_request_rejected",
+        "provider_timeout",
+        "provider_unavailable",
+      ]),
+    ),
+    reply_source_event: Schema.NullOr(RoomsSourceEvent),
+  }),
+});
+
+export const RoomsHumanFeedItem = Schema.Union([
+  RoomsHumanMessage,
+  RoomsUnknownFeedItem,
+  RoomsAgentInvocationUpdate,
+]);
 export type RoomsHumanFeedItem = typeof RoomsHumanFeedItem.Type;
 
 export const RoomsHumanFeed = Schema.Struct({
-  contract: RoomsHumanContract,
+  contract: RoomsHumanFeedContract,
   room_id: Schema.String,
   channel_id: Schema.String,
   page_info: Schema.Struct({

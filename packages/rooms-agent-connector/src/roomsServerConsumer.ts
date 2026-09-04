@@ -30,6 +30,7 @@ export const ROOMS_SAFE_FAILURE_CODES = [
   "connector_cancelled",
   "connector_internal",
   "provider_rate_limited",
+  "provider_request_rejected",
   "provider_timeout",
   "provider_unavailable",
 ] as const;
@@ -606,12 +607,20 @@ const recognizedRateLimitCodes = new Set([
   "rate_limited",
 ]);
 
+const recognizedRequestRejectionCodes = new Set([
+  "gateway_protocol_mismatch",
+  "gateway_request_rejected",
+]);
+
 export const normalizeRoomsFailure = (result: ResidentAgentResult): RoomsSafeFailureCode => {
   if (result.status === "timed_out") return "provider_timeout";
   if (result.status === "unavailable") return "provider_unavailable";
   if (result.status === "cancelled") return "connector_cancelled";
   if (result.failure && recognizedRateLimitCodes.has(result.failure.code)) {
     return "provider_rate_limited";
+  }
+  if (result.failure && recognizedRequestRejectionCodes.has(result.failure.code)) {
+    return "provider_request_rejected";
   }
   return "connector_internal";
 };

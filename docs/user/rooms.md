@@ -26,6 +26,18 @@ Channels keep messages in their real Rooms routes. Select a message to shape it 
 current server contract cannot persist a message-to-story link, so the action is explicitly labeled
 **Create without link** and no durable relationship is implied.
 
+When a message addresses an Agent, Rooms keeps that request visible as one Agent turn:
+
+- **Claw is working…** means the connector recorded the invocation but no reply is recorded yet.
+- **Taking longer than expected** appears after 30 seconds without a terminal reply. It does not
+  claim that the invocation failed.
+- A successful reply replaces the progress state and stays attributed to the Agent.
+- **Claw couldn’t respond** includes a safe reason such as unavailable, timed out, rate limited, or
+  rejected. Gateway details are never displayed.
+
+Rooms does not automatically retry failed Agent requests. A retry could execute the same request
+twice until the protocol defines explicit idempotency and double-execution rules.
+
 Opening a Rooms thread keeps the native T3 thread surface and adds a collapsible context rail. When
 the thread is exactly linked to a story, the rail shows its owner, stage, evidence, and next action.
 The current thread contract does not expose a selectable output inventory, so Rooms shows that
@@ -47,6 +59,9 @@ The side-by-side `T3 Code Rooms` mobile build connects directly to the configure
 Human endpoint with a fresh dedicated Clerk token for every request. From the Threads screen, open
 Rooms to review attention items, inspect and advance stories, read or send channel messages, open an
 exact linked T3 thread, and distinguish people, agents, and machines.
+
+Agent turns use the same running, replied, failed, and delayed presentation on mobile. The latest
+Agent state is announced as an accessible live update.
 
 The initial mobile surface refreshes when opened and on pull-to-refresh. Evidence upload, story
 creation, vision revision history, invitations, and administration remain desktop actions. Mobile

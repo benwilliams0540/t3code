@@ -851,6 +851,7 @@ export class OpenClawGatewayTransport implements ResidentAgentGatewayTransport {
           deliver: false,
           timeout: timeoutSeconds,
           promptMode: "none",
+          modelRun: true,
           bootstrapContextMode: "lightweight",
           sessionEffects: "internal",
           sourceReplyDeliveryMode: "message_tool_only",
