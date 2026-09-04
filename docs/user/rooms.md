@@ -3,6 +3,11 @@
 Rooms brings the shared work around a project into T3 Code. Open **Version 3** in the sidebar,
 select a Rooms source, and then select a project.
 
+The Shared source needs a T3 Connect account. When you are signed out, the Rooms workspace shows
+**Sign in to T3 Connect** in place of the room; the Rooms workspace has its own rail instead of the
+app sidebar, so that button is the way in. The same button appears when your Rooms session has
+expired.
+
 ## Find the work that needs attention
 
 The dashboard leads with **Needs you**, then shows active work, the project's vision status,

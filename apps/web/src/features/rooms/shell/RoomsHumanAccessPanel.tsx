@@ -1,6 +1,8 @@
 import { LogInIcon, ShieldAlertIcon, TicketCheckIcon } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 
+import { shouldMountClerkProvider } from "~/cloud/publicConfig";
+import { useT3ConnectAuthPrompt } from "~/components/clerk/useT3ConnectAuthPrompt";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -30,7 +32,7 @@ export function roomsHumanAccessCopy(state: RoomsHumanSourceFailure): readonly [
     case "signed-out":
       return [
         "Sign in to shared Rooms",
-        "Use the existing T3 Connect sign-in in the app sidebar, then return here.",
+        "Sign in with your T3 Connect account to load the rooms you belong to.",
       ];
     case "authenticated-nonmember":
       return [
@@ -40,7 +42,7 @@ export function roomsHumanAccessCopy(state: RoomsHumanSourceFailure): readonly [
     case "invited":
       return ["Invitation ready", "Review the bounded room and role metadata before joining."];
     case "expired":
-      return ["Rooms session expired", "Refresh the T3 Connect session and retry."];
+      return ["Rooms session expired", "Sign in to T3 Connect again, then retry the session."];
     case "authorization-failure":
       return ["Shared Rooms authorization failed", state.error?.message ?? "Access was denied."];
     case "invalid-configuration":
@@ -53,14 +55,29 @@ export function roomsHumanAccessCopy(state: RoomsHumanSourceFailure): readonly [
   }
 }
 
+// The Rooms workspace replaces the app sidebar with its own rail, so the only
+// place a signed-out person can reach the T3 Connect sign-in is this panel.
+export function roomsHumanAccessOffersSignIn(state: RoomsHumanSourceFailure): boolean {
+  return state.status === "signed-out" || state.status === "expired";
+}
+
+// Mounted only when Clerk is configured: the Clerk hooks throw without a provider.
+function RoomsSignInButton() {
+  const { authPrompt, openAuthPrompt } = useT3ConnectAuthPrompt();
+  return (
+    <>
+      <Button onClick={openAuthPrompt}>
+        <LogInIcon />
+        Sign in to T3 Connect
+      </Button>
+      {authPrompt}
+    </>
+  );
+}
+
 export function RoomsHumanAccessPanel({ state }: { readonly state: RoomsHumanSourceFailure }) {
-  const {
-    inspectHumanInvite,
-    redeemHumanBootstrap,
-    redeemHumanInvite,
-    retryHumanSession,
-    setMode,
-  } = useRoomsDataSource();
+  const { inspectHumanInvite, redeemHumanBootstrap, redeemHumanInvite, retryHumanSession } =
+    useRoomsDataSource();
   const [bootstrapToken, setBootstrapToken] = useState("");
   const [roomId, setRoomId] = useState("");
   const [inviteToken, setInviteToken] = useState("");
@@ -222,6 +239,9 @@ export function RoomsHumanAccessPanel({ state }: { readonly state: RoomsHumanSou
         ) : null}
 
         <div className="mt-6 flex flex-wrap gap-2">
+          {roomsHumanAccessOffersSignIn(state) && shouldMountClerkProvider() ? (
+            <RoomsSignInButton />
+          ) : null}
           {state.status !== "authenticating" && state.status !== "signed-out" ? (
             <Button
               disabled={pending !== null}
@@ -231,9 +251,6 @@ export function RoomsHumanAccessPanel({ state }: { readonly state: RoomsHumanSou
               Retry session
             </Button>
           ) : null}
-          <Button onClick={() => setMode("sample")} variant="outline">
-            Use Sample workspace
-          </Button>
         </div>
       </div>
     </section>
