@@ -87,6 +87,42 @@ function iconResizeSpawnerLayer(
 }
 
 it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
+  it.effect("packages ThreadSpace with separate identity and no upstream update feed", () =>
+    Effect.gen(function* () {
+      const config = yield* createBuildConfig(
+        "mac",
+        "dmg",
+        "0.0.34",
+        true,
+        false,
+        undefined,
+        undefined,
+      );
+      assert.equal(config.appId, "com.threadspace.alpha");
+      assert.equal(config.productName, "ThreadSpace (Alpha)");
+      assert.equal(config.artifactName, "ThreadSpace-${version}-${arch}.${ext}");
+      assert.notProperty(config, "publish");
+      assert.deepEqual((config.mac as Record<string, unknown>).protocols, [
+        { name: "ThreadSpace", schemes: ["threadspace", "threadspace-dev"] },
+      ]);
+      assert.equal(
+        resolveDesktopBuildIconAssets("0.0.34", "threadspace").macIconPng,
+        "apps/mobile/assets/threadspace-alpha-dark-1024.png",
+      );
+    }).pipe(
+      Effect.provide(
+        ConfigProvider.layer(
+          ConfigProvider.fromEnv({
+            env: {
+              T3CODE_DESKTOP_BRAND: "threadspace",
+              GITHUB_REPOSITORY: "pingdotgg/t3code",
+            },
+          }),
+        ),
+      ),
+    ),
+  );
+
   it("resolves the dedicated nightly updater channel from nightly versions", () => {
     assert.equal(resolveDesktopUpdateChannel("0.0.17-nightly.20260413.42"), "nightly");
     assert.equal(resolveDesktopUpdateChannel("0.0.17"), "latest");

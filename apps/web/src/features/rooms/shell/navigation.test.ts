@@ -72,5 +72,7 @@ describe("Rooms shell navigation", () => {
 
     expect(resolveRoomsInternalHref(route, "https:")).toBe(route);
     expect(resolveRoomsInternalHref(route, "t3code-dev:")).toBe(`#${route}`);
+    expect(resolveRoomsInternalHref(route, "threadspace-dev:")).toBe(`#${route}`);
+    expect(resolveRoomsInternalHref(route, "threadspace:")).toBe(route);
   });
 });

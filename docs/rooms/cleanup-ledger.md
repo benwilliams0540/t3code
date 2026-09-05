@@ -11,6 +11,7 @@ Known messy, unfinished, or deferred areas, so an agent picking up Rooms can see
 
 ## Desktop build and sign-in
 
+- **ThreadSpace has a separate opt-in desktop identity.** See `../user/threadspace-desktop.md` for the build and isolated state paths. Clerk's new native callback allowlist, passkey provisioning, notarization, and a dedicated update service remain separate setup and release work; do not claim sign-in proof from a successful build.
 - **Passkeys are a build-time guess.** `T3CODE_DISABLE_CLERK_PASSKEYS` is read from the environment at launch (`apps/desktop/src/app/DesktopConfig.ts`); the unentitled Alpha relies on it. Detect the missing entitlement at runtime instead.
 - **Unnotarized Developer ID builds.** Gatekeeper rejects on first open; that is expected for the Alpha and must not be worked around by stripping quarantine.
 - **Alpha version numbers are hand-picked** at build time (`T3CODE_DESKTOP_VERSION`); there is no release tag on the fork.

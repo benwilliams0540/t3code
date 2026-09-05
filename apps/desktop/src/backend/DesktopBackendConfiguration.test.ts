@@ -17,6 +17,7 @@ import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopServerExposure from "./DesktopServerExposure.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopWslEnvironment from "../wsl/DesktopWslEnvironment.ts";
+import type { DesktopBrand } from "../../../../scripts/lib/desktop-brand.ts";
 
 const PersistedServerObservabilitySettingsDocument = Schema.Struct({
   observability: Schema.Struct({
@@ -51,6 +52,7 @@ const serverExposureLayer = Layer.succeed(DesktopServerExposure.DesktopServerExp
 function makeEnvironmentLayer(
   baseDir: string,
   options?: {
+    readonly brand?: DesktopBrand;
     readonly appPath?: string;
     readonly dirname?: string;
     readonly isPackaged?: boolean;
@@ -60,6 +62,7 @@ function makeEnvironmentLayer(
   },
 ) {
   return DesktopEnvironment.layer({
+    brand: options?.brand ?? "t3code",
     dirname: options?.dirname ?? "/repo/apps/desktop/src",
     homeDirectory: baseDir,
     platform: options?.platform ?? "darwin",
@@ -102,6 +105,7 @@ const withHarness = <A, E, R>(
     | FileSystem.FileSystem
     | DesktopBackendConfiguration.DesktopBackendConfiguration
   >,
+  brand: DesktopBrand = "t3code",
 ) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
@@ -115,13 +119,41 @@ const withHarness = <A, E, R>(
           Layer.provideMerge(serverExposureLayer),
           Layer.provideMerge(DesktopAppSettings.layerTest()),
           Layer.provideMerge(DesktopWslEnvironment.layerTest()),
-          Layer.provideMerge(makeEnvironmentLayer(baseDir)),
+          Layer.provideMerge(makeEnvironmentLayer(baseDir, { brand })),
         ),
       ),
     );
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer));
 
 describe("DesktopBackendConfiguration", () => {
+  it.effect("starts ThreadSpace with its own backend home and process title", () =>
+    withHarness(
+      Effect.gen(function* () {
+        const environment = yield* DesktopEnvironment.DesktopEnvironment;
+        const configuration = yield* DesktopBackendConfiguration.DesktopBackendConfiguration;
+        const primary = yield* configuration.resolvePrimary;
+
+        assert.deepEqual(primary.args, [
+          "--title=ThreadSpace Backend",
+          environment.backendEntryPath,
+          "--bootstrap-fd",
+          "3",
+        ]);
+        assert.equal(
+          primary.bootstrap.t3Home,
+          environment.path.join(
+            environment.homeDirectory,
+            "Library",
+            "Application Support",
+            "threadspace-alpha",
+            "runtime",
+          ),
+        );
+      }),
+      "threadspace",
+    ),
+  );
+
   it.effect("resolvePrimary produces a stable scoped bootstrap token", () =>
     withHarness(
       Effect.gen(function* () {
