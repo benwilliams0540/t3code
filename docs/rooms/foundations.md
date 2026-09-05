@@ -1,4 +1,4 @@
-# Rooms foundations (decided 2026-09-04)
+# Rooms foundations (updated 2026-09-05)
 
 Monroe's answers to the foundation questions, recorded so features are built against them rather than re-guessed. Change this file when a decision changes.
 
@@ -21,7 +21,16 @@ Monroe's answers to the foundation questions, recorded so features are built aga
 ## What a room is
 
 - A room may hold many git checkouts as subdirectories. T3 project binding must allow several projects per room.
-- Opening a room is a limited account feature for now. "New room" asks which server is the backbone, defaulting to FCFDEV or the last one used. Real accounts and analytics come later.
+- Users can create rooms on a server they operate or are authorized to use. "New room" shows the selected server. The current private development server is not a universal product default.
+
+## Free self-hosting and paid setup
+
+- A GitHub release must let someone self-host their own room for free and connect other ThreadSpace clients over a tailnet or another supported network. They supply and operate the host and network.
+- The paid offering handles authentication, provisioning, and setup. It must not be a prerequisite for running or joining a self-managed room.
+- Free self-hosting must work without our Clerk instance or permission from a maintainer. It still needs real participant authentication and room membership; network reachability alone is not room authority.
+- The client needs runtime server profiles and a join flow. Rebuilding a client with a different server URL or Clerk key is not acceptable release onboarding.
+- A room lives on a server; a server may host multiple separately authorized rooms. Creating a logical room does not provision a machine.
+- Current Shared Rooms is Clerk-only and uses public build-time server/auth configuration. The self-service New room feature removes the operator token dependency, but does not yet satisfy free self-hosting. See [hosting and access direction](hosting-and-access.md).
 
 ## Surfaces
 
