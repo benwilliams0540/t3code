@@ -18,7 +18,9 @@ describe("shared Rooms access state copy", () => {
   it("represents every authentication and membership state honestly", () => {
     expect(roomsHumanAccessCopy(state("signed-out"))[0]).toContain("Sign in");
     expect(roomsHumanAccessCopy(state("authenticating"))[0]).toContain("Authenticating");
-    expect(roomsHumanAccessCopy(state("authenticated-nonmember"))[0]).toContain("not yet a member");
+    expect(roomsHumanAccessCopy(state("authenticated-nonmember"))[0]).toContain(
+      "Create your first room",
+    );
     expect(roomsHumanAccessCopy(state("invited"))[0]).toContain("Invitation");
     expect(roomsHumanAccessCopy(state("expired"))[0]).toContain("expired");
     expect(roomsHumanAccessCopy(state("authorization-failure"))[0]).toContain("authorization");

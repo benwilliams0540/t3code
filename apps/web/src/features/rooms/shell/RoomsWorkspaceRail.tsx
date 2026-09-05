@@ -7,6 +7,7 @@ import { cn } from "~/lib/utils";
 import { useRoomsDataSource, type RoomsSourceRoom } from "../dataSource";
 import { roomForShortcut } from "../model/selection";
 import { ThreadspaceMark } from "./ThreadspaceIdentity";
+import { RoomsCreateRoomButton } from "./RoomsCreateRoomButton";
 
 function roomMonogram(room: RoomsSourceRoom): string {
   return room.name
@@ -112,6 +113,7 @@ export function RoomsWorkspaceRail({
             </button>
           );
         })}
+        <RoomsCreateRoomButton compact />
       </div>
     </aside>
   );

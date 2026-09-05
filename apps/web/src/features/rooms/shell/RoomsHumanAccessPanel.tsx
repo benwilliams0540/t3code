@@ -10,6 +10,7 @@ import { Label } from "~/components/ui/label";
 import { useRoomsDataSource, type RoomsHumanSourceFailure } from "../dataSource";
 import { isRoomsLocalClientError } from "../dataSource/localChannelsClient";
 import { ThreadspaceBrand } from "./ThreadspaceIdentity";
+import { RoomsCreateRoomButton } from "./RoomsCreateRoomButton";
 
 interface AccessError {
   readonly code: string;
@@ -37,8 +38,8 @@ export function roomsHumanAccessCopy(state: RoomsHumanSourceFailure): readonly [
       ];
     case "authenticated-nonmember":
       return [
-        "Authenticated, not yet a member",
-        "This account reached Threadspace successfully but has no shared-room membership.",
+        "Create your first room",
+        "You’re signed in. Start a room of your own or join one with an invitation.",
       ];
     case "invited":
       return ["Invitation ready", "Review the bounded room and role metadata before joining."];
@@ -162,29 +163,35 @@ export function RoomsHumanAccessPanel({ state }: { readonly state: RoomsHumanSou
 
         {(state.status === "authenticated-nonmember" || state.status === "invited") && (
           <div className="mt-6 grid gap-5 border-t border-border pt-5">
+            <RoomsCreateRoomButton />
             {state.status === "authenticated-nonmember" ? (
-              <form className="grid gap-3" onSubmit={(event) => void redeemBootstrap(event)}>
-                <div>
-                  <Label htmlFor="rooms-bootstrap-token">First-admin bootstrap</Label>
-                  <Input
-                    autoComplete="off"
-                    id="rooms-bootstrap-token"
-                    maxLength={512}
-                    onChange={(event) => setBootstrapToken(event.target.value)}
-                    type="password"
-                    value={bootstrapToken}
-                  />
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Used once for explicit operator-issued room creation; never saved to settings.
-                  </p>
-                </div>
-                <Button
-                  disabled={pending !== null || !validCredential(bootstrapToken)}
-                  type="submit"
-                >
-                  {pending === "bootstrap" ? "Redeeming…" : "Create shared room as admin"}
-                </Button>
-              </form>
+              <details>
+                <summary className="cursor-pointer text-xs text-muted-foreground">
+                  Have an operator setup token?
+                </summary>
+                <form className="grid gap-3" onSubmit={(event) => void redeemBootstrap(event)}>
+                  <div>
+                    <Label htmlFor="rooms-bootstrap-token">First-admin bootstrap</Label>
+                    <Input
+                      autoComplete="off"
+                      id="rooms-bootstrap-token"
+                      maxLength={512}
+                      onChange={(event) => setBootstrapToken(event.target.value)}
+                      type="password"
+                      value={bootstrapToken}
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Used once for explicit operator-issued room creation; never saved to settings.
+                    </p>
+                  </div>
+                  <Button
+                    disabled={pending !== null || !validCredential(bootstrapToken)}
+                    type="submit"
+                  >
+                    {pending === "bootstrap" ? "Redeeming…" : "Redeem setup token"}
+                  </Button>
+                </form>
+              </details>
             ) : null}
 
             <form className="grid gap-3" onSubmit={(event) => void inspectInvite(event)}>

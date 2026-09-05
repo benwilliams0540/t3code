@@ -63,6 +63,7 @@ export function normalizeRoomsOrigin(mode: RoomsOriginMode, value: string): stri
 function exactHumanRouteMethods(pathname: string): readonly ("GET" | "POST")[] {
   if (pathname === "/rooms/human/v1/session") return ["GET"];
   if (
+    pathname === "/rooms/human/v1/rooms" ||
     pathname === "/rooms/human/v1/bootstrap/redemptions" ||
     pathname === "/rooms/human/v1/invite-inspections" ||
     pathname === "/rooms/human/v1/invite-redemptions"

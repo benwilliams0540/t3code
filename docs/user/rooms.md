@@ -8,6 +8,23 @@ The Shared source needs a T3 Connect account. When you are signed out, the Rooms
 app sidebar, so that button is the way in. The same button appears when your Rooms session has
 expired.
 
+## Create a shared room
+
+After signing in, choose **New room** from the room rail or the first-room screen.
+Enter a name and check the server shown in the dialog. Creation makes your account the
+room's admin and opens its **#general** channel. Existing members can create additional
+rooms from the same rail. You do not need a Clerk administrator account, an operator
+setup token, or permission from another room's owner to create your own room.
+
+If a request fails, **Retry creation** reuses the same request ID. The server returns
+the existing room if the first attempt succeeded. Changing the name starts a new request.
+The optional operator setup-token flow remains available for managed provisioning.
+
+This requires a reachable Rooms server with the self-service creation route and working
+sign-in configuration. A private development server is not a public hosted service;
+downloading the client alone does not provision a server. Release onboarding must state
+which service users join and how they connect to it.
+
 ## Find the work that needs attention
 
 The dashboard leads with **Needs you**, then shows active work, the project's vision status,
@@ -64,5 +81,5 @@ Agent turns use the same running, replied, failed, and delayed presentation on m
 Agent state is announced as an accessible live update.
 
 The initial mobile surface refreshes when opened and on pull-to-refresh. Evidence upload, story
-creation, vision revision history, invitations, and administration remain desktop actions. Mobile
+creation, room creation, vision revision history, invitations, and administration remain desktop/web actions. Mobile
 shows those limits explicitly instead of substituting local fixtures or browser state.

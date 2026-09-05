@@ -48,6 +48,7 @@ describe("Shared Rooms request policy", () => {
   it("preserves the exact route, method, and query allow-list", () => {
     const allowed: readonly RoomsHumanHttpRequest[] = [
       request(),
+      request({ path: "/rooms/human/v1/rooms", method: "POST" }),
       request({ path: "/rooms/human/v1/bootstrap/redemptions", method: "POST" }),
       request({ path: `/rooms/human/v1/rooms/${encodeURIComponent(room)}/workspace` }),
       request({
@@ -74,6 +75,8 @@ describe("Shared Rooms request policy", () => {
 
     for (const unsafe of [
       request({ method: "POST" }),
+      request({ path: "/rooms/human/v1/rooms" }),
+      request({ path: "/rooms/human/v1/rooms?role=admin", method: "POST" }),
       request({ path: "/rooms/human/v1/session?forward_to=other" }),
       request({
         path: `/rooms/human/v1/rooms/${encodeURIComponent(room)}/changes?relay_token=forbidden`,

@@ -104,6 +104,18 @@ generation again. Room authority always comes from a fresh server session/worksp
 
 ## Roles and UI
 
+Signed-in humans can create their own shared room through `POST /rooms/human/v1/rooms`
+with a name and stable UUIDv7 request ID. The server returns the existing membership
+redemption shape, assigns the creator's admin membership only in the new room, and
+creates `#general` atomically. New users and existing members see **New room**; operator
+bootstrap credentials remain an optional provisioning path. The dialog displays the
+configured server. It does not provision hosting or grant backend/Clerk administration.
+
+Room creation is currently exposed in desktop and web; native mobile creation is pending.
+The producer route and ingress allow-list must be deployed before the consumer. Fresh
+public-download onboarding, public signup, and server reachability are separate release
+acceptance requirements from a local build against a private development deployment.
+
 The UI consumes server capabilities rather than inferring authority from labels:
 
 - `channel.create` controls channel creation;

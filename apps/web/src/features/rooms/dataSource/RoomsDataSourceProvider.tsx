@@ -108,6 +108,10 @@ interface RoomsDataSourceContextValue {
   readonly localLiveUpdatesStatus: RoomsLocalLiveUpdatesStatus;
   readonly retryLocalWorkspace: () => Promise<RoomsLocalWorkspace | null>;
   readonly retryHumanSession: () => Promise<RoomsHumanWorkspace | null>;
+  readonly createHumanRoom: (
+    name: string,
+    requestId: string,
+  ) => Promise<RoomsHumanMembershipRedemption>;
   readonly redeemHumanBootstrap: (
     bootstrapToken: string,
   ) => Promise<RoomsHumanMembershipRedemption>;
@@ -679,6 +683,17 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
     [currentHumanAccessClient, loadHumanSession],
   );
 
+  const createHumanRoom = useCallback(
+    async (name: string, requestId: string) => {
+      const generation = readRoomsAuthenticationSnapshot().generation;
+      const result = await currentHumanAccessClient().createRoom({ name, requestId });
+      await loadHumanSession(result.room.id);
+      assertRoomsAuthenticationGeneration(generation);
+      return result;
+    },
+    [currentHumanAccessClient, loadHumanSession],
+  );
+
   const inspectHumanInvite = useCallback(
     async (roomId: string, inviteToken: string) => {
       const invitation = await currentHumanAccessClient().inspectInvite(roomId, inviteToken);
@@ -859,6 +874,7 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       retryLocalWorkspace,
       retryHumanSession,
       redeemHumanBootstrap,
+      createHumanRoom,
       inspectHumanInvite,
       redeemHumanInvite,
       createHumanInvite,
@@ -890,6 +906,7 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       retryLocalWorkspace,
       retryHumanSession,
       redeemHumanBootstrap,
+      createHumanRoom,
       inspectHumanInvite,
       redeemHumanInvite,
       createHumanInvite,

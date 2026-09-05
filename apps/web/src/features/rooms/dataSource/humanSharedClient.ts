@@ -44,6 +44,10 @@ export interface RoomsHumanTransport {
 
 export interface RoomsHumanClient {
   readonly getSession: () => Promise<RoomsHumanSession>;
+  readonly createRoom: (input: {
+    readonly name: string;
+    readonly requestId: string;
+  }) => Promise<RoomsHumanMembershipRedemption>;
   readonly redeemBootstrap: (bootstrapToken: string) => Promise<RoomsHumanMembershipRedemption>;
   readonly inspectInvite: (
     roomId: string,
@@ -321,6 +325,11 @@ export function createRoomsHumanClient(
         await request("/rooms/human/v1/bootstrap/redemptions", "POST", {
           bootstrap_token: validateRoomsHumanOpaqueCredential(bootstrapToken),
         }),
+        decoders.redemption,
+      ),
+    createRoom: async ({ name, requestId }) =>
+      decode(
+        await request("/rooms/human/v1/rooms", "POST", { name, request_id: requestId }),
         decoders.redemption,
       ),
     inspectInvite: async (roomId, inviteToken) => {

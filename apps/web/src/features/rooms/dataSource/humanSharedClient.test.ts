@@ -21,6 +21,45 @@ function response(body: unknown, status = 200, headers: Record<string, string> =
 }
 
 describe("authenticated shared Rooms client", () => {
+  it("creates a room using the current bearer and preserves its request ID for a retry", async () => {
+    const requests: Parameters<RoomsHumanTransport["request"]>[0][] = [];
+    const result = {
+      contract,
+      status: "ready",
+      room: { id: roomId, slug: "new-room", name: "New room", locality: "shared" },
+      principal: { id: principalId, type: "human", display_name: "New user", role: "admin" },
+    };
+    let reads = 0;
+    const client = createRoomsHumanClient(
+      "https://rooms.example.test",
+      async () => `token-${++reads}`,
+      () => ({
+        request: async (request) => {
+          requests.push(request);
+          return response(result, requests.length === 1 ? 201 : 200);
+        },
+      }),
+    );
+    const input = { name: "New room", requestId: "0198f7e2-1234-789a-8abc-123456789abc" };
+    expect(await client.createRoom(input)).toEqual(result);
+    expect(await client.createRoom(input)).toEqual(result);
+    expect(
+      requests.map(({ path, method, body, bearer }) => ({
+        path,
+        method,
+        body: JSON.parse(body!),
+        bearer,
+      })),
+    ).toEqual(
+      [1, 2].map((n) => ({
+        path: "/rooms/human/v1/rooms",
+        method: "POST",
+        body: { name: input.name, request_id: input.requestId },
+        bearer: `token-${n}`,
+      })),
+    );
+  });
+
   it("refreshes the dedicated bearer for ordinary and long-poll requests", async () => {
     const requests: Parameters<RoomsHumanTransport["request"]>[0][] = [];
     let tokenRead = 0;

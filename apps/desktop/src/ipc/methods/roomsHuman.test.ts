@@ -18,6 +18,20 @@ const channel = "channel:0198f7e2-1234-789a-8abc-123456789abc";
 const decodeHumanRequest = Schema.decodeUnknownSync(RoomsHumanHttpRequestSchema);
 
 describe("desktop Rooms human HTTP boundary", () => {
+  it("admits room creation without broadening other methods or query parameters", () => {
+    const request = {
+      baseUrl: base,
+      path: "/rooms/human/v1/rooms",
+      method: "POST" as const,
+      bearer,
+    };
+    expect(resolveRoomsHumanRequestUrl(request).pathname).toBe(request.path);
+    expect(() => resolveRoomsHumanRequestUrl({ ...request, method: "GET" })).toThrow("allow-list");
+    expect(() =>
+      resolveRoomsHumanRequestUrl({ ...request, path: `${request.path}?role=admin` }),
+    ).toThrow("allow-list");
+  });
+
   it("allows only exact authenticated shared-Rooms routes and methods", () => {
     expect(
       resolveRoomsHumanRequestUrl({
