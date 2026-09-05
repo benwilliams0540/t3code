@@ -8,6 +8,27 @@ The Shared source needs a T3 Connect account. When you are signed out, the Rooms
 app sidebar, so that button is the way in. The same button appears when your Rooms session has
 expired.
 
+## Use your own server
+
+The Shared source can also talk to a Threadspace server you or a friend host. In the access
+panel, enter the server URL under **Change server** and choose **Connect**. The client asks
+the server which sign-in it uses before showing any form.
+
+If the server has its own sign-in:
+
+- **Set up server** appears when nobody owns the server yet. Paste the setup token the host
+  printed with `bin/rails rooms:local:issue_setup`, pick a username, a password of at least 10
+  characters, and a display name. You become the owner.
+- **Join with invitation** takes a room ID and invite token from a room admin plus your new
+  username, password, and display name. One step creates your account and puts you in the room.
+- **Sign in** works on any device with the same username and password.
+- **Reset password** takes a reset token the host issues with
+  `USERNAME=<name> bin/rails rooms:local:issue_password_reset`. It signs out every other device.
+
+**Sign out** on the dashboard revokes this device's session on the server. **Forget this
+server** also drops the server from this device. The client keeps your session for that
+server only and never sends it to another address.
+
 ## Create a shared room
 
 After signing in, choose **New room** from the room rail or the first-room screen.

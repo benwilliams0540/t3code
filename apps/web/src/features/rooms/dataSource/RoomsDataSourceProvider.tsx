@@ -1,3 +1,4 @@
+import { normalizeRoomsOrigin } from "@t3tools/shared/roomsTransport";
 import * as Schema from "effect/Schema";
 import {
   createContext,
@@ -12,9 +13,12 @@ import {
 } from "react";
 
 import {
+  activateLocalRoomsSession,
   assertRoomsAuthenticationGeneration,
+  deactivateLocalRoomsSession,
   readRoomsAuthenticationSnapshot,
   readRoomsClerkToken,
+  setRoomsAuthenticationOwner,
   subscribeRoomsAuthentication,
 } from "~/cloud/roomsAuth";
 import { resolveCloudPublicConfig } from "~/cloud/publicConfig";
@@ -35,6 +39,30 @@ import {
   type RoomsLocalCommandResult,
 } from "./localChannelsClient";
 import { createRoomsHumanClient } from "./humanSharedClient";
+import {
+  createRoomsLocalAuthClient,
+  type RoomsLocalEnrollInput,
+  type RoomsLocalPasswordResetInput,
+  type RoomsLocalSetupInput,
+  type RoomsLocalSignInInput,
+} from "./localAuthClient";
+import type {
+  RoomsAuthProviderName,
+  RoomsLocalAuthProvider,
+  RoomsLocalAuthSignedIn,
+} from "./localAuthContract";
+import {
+  ROOMS_SHARED_SERVER_STORAGE_KEY,
+  resolveRoomsAuthProvider,
+  resolveRoomsSharedServerBaseUrl,
+  roomsDeviceLabel,
+  roomsProfileAfterDiscovery,
+  roomsProfileAfterSignIn,
+  roomsProfileAfterSignOut,
+  RoomsSharedServerProfileOrNull,
+  type RoomsSharedServerProfile,
+  usableRoomsSharedSession,
+} from "./serverProfile";
 import type {
   RoomsHumanInviteInspection,
   RoomsInteractiveFeed,
@@ -103,6 +131,20 @@ interface RoomsDataSourceContextValue {
   readonly selectedBySource: RoomsSelectedRoomBySource;
   readonly localConfig: RoomsLocalWorkspaceConfig | null;
   readonly localApiBaseUrl: string;
+  // Runtime server selection for the Shared source. Null means the build-time
+  // configuration (managed T3 Connect) applies.
+  readonly serverProfile: RoomsSharedServerProfile | null;
+  readonly authProvider: RoomsAuthProviderName;
+  readonly humanApiBaseUrl: string;
+  readonly connectServer: (baseUrl: string) => Promise<RoomsLocalAuthProvider>;
+  readonly forgetServer: () => Promise<void>;
+  readonly setUpLocalServer: (input: RoomsLocalSetupInput) => Promise<RoomsLocalAuthSignedIn>;
+  readonly signInLocal: (input: RoomsLocalSignInInput) => Promise<RoomsLocalAuthSignedIn>;
+  readonly enrollLocal: (input: RoomsLocalEnrollInput) => Promise<RoomsLocalAuthSignedIn>;
+  readonly resetLocalPassword: (
+    input: RoomsLocalPasswordResetInput,
+  ) => Promise<RoomsLocalAuthSignedIn>;
+  readonly signOutLocal: () => Promise<void>;
   readonly localFeedInvalidationGeneration: number;
   readonly localFeedRefreshGeneration: number;
   readonly localLiveUpdatesStatus: RoomsLocalLiveUpdatesStatus;
@@ -237,7 +279,39 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
     readRoomsAuthenticationSnapshot,
   );
   const humanPublicConfig = resolveCloudPublicConfig();
-  const humanApiBaseUrl = humanPublicConfig.roomsApiUrl ?? "";
+  const [serverProfile, setServerProfile] = useLocalStorage(
+    ROOMS_SHARED_SERVER_STORAGE_KEY,
+    null,
+    RoomsSharedServerProfileOrNull,
+  );
+  const humanApiBaseUrl = resolveRoomsSharedServerBaseUrl(
+    serverProfile,
+    humanPublicConfig.roomsApiUrl,
+  );
+  const authProvider = resolveRoomsAuthProvider(serverProfile);
+  const storedLocalSession = usableRoomsSharedSession(serverProfile);
+  const storedLocalSessionToken = storedLocalSession?.token ?? null;
+  const storedLocalSessionAccountId = storedLocalSession?.accountId ?? null;
+  const serverProfileRef = useRef(serverProfile);
+  useEffect(() => {
+    serverProfileRef.current = serverProfile;
+  }, [serverProfile]);
+  // Hand the published Rooms session to whichever provider the selected server
+  // uses. A stored local session is re-activated here on every launch; Clerk keeps
+  // its own intent and is republished when ownership returns to it.
+  useEffect(() => {
+    if (authProvider === "local") {
+      if (storedLocalSessionToken !== null && storedLocalSessionAccountId !== null) {
+        activateLocalRoomsSession(storedLocalSessionAccountId, storedLocalSessionToken);
+      } else {
+        deactivateLocalRoomsSession();
+      }
+      setRoomsAuthenticationOwner("local");
+      return;
+    }
+    deactivateLocalRoomsSession();
+    setRoomsAuthenticationOwner("clerk");
+  }, [authProvider, storedLocalSessionAccountId, storedLocalSessionToken]);
   const [mode, setPersistedMode] = useLocalStorage(
     ROOMS_DATA_SOURCE_STORAGE_KEY,
     "sample" as const,
@@ -361,11 +435,15 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
     ): Promise<RoomsHumanWorkspace | null> => {
       const generation = ++humanLoadGenerationRef.current;
       const authGeneration = authentication.generation;
-      if (
-        !humanPublicConfig.clerkPublishableKey ||
-        !humanPublicConfig.roomsApiUrl ||
-        !humanPublicConfig.roomsClerkJwtTemplate
-      ) {
+      const configured =
+        authProvider === "local"
+          ? humanApiBaseUrl !== ""
+          : Boolean(
+              humanPublicConfig.clerkPublishableKey &&
+              humanApiBaseUrl &&
+              humanPublicConfig.roomsClerkJwtTemplate,
+            );
+      if (!configured) {
         const next = humanFailure("invalid-configuration");
         humanStateRef.current = next;
         setHumanState(next);
@@ -453,10 +531,11 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       }
     },
     [
+      authProvider,
       authentication,
+      humanApiBaseUrl,
       humanClientForGeneration,
       humanPublicConfig.clerkPublishableKey,
-      humanPublicConfig.roomsApiUrl,
       humanPublicConfig.roomsClerkJwtTemplate,
       setSelectedBySource,
     ],
@@ -720,6 +799,86 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
     [currentHumanReadyClient],
   );
 
+  const localAuthClient = useMemo(
+    () => createRoomsLocalAuthClient(humanApiBaseUrl),
+    [humanApiBaseUrl],
+  );
+
+  const connectServer = useCallback(
+    async (baseUrl: string) => {
+      const normalized = normalizeRoomsOrigin("shared", baseUrl);
+      if (normalized === null) {
+        throw new RoomsLocalClientError({
+          kind: "invalid_configuration",
+          code: "invalid_human_api_base_url",
+          message: "Use an HTTPS origin or HTTP loopback origin for the Threadspace server.",
+        });
+      }
+      const discovered = await createRoomsLocalAuthClient(normalized).getAuthProvider();
+      setServerProfile((current) => roomsProfileAfterDiscovery(current, normalized, discovered));
+      setPersistedMode("shared");
+      return discovered;
+    },
+    [setPersistedMode, setServerProfile],
+  );
+
+  const commitLocalSignIn = useCallback(
+    (result: RoomsLocalAuthSignedIn) => {
+      setServerProfile(roomsProfileAfterSignIn(humanApiBaseUrl, result));
+      setPersistedMode("shared");
+      return result;
+    },
+    [humanApiBaseUrl, setPersistedMode, setServerProfile],
+  );
+
+  const withDeviceLabel = <T extends { readonly deviceLabel?: string }>(input: T): T => ({
+    ...input,
+    deviceLabel: input.deviceLabel ?? roomsDeviceLabel(),
+  });
+
+  const setUpLocalServer = useCallback(
+    async (input: RoomsLocalSetupInput) =>
+      commitLocalSignIn(await localAuthClient.setUp(withDeviceLabel(input))),
+    [commitLocalSignIn, localAuthClient],
+  );
+
+  const signInLocal = useCallback(
+    async (input: RoomsLocalSignInInput) =>
+      commitLocalSignIn(await localAuthClient.signIn(withDeviceLabel(input))),
+    [commitLocalSignIn, localAuthClient],
+  );
+
+  const enrollLocal = useCallback(
+    async (input: RoomsLocalEnrollInput) =>
+      commitLocalSignIn(await localAuthClient.enroll(withDeviceLabel(input))),
+    [commitLocalSignIn, localAuthClient],
+  );
+
+  const resetLocalPassword = useCallback(
+    async (input: RoomsLocalPasswordResetInput) =>
+      commitLocalSignIn(await localAuthClient.resetPassword(withDeviceLabel(input))),
+    [commitLocalSignIn, localAuthClient],
+  );
+
+  // Revoke on the server when it can be reached; clear the device either way. A
+  // token that could not be revoked stays valid on the server until it expires.
+  const signOutLocal = useCallback(async () => {
+    const session = usableRoomsSharedSession(serverProfileRef.current);
+    if (session) {
+      try {
+        await localAuthClient.signOut(session.token);
+      } catch (error) {
+        console.warn("Could not revoke the Threadspace session on the server.", error);
+      }
+    }
+    setServerProfile((current) => roomsProfileAfterSignOut(current));
+  }, [localAuthClient, setServerProfile]);
+
+  const forgetServer = useCallback(async () => {
+    await signOutLocal();
+    setServerProfile(null);
+  }, [setServerProfile, signOutLocal]);
+
   const createLocalChannel = useCallback(
     async (input: RoomsLocalCreateChannelInput) => {
       if (mode === "shared") {
@@ -868,6 +1027,16 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       selectedBySource,
       localConfig,
       localApiBaseUrl,
+      serverProfile,
+      authProvider,
+      humanApiBaseUrl,
+      connectServer,
+      forgetServer,
+      setUpLocalServer,
+      signInLocal,
+      enrollLocal,
+      resetLocalPassword,
+      signOutLocal,
       localFeedInvalidationGeneration: localFeedSync.invalidationGeneration,
       localFeedRefreshGeneration: localFeedSync.refreshGeneration,
       localLiveUpdatesStatus: mode === "shared" ? humanLiveUpdatesStatus : localLiveUpdatesStatus,
@@ -894,10 +1063,20 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       setMode,
     }),
     [
+      authProvider,
+      connectServer,
       createLocalChannel,
+      enrollLocal,
+      forgetServer,
+      humanApiBaseUrl,
       loadLocalFeed,
       localApiBaseUrl,
       localConfig,
+      resetLocalPassword,
+      serverProfile,
+      setUpLocalServer,
+      signInLocal,
+      signOutLocal,
       localFeedSync.invalidationGeneration,
       localFeedSync.refreshGeneration,
       localLiveUpdatesStatus,

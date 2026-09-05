@@ -60,13 +60,30 @@ export function normalizeRoomsOrigin(mode: RoomsOriginMode, value: string): stri
   }
 }
 
+// Server-owned local sign-in (rooms.local-auth v1). These are the only human routes a
+// client may call without a bearer, because they are how a bearer is obtained.
+const UNAUTHENTICATED_HUMAN_ROUTES: ReadonlyMap<string, "GET" | "POST"> = new Map([
+  ["/rooms/human/v1/auth-provider", "GET"],
+  ["/rooms/human/v1/local/setup-redemptions", "POST"],
+  ["/rooms/human/v1/local/sessions", "POST"],
+  ["/rooms/human/v1/local/enrollments", "POST"],
+  ["/rooms/human/v1/local/password-reset-redemptions", "POST"],
+]);
+
+export function isRoomsHumanUnauthenticatedRoute(pathname: string): boolean {
+  return UNAUTHENTICATED_HUMAN_ROUTES.has(pathname);
+}
+
 function exactHumanRouteMethods(pathname: string): readonly ("GET" | "POST")[] {
+  const unauthenticated = UNAUTHENTICATED_HUMAN_ROUTES.get(pathname);
+  if (unauthenticated !== undefined) return [unauthenticated];
   if (pathname === "/rooms/human/v1/session") return ["GET"];
   if (
     pathname === "/rooms/human/v1/rooms" ||
     pathname === "/rooms/human/v1/bootstrap/redemptions" ||
     pathname === "/rooms/human/v1/invite-inspections" ||
-    pathname === "/rooms/human/v1/invite-redemptions"
+    pathname === "/rooms/human/v1/invite-redemptions" ||
+    pathname === "/rooms/human/v1/local/sign-out"
   ) {
     return ["POST"];
   }
@@ -152,6 +169,21 @@ export function resolveRoomsHumanRequestUrl(request: RoomsHumanHttpRequest): URL
     throw new RoomsTransportPolicyError(
       "invalid_route",
       "Rooms human API request is outside the exact authenticated route allow-list.",
+    );
+  }
+  if (isRoomsHumanUnauthenticatedRoute(decodedPath)) {
+    if (request.bearer !== undefined) {
+      throw new RoomsTransportPolicyError(
+        "invalid_bearer",
+        "Rooms human sign-in routes must not carry a bearer credential.",
+      );
+    }
+    return target;
+  }
+  if (request.bearer === undefined) {
+    throw new RoomsTransportPolicyError(
+      "invalid_bearer",
+      "Rooms human API request requires a bearer credential.",
     );
   }
   validateRoomsHumanBearer(request.bearer);

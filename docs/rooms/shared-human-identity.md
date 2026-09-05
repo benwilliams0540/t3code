@@ -46,6 +46,23 @@ does not yet define idempotency and double-execution rules.
 The OpenClaw transport sends `modelRun: true` whenever it sends `promptMode: "none"`, as required
 by the OpenClaw 2026.8.2 agent protocol. The connector regression test freezes that request shape.
 
+## Server-owned local sign-in (free self-hosting)
+
+A server running `ROOMS_HUMAN_AUTH_PROVIDER=local` authenticates people itself under the
+`rooms.local-auth` v1 contract (producer t3rooms `2ecba24`). The client discovers the
+provider with `GET /rooms/human/v1/auth-provider` before it shows any form, then signs in,
+joins with an invitation, sets up a new server, or resets a password on the
+`/rooms/human/v1/local/*` routes. Those five routes are the only human routes the transport
+sends without a bearer. The returned session token is the bearer for every existing v1/v2
+route and resolves the same server-owned `h:` principal and membership as a Clerk token.
+
+The selected server, its provider, its server ID, and the current session live in the
+per-device server profile (`t3code:rooms-shared-server:v1`). A session is reused only when
+the server ID is unchanged. Sign-out revokes the session on the server and clears it here;
+password reset revokes every session for the account. Exactly one source, Clerk or the
+local server, owns the published Rooms session at a time. See
+[hosting and access](hosting-and-access.md).
+
 ## Client configuration
 
 Canonical public build variables are:

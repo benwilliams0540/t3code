@@ -129,7 +129,7 @@ const decoders = {
   error: Schema.decodeUnknownSync(RoomsHumanErrorResponse),
 };
 
-function defaultTransport(): RoomsHumanTransport {
+export function defaultRoomsHumanTransport(): RoomsHumanTransport {
   const transport = ensureLocalApi().roomsHuman;
   if (!transport) {
     throw new RoomsLocalClientError({
@@ -171,7 +171,10 @@ function parseBody(response: RoomsHumanHttpResponse): unknown {
   }
 }
 
-function decode<T>(response: RoomsHumanHttpResponse, parser: (body: unknown) => T): T {
+export function decodeRoomsHumanResponse<T>(
+  response: RoomsHumanHttpResponse,
+  parser: (body: unknown) => T,
+): T {
   const body = parseBody(response);
   if (response.status < 200 || response.status >= 300) {
     try {
@@ -204,6 +207,8 @@ function decode<T>(response: RoomsHumanHttpResponse, parser: (body: unknown) => 
   }
 }
 
+const decode = decodeRoomsHumanResponse;
+
 function invariant(condition: boolean, code: string, message: string): void {
   if (condition) return;
   throw new RoomsLocalClientError({ kind: "invalid_response", status: 200, code, message });
@@ -212,7 +217,7 @@ function invariant(condition: boolean, code: string, message: string): void {
 export function createRoomsHumanClient(
   configuredBaseUrl: string,
   readToken: () => Promise<string> = readRoomsClerkToken,
-  transportFactory: () => RoomsHumanTransport = defaultTransport,
+  transportFactory: () => RoomsHumanTransport = defaultRoomsHumanTransport,
   assertCurrent: () => void = () => undefined,
 ): RoomsHumanClient {
   const normalizedBaseUrl = normalizeRoomsOrigin("shared", configuredBaseUrl);

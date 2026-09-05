@@ -112,7 +112,7 @@ function createBrowserLocalApi(): LocalApi {
           credentials: "omit",
           redirect: "manual",
           headers: {
-            authorization: `Bearer ${request.bearer}`,
+            ...(request.bearer === undefined ? {} : { authorization: `Bearer ${request.bearer}` }),
             ...(body === undefined
               ? {}
               : { "content-type": validatedBody?.contentType ?? "application/json" }),

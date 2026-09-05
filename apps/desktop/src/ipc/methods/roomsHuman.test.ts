@@ -32,6 +32,51 @@ describe("desktop Rooms human HTTP boundary", () => {
     ).toThrow("allow-list");
   });
 
+  it("sends no Authorization header on the sign-in routes and always sends it elsewhere", async () => {
+    const fetchMock = vi.fn<typeof fetch>(
+      async () =>
+        new Response("{}", { status: 200, headers: { "content-type": "application/json" } }),
+    );
+    await Effect.runPromise(
+      performRoomsHumanRequest(
+        decodeHumanRequest({
+          baseUrl: base,
+          path: "/rooms/human/v1/local/sessions",
+          method: "POST",
+          body: JSON.stringify({ username: "monroe", password: "correct horse battery" }),
+        }),
+        fetchMock,
+      ),
+    );
+    const signIn = fetchMock.mock.calls[0]![1]!;
+    expect(signIn.headers).not.toHaveProperty("authorization");
+    expect(signIn.headers).toMatchObject({ "content-type": "application/json" });
+
+    await Effect.runPromise(
+      performRoomsHumanRequest(
+        decodeHumanRequest({
+          baseUrl: base,
+          path: "/rooms/human/v1/session",
+          method: "GET",
+          bearer,
+        }),
+        fetchMock,
+      ),
+    );
+    expect(fetchMock.mock.calls[1]![1]!.headers).toMatchObject({
+      authorization: `Bearer ${bearer}`,
+    });
+    await expect(
+      Effect.runPromise(
+        performRoomsHumanRequest(
+          decodeHumanRequest({ baseUrl: base, path: "/rooms/human/v1/session", method: "GET" }),
+          fetchMock,
+        ),
+      ),
+    ).rejects.toThrow("allow-list");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("allows only exact authenticated shared-Rooms routes and methods", () => {
     expect(
       resolveRoomsHumanRequestUrl({

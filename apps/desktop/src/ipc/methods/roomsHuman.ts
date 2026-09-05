@@ -92,7 +92,7 @@ export const performRoomsHumanRequest = Effect.fn("desktop.ipc.roomsHuman.perfor
           redirect: "manual",
           signal,
           headers: {
-            authorization: `Bearer ${request.bearer}`,
+            ...(request.bearer === undefined ? {} : { authorization: `Bearer ${request.bearer}` }),
             ...(requestBody === null ? {} : { "content-type": requestBody.contentType }),
           },
           ...(requestBody === null ? {} : { body: requestBody.bytes as BodyInit }),

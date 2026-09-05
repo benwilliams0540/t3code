@@ -979,7 +979,8 @@ export const RoomsHumanHttpRequestSchema = Schema.Struct({
   baseUrl: Schema.String,
   path: Schema.String,
   method: Schema.Literals(["GET", "POST"]),
-  bearer: Schema.String,
+  // Absent only on the server-owned sign-in routes; every other route requires it.
+  bearer: Schema.optionalKey(Schema.String),
   body: Schema.optionalKey(Schema.String),
   bodyEncoding: Schema.optionalKey(Schema.Literals(["utf8", "base64"])),
   contentType: Schema.optionalKey(Schema.String),

@@ -2,7 +2,6 @@ import { useNavigate } from "@tanstack/react-router";
 import { PlusIcon } from "lucide-react";
 import { type FormEvent, useId, useRef, useState } from "react";
 
-import { resolveCloudPublicConfig } from "~/cloud/publicConfig";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -33,7 +32,7 @@ export function RoomsCreateRoomButton({ compact = false }: { readonly compact?: 
 }
 
 function RoomsCreateRoomForm({ compact }: { readonly compact: boolean }) {
-  const { createHumanRoom, state } = useRoomsDataSource();
+  const { createHumanRoom, humanApiBaseUrl, state } = useRoomsDataSource();
   const navigate = useNavigate();
   const inputId = useId();
   const [open, setOpen] = useState(false);
@@ -47,7 +46,7 @@ function RoomsCreateRoomForm({ compact }: { readonly compact: boolean }) {
     (state.status === "ready" ||
       state.status === "authenticated-nonmember" ||
       state.status === "invited");
-  const server = resolveCloudPublicConfig().roomsApiUrl;
+  const server = humanApiBaseUrl || "not configured";
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();

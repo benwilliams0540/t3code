@@ -36,8 +36,9 @@ export function roomsHumanInviteClipboardPayload(invite: {
 }
 
 function RoomsHumanDashboard({ workspace }: { readonly workspace: RoomsHumanWorkspace }) {
-  const { createHumanInvite } = useRoomsDataSource();
+  const { authProvider, createHumanInvite, humanApiBaseUrl, signOutLocal } = useRoomsDataSource();
   const [role, setRole] = useState<RoomsHumanRole>("operator");
+  const [signingOut, setSigningOut] = useState(false);
   const [pending, setPending] = useState(false);
   const [invite, setInvite] = useState<{
     readonly roomId: string;
@@ -103,6 +104,23 @@ function RoomsHumanDashboard({ workspace }: { readonly workspace: RoomsHumanWork
           <code className="mt-1 block text-[10px] text-muted-foreground">
             {workspace.principal.id}
           </code>
+          <p className="mt-2 break-all font-mono text-[10px] text-muted-foreground">
+            {humanApiBaseUrl}
+          </p>
+          {authProvider === "local" ? (
+            <Button
+              className="mt-2"
+              disabled={signingOut}
+              onClick={() => {
+                setSigningOut(true);
+                void signOutLocal().finally(() => setSigningOut(false));
+              }}
+              size="sm"
+              variant="outline"
+            >
+              {signingOut ? "Signing out…" : "Sign out of this server"}
+            </Button>
+          ) : null}
         </div>
       </div>
 

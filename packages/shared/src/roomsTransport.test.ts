@@ -90,6 +90,71 @@ describe("Shared Rooms request policy", () => {
     }
   });
 
+  it("admits the server-owned sign-in routes without a bearer and nothing else", () => {
+    const unauthenticated: readonly RoomsHumanHttpRequest[] = [
+      {
+        baseUrl: "https://rooms.example.test",
+        path: "/rooms/human/v1/auth-provider",
+        method: "GET",
+      },
+      {
+        baseUrl: "https://rooms.example.test",
+        path: "/rooms/human/v1/local/setup-redemptions",
+        method: "POST",
+      },
+      {
+        baseUrl: "https://rooms.example.test",
+        path: "/rooms/human/v1/local/sessions",
+        method: "POST",
+      },
+      {
+        baseUrl: "https://rooms.example.test",
+        path: "/rooms/human/v1/local/enrollments",
+        method: "POST",
+      },
+      {
+        baseUrl: "https://rooms.example.test",
+        path: "/rooms/human/v1/local/password-reset-redemptions",
+        method: "POST",
+      },
+    ];
+    for (const candidate of unauthenticated) {
+      expect(resolveRoomsHumanRequestUrl(candidate).pathname).toBe(candidate.path);
+      expect(() => resolveRoomsHumanRequestUrl({ ...candidate, bearer })).toThrow(
+        "must not carry a bearer",
+      );
+      expect(() =>
+        resolveRoomsHumanRequestUrl({
+          ...candidate,
+          method: candidate.method === "GET" ? "POST" : "GET",
+        }),
+      ).toThrow("allow-list");
+    }
+    expect(
+      resolveRoomsHumanRequestUrl(
+        request({ path: "/rooms/human/v1/local/sign-out", method: "POST" }),
+      ).pathname,
+    ).toBe("/rooms/human/v1/local/sign-out");
+    for (const authenticated of [
+      request({ path: "/rooms/human/v1/local/sign-out", method: "POST" }),
+      request(),
+      request({ path: "/rooms/human/v1/rooms", method: "POST" }),
+    ]) {
+      const { bearer: _bearer, ...withoutBearer } = authenticated;
+      expect(() => resolveRoomsHumanRequestUrl(withoutBearer)).toThrow("requires a bearer");
+    }
+    expect(() =>
+      resolveRoomsHumanRequestUrl(
+        request({ path: "/rooms/human/v1/local/sessions?next=x", method: "POST" }),
+      ),
+    ).toThrow("allow-list");
+    expect(() =>
+      resolveRoomsHumanRequestUrl(
+        request({ path: "/rooms/human/v1/local/unknown", method: "POST" }),
+      ),
+    ).toThrow("allow-list");
+  });
+
   it("rejects invalid bearer and out-of-contract bodies", () => {
     expect(() => validateRoomsHumanBearer("token\r\nx-bad: 1")).toThrow("invalid");
     expect(() => validateRoomsHumanRequestBody(request({ body: "{}" }))).toThrow(

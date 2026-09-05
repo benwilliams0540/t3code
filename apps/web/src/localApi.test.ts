@@ -152,6 +152,19 @@ describe("LocalApi", () => {
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ credentials: "omit", redirect: "manual" });
   });
 
+  it("omits the Authorization header on the browser sign-in path", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { createLocalApi } = await import("./localApi");
+
+    await createLocalApi().roomsHuman!.request({
+      baseUrl: "http://127.0.0.1:33102",
+      path: "/rooms/human/v1/auth-provider",
+      method: "GET",
+    });
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).not.toHaveProperty("authorization");
+  });
+
   it("delegates Shared HTTPS to the desktop boundary", async () => {
     const requestRoomsHuman = vi.fn().mockResolvedValue({ status: 200, headers: {}, body: "{}" });
     testWindow().desktopBridge = { requestRoomsHuman } as unknown as DesktopBridge;

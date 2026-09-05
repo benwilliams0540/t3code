@@ -26,10 +26,15 @@ host provisioning creates or configures the server itself. A friend can join wit
 released client without a custom build. Free refers to the ThreadSpace offering: the host
 owner supplies their infrastructure and any independently required network/provider service.
 
-The free authentication mechanism is not implemented or selected yet. The recommended
-first design to evaluate is server-owned enrollment and revocable device sessions, using
-an established authentication implementation. Existing Clerk support can remain an adapter
-for managed deployments. The development-only Local identity is not a production fallback.
+The free authentication mechanism is now implemented as a local checkpoint on both sides
+(2026-09-05, Rails `2ecba24`, client on `agent/rooms-self-service-creation`): server-owned
+accounts with bcrypt passwords via Rails' `has_secure_password`, revocable device sessions
+stored as digests, first-owner setup and password reset from operator-issued one-time
+credentials, and invite enrollment that creates the account and the room membership in one
+transaction. Clerk remains the adapter for managed deployments; one provider per server.
+The development-only Local identity is not a production fallback. See
+[the contract](https://github.com/benwilliams0540/t3rooms/tree/integrate/rooms-current/contracts/rooms/local-auth/v1)
+and the "Implemented local sign-in" section below.
 
 ## Identity, hosting, and connectivity are separate
 
@@ -63,6 +68,52 @@ any hosted account registration is a separate, user-visible action.
 
 Sources: [Google OpenID Connect](https://developers.google.com/identity/openid-connect/openid-connect),
 [installed application OAuth](https://developers.google.com/identity/protocols/oauth2/native-app).
+
+## Implemented local sign-in (checkpointed 2026-09-05)
+
+```mermaid
+flowchart LR
+  Client[Client: runtime server profile] -->|GET auth-provider| Server[Self-hosted Rooms server]
+  Server -->|provider local, setup_required| Client
+  Client -->|setup token or invite + username/password| Server
+  Server -->|opaque session token, once| Client
+  Client -->|Bearer session on every existing route| Server
+  Server --> Binding[Attestation binding: provider local, server issuer, account subject]
+  Binding --> Member[Same h: principal, membership, role, capabilities]
+```
+
+Server (`ROOMS_HUMAN_AUTH_PROVIDER=local`, no Clerk variables):
+
+- `bin/rails rooms:local:issue_setup` prints one setup credential; redeeming it creates the
+  server issuer, the owner's account, principal, binding, and first session. Single use.
+- Invites are unchanged. A new person enrolls with room ID + invite + username/password in
+  one transaction; an invalid invite leaves no account behind.
+- Sessions last 90 days, are revoked by sign-out, and all revoke on password reset
+  (`USERNAME=<name> bin/rails rooms:local:issue_password_reset`). Identity and memberships
+  survive a reset. Sign-in failures are one generic error; timing does not reveal usernames.
+- A Clerk-configured server answers the local routes 404; a local server rejects JWT bearers.
+
+Client:
+
+- The Shared source has a runtime **server profile** (URL, provider, server ID, session)
+  stored per device. Changing the URL discovers the provider first; a stored session is kept
+  only if the server ID is unchanged, so repointing the URL never sends a session elsewhere.
+- Exactly one source owns the published Rooms session. A local server owns it while selected;
+  Clerk keeps its own intent and is republished when the profile is forgotten.
+- The access panel offers sign in, join with invitation, set up server (when the server has no
+  owner), and reset password. The dashboard shows the server and offers sign out.
+- Transport: the five unauthenticated sign-in routes are admitted without a bearer; every
+  other route still requires one. Desktop and browser transports send no Authorization header
+  on those routes.
+
+Decision to confirm: the local session token is persisted in the client's local storage per
+server so reopening the app lands back in the room. It is revocable server-side and cleared
+on sign-out. Electron encrypted storage would be a follow-up hardening, not a blocker.
+
+Not yet done: native mobile enrollment/server selection UI, a packaged one-command server
+install with persistent data and backups, plain-HTTP LAN origins (the client still requires
+HTTPS or loopback; a tailnet with Tailscale Serve satisfies this), and the end-to-end proof
+against a running server rather than tests.
 
 ## Inspected implementation today
 
@@ -133,12 +184,12 @@ Passkey provisioning and TestFlight remain separate work.
 
 ## Work order and acceptance
 
-1. Implement runtime server profiles and explicit join/enrollment, with credentials and cached
-   data isolated per server/account. Advertised server auth configuration must not silently
-   override user trust or send an existing server's credentials to another server.
-2. Add and test a production self-hosted authentication path alongside Clerk, retaining the
-   server-owned membership and capability model. Evaluate established implementations before
-   selecting the mechanism; do not weaken authentication to meet the free-hosting requirement.
+1. Done as a local checkpoint: runtime server profiles and explicit join/enrollment, with the
+   session isolated per server ID. Advertised server auth configuration never sends an existing
+   server's credentials to another server. Remaining: mobile UI and encrypted desktop storage.
+2. Done as a local checkpoint: server-owned local authentication alongside Clerk, retaining the
+   server-owned membership and capability model (Rails `has_secure_password`, digest-stored
+   revocable sessions). Remaining: a live two-device proof against a running server.
 3. Package a reproducible server install with persistent data, first-owner setup, network
    instructions, upgrades, backup and restore. The operator performs this once; friends only join.
 4. Prove an unrelated person can install the released artifacts, host a room outside our
