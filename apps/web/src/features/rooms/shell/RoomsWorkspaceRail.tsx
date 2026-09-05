@@ -1,11 +1,12 @@
 import { useNavigate } from "@tanstack/react-router";
-import { BoxesIcon, LockKeyholeIcon, UsersIcon } from "lucide-react";
+import { LockKeyholeIcon, UsersIcon } from "lucide-react";
 import { useCallback, useEffect } from "react";
 
 import { cn } from "~/lib/utils";
 
 import { useRoomsDataSource, type RoomsSourceRoom } from "../dataSource";
 import { roomForShortcut } from "../model/selection";
+import { ThreadspaceMark } from "./ThreadspaceIdentity";
 
 function roomMonogram(room: RoomsSourceRoom): string {
   return room.name
@@ -56,7 +57,7 @@ export function RoomsWorkspaceRail({
 
   return (
     <aside
-      aria-label="Rooms workspaces"
+      aria-label="Threadspace rooms"
       className="relative z-30 flex h-full w-[var(--rooms-workspace-rail-width)] shrink-0 flex-col items-center border-r border-sidebar-border bg-sidebar text-sidebar-foreground surface-grain"
       data-rooms-workspace-rail=""
     >
@@ -65,9 +66,9 @@ export function RoomsWorkspaceRail({
         data-rooms-macos-window-controls-spacer={reserveMacosWindowControls ? "" : undefined}
       >
         {reserveMacosWindowControls ? null : (
-          <BoxesIcon aria-hidden className="m-auto size-4 text-muted-foreground" />
+          <ThreadspaceMark className="m-auto size-5 text-[var(--threadspace-cyan)]" />
         )}
-        <span className="sr-only">Rooms</span>
+        <span className="sr-only">Threadspace</span>
       </div>
       <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto px-2 py-2">
         {state.rooms.map((room, index) => {
@@ -84,10 +85,10 @@ export function RoomsWorkspaceRail({
                   : `${room.name}, ${room.unreadCount} unread, ${room.locality === "local_only" ? "local only" : "shared"}`
               }
               className={cn(
-                "group/room relative flex size-10 shrink-0 items-center justify-center rounded-xl border text-xs font-semibold transition-[border-color,background-color,border-radius] motion-reduce:transition-none",
+                "group/room relative flex size-10 shrink-0 items-center justify-center rounded-sm border font-mono text-[10px] font-semibold tracking-[0.08em] transition-[border-color,background-color] motion-reduce:transition-none",
                 isSelected
-                  ? "rounded-[0.65rem] border-blue-500/70 bg-blue-500/18 text-foreground"
-                  : "border-border bg-muted/45 text-muted-foreground hover:rounded-[0.65rem] hover:border-border/90 hover:bg-muted hover:text-foreground",
+                  ? "border-[var(--threadspace-cyan-edge)] bg-[var(--threadspace-cyan-soft)] text-foreground"
+                  : "border-border bg-muted/45 text-muted-foreground hover:border-[var(--threadspace-cyan-edge)] hover:bg-muted hover:text-foreground",
               )}
               data-room-id={room.id}
               key={room.id}
@@ -96,15 +97,15 @@ export function RoomsWorkspaceRail({
               type="button"
             >
               {isSelected ? (
-                <span className="absolute -left-[9px] h-5 w-[3px] rounded-full bg-foreground" />
+                <span className="absolute -left-[9px] h-5 w-[2px] bg-[var(--threadspace-cyan)]" />
               ) : null}
               {roomMonogram(room)}
               <LocalityIcon
                 aria-hidden
-                className="absolute -bottom-1 -left-1 size-3 rounded-full bg-sidebar p-0.5 text-muted-foreground"
+                className="absolute -bottom-1 -left-1 size-3 bg-sidebar p-0.5 text-muted-foreground"
               />
               {room.unreadCount !== null && room.unreadCount > 0 ? (
-                <span className="absolute -right-1.5 -top-1.5 min-w-4 rounded-full bg-red-500 px-1 text-center text-[9px] font-bold leading-4 text-white">
+                <span className="absolute -right-1.5 -top-1.5 min-w-4 border border-sidebar bg-[var(--threadspace-amber)] px-1 text-center text-[9px] font-bold leading-4 text-white">
                   {room.unreadCount}
                 </span>
               ) : null}

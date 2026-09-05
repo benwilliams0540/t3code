@@ -123,7 +123,7 @@ function RoomsServerThreadSurface({
   }
   if (renderState === "missing") {
     return (
-      <NativeThreadUnavailable description="No locally available T3 thread matches this route. Mirrored Rooms IDs are never used as native thread IDs." />
+      <NativeThreadUnavailable description="No locally available T3 thread matches this route. Mirrored Threadspace IDs are never used as native thread IDs." />
     );
   }
   if (
@@ -225,7 +225,7 @@ function RoomsDraftThreadSurface({
 
   if (!draftSession) {
     return (
-      <NativeThreadUnavailable description="This native T3 draft no longer exists. Rooms does not invent a replacement thread." />
+      <NativeThreadUnavailable description="This native T3 draft no longer exists. Threadspace does not invent a replacement thread." />
     );
   }
   if (!draftIsBound) {

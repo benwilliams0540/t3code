@@ -598,5 +598,5 @@ export interface RoomsWorkspaceReadFixture {
 export type RoomsWorkspaceReadDocument = RoomsWorkspaceReadV1 | RoomsWorkspaceReadFixture;
 
 export function assertNever(value: never): never {
-  throw new Error(`Unhandled Rooms contract variant: ${String(value)}`);
+  throw new Error(`Unhandled Threadspace contract variant: ${String(value)}`);
 }

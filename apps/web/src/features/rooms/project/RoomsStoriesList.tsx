@@ -9,6 +9,49 @@ import type { RoomsStory } from "../model/workspace";
 import type { RoomsWorkspaceSlotProps } from "../shell/slots";
 import { ROOMS_STORIES_VIEW_STORAGE_KEY, RoomsStoriesView } from "../stories/presentation";
 
+type StoryBlockingGroup = "waiting-on-you" | "waiting-on-someone-else" | "not-blocked" | "unknown";
+
+const STORY_BLOCKING_GROUPS = [
+  { key: "waiting-on-you", label: "Waiting on you", detail: "Your next human action is available" },
+  {
+    key: "waiting-on-someone-else",
+    label: "Waiting on someone else",
+    detail: "Owned or reviewed elsewhere",
+  },
+  { key: "not-blocked", label: "Not blocked", detail: "No human blocker is declared" },
+  { key: "unknown", label: "Unknown", detail: "The contract cannot identify the blocker" },
+] as const satisfies readonly {
+  readonly key: StoryBlockingGroup;
+  readonly label: string;
+  readonly detail: string;
+}[];
+
+function storyBlockingGroup(props: RoomsWorkspaceSlotProps, story: RoomsStory): StoryBlockingGroup {
+  const stage = props.workspace.workflows
+    .flatMap((workflow) => workflow.stages)
+    .find((candidate) => candidate.id === story.stage_id);
+  if (stage?.key === "done" || story.gate_state === "passed") return "not-blocked";
+  const currentPrincipalId = props.workspace.authorization.principal_id;
+  if (story.gate_state === "waiting_for_review") {
+    const humanCanReview = stage?.gate?.reviewer.allowed_principal_types.includes("human") ?? false;
+    const selfReviewForbidden =
+      (stage?.gate?.reviewer.forbid_self_review ?? false) && story.owner_id === currentPrincipalId;
+    return humanCanReview && !selfReviewForbidden ? "waiting-on-you" : "waiting-on-someone-else";
+  }
+  if (story.owner_id === currentPrincipalId) return "waiting-on-you";
+  return story.owner_id ? "waiting-on-someone-else" : "unknown";
+}
+
+function sampleStoryNextAction(props: RoomsWorkspaceSlotProps, story: RoomsStory): string {
+  const group = storyBlockingGroup(props, story);
+  if (group === "not-blocked") return "No human action is currently required";
+  if (group === "unknown") return "Open the story to inspect the available contract facts";
+  if (group === "waiting-on-someone-else") return "Wait for the declared owner or reviewer";
+  if (story.gate_state === "waiting_for_review") return "Review the submitted evidence";
+  if (story.gate_state === "waiting_for_evidence") return "Attach qualifying evidence";
+  return "Open the story and continue the declared work";
+}
+
 function StorySummary({
   onSelect,
   props,
@@ -79,6 +122,14 @@ function StoryDetail({ props, story }: { props: RoomsWorkspaceSlotProps; story: 
         {story.story_type} · workflow {story.workflow_version}
       </p>
       <h2 className="mt-2 text-xl font-semibold text-foreground">{story.title}</h2>
+      <section className="mt-4 border border-amber-500/35 bg-amber-500/[0.07] p-4">
+        <p className="font-mono text-[10px] font-semibold tracking-[0.14em] text-[var(--threadspace-amber)] uppercase">
+          Next human action
+        </p>
+        <p className="mt-2 text-sm font-semibold text-foreground">
+          {sampleStoryNextAction(props, story)}
+        </p>
+      </section>
       <div className="mt-4 flex flex-wrap gap-2">
         {props.workspace.workflows
           .find((workflow) => workflow.id === story.workflow_id)
@@ -137,6 +188,7 @@ export function RoomsStoriesList(props: RoomsWorkspaceSlotProps) {
     RoomsStoriesView,
   );
   const [selectedStoryId, setSelectedStoryId] = useState(workspace.stories[0]?.id ?? null);
+  const [stageFilter, setStageFilter] = useState<string>("all");
   useEffect(() => {
     if (!workspace.stories.some((story) => story.id === selectedStoryId)) {
       setSelectedStoryId(workspace.stories[0]?.id ?? null);
@@ -185,25 +237,50 @@ export function RoomsStoriesList(props: RoomsWorkspaceSlotProps) {
           </p>
         </div>
       ) : view === "board" ? (
-        <div className="overflow-x-auto pb-3" data-rooms-stories-layout="board">
-          <div className="grid min-w-[64rem] grid-cols-4 items-start gap-3">
-            {stages.map((stage) => (
-              <section
-                className="min-h-[28rem] rounded-xl border border-border bg-muted/10"
+        <div className="grid gap-3 pb-3" data-rooms-stories-layout="board">
+          <div className="flex flex-wrap items-center gap-2 border border-border bg-muted/15 p-2">
+            <span className="px-1 font-mono text-[9px] tracking-[0.12em] text-muted-foreground uppercase">
+              Stage
+            </span>
+            {[{ id: "all", name: "All" }, ...stages].map((stage) => (
+              <Button
+                aria-pressed={stageFilter === stage.id}
                 key={stage.id}
+                onClick={() => setStageFilter(stage.id)}
+                size="sm"
+                type="button"
+                variant={stageFilter === stage.id ? "secondary" : "ghost"}
               >
-                <header className="flex items-center border-b border-border px-3 py-3">
-                  <h2 className="text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-                    {stage.name}
-                  </h2>
-                  <span className="ml-auto text-xs text-muted-foreground">
-                    {workspace.stories.filter((story) => story.stage_id === stage.id).length}
+                {stage.name}
+              </Button>
+            ))}
+          </div>
+          {STORY_BLOCKING_GROUPS.map((group) => {
+            const groupStories = workspace.stories.filter(
+              (story) =>
+                (stageFilter === "all" || story.stage_id === stageFilter) &&
+                storyBlockingGroup(props, story) === group.key,
+            );
+            return (
+              <section
+                className="threadspace-panel border border-border bg-muted/10"
+                data-rooms-blocking-group={group.key}
+                key={group.key}
+              >
+                <header className="flex items-center gap-3 border-b border-border px-3 py-2.5">
+                  <div>
+                    <h2 className="text-xs font-semibold tracking-[0.08em] text-foreground uppercase">
+                      {group.label}
+                    </h2>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">{group.detail}</p>
+                  </div>
+                  <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+                    {groupStories.length}
                   </span>
                 </header>
-                <div className="grid gap-2.5 p-2.5">
-                  {workspace.stories
-                    .filter((story) => story.stage_id === stage.id)
-                    .map((story) => (
+                {groupStories.length > 0 ? (
+                  <div className="grid gap-2.5 p-2.5 lg:grid-cols-2">
+                    {groupStories.map((story) => (
                       <StorySummary
                         key={story.id}
                         onSelect={() => {
@@ -215,10 +292,15 @@ export function RoomsStoriesList(props: RoomsWorkspaceSlotProps) {
                         story={story}
                       />
                     ))}
-                </div>
+                  </div>
+                ) : (
+                  <p className="px-3 py-3 text-xs text-muted-foreground">
+                    No stories in this blocking group.
+                  </p>
+                )}
               </section>
-            ))}
-          </div>
+            );
+          })}
         </div>
       ) : (
         <div

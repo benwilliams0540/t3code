@@ -42,6 +42,15 @@ export interface RoomsDashboardProjection {
   readonly layout: RoomsDashboardLayout;
   readonly sourceProjection: RoomsProjection;
   readonly room: RoomsRoom;
+  readonly health: {
+    readonly sourceCount: number;
+    readonly reachableSources: number;
+    readonly unknownSources: number;
+    readonly unreachableSources: number;
+    readonly staleMirrors: number;
+    readonly unreadCount: number;
+    readonly attentionCount: number;
+  };
   readonly vision: {
     readonly headline: string;
     readonly summary: string;
@@ -174,6 +183,22 @@ export function buildRoomsDashboardProjection(
       layout,
       sourceProjection,
       room,
+      health: {
+        sourceCount: workspace.sources.length,
+        reachableSources: workspace.sources.filter(
+          (source) => source.reachability.state === "reachable",
+        ).length,
+        unknownSources: workspace.sources.filter(
+          (source) => source.reachability.state === "unknown",
+        ).length,
+        unreachableSources: workspace.sources.filter(
+          (source) => source.reachability.state === "unreachable",
+        ).length,
+        staleMirrors: workspace.sources.filter((source) => source.mirror.freshness === "stale")
+          .length,
+        unreadCount: room.unread.count,
+        attentionCount: workspace.dashboard.needs_attention.length,
+      },
       vision: {
         headline: workspace.dashboard.vision.headline,
         summary: workspace.dashboard.vision.summary,

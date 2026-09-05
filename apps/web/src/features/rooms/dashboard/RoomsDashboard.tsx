@@ -66,7 +66,9 @@ function Chip({
           ? "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300"
           : "border-border bg-muted/40 text-muted-foreground";
   return (
-    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${toneClass}`}>
+    <span
+      className={`inline-flex border px-2 py-0.5 font-mono text-[10px] tracking-[0.06em] uppercase ${toneClass}`}
+    >
       {children}
     </span>
   );
@@ -115,7 +117,7 @@ function VisionCard({ projection }: { readonly projection: RoomsDashboardProject
   const { document, headline, revision, route, summary } = projection.vision;
   return (
     <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-center">
+      <div className="flex flex-col gap-5 2xl:flex-row 2xl:items-center">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <FileCheck2Icon aria-hidden className="size-4 text-muted-foreground" />
@@ -343,14 +345,12 @@ function DashboardHeader({ projection }: { readonly projection: RoomsDashboardPr
       data-rooms-dashboard-header={projection.sourceProjection.kind}
     >
       <div>
-        <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-          Current workspace
+        <p className="threadspace-technical font-mono text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+          Sheet 01 · Room status · sample
         </p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
-          {projection.room.name}
-        </h1>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Status</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          What needs you, what is moving, and what changed recently.
+          {projection.room.name} · what needs you, what is moving, and what changed recently.
         </p>
       </div>
       <div className="ml-auto flex flex-wrap gap-2">
@@ -358,6 +358,60 @@ function DashboardHeader({ projection }: { readonly projection: RoomsDashboardPr
         <Chip tone="good">{projection.room.membership.role}</Chip>
       </div>
     </header>
+  );
+}
+
+function HealthSummary({ projection }: { readonly projection: RoomsDashboardProjection }) {
+  const health = projection.health;
+  const sourceValue =
+    health.sourceCount === 0
+      ? "Not exposed"
+      : `${health.reachableSources} of ${health.sourceCount} reachable`;
+  const sourceDetail =
+    health.sourceCount === 0
+      ? "No source health is available"
+      : `${health.unreachableSources} unreachable · ${health.unknownSources} unknown`;
+  const mirrorValue =
+    health.sourceCount === 0
+      ? "Unknown"
+      : health.staleMirrors > 0
+        ? `${health.staleMirrors} stale`
+        : "Current";
+
+  const cells = [
+    {
+      label: "Room",
+      value: humanize(projection.room.locality),
+      detail: `${projection.room.membership.role} membership`,
+    },
+    { label: "Source health", value: sourceValue, detail: sourceDetail },
+    {
+      label: "Mirror",
+      value: mirrorValue,
+      detail: "Reported separately from reachability",
+    },
+    {
+      label: "Attention",
+      value: `${health.attentionCount} ${health.attentionCount === 1 ? "item" : "items"}`,
+      detail: `${health.unreadCount} unread durable events`,
+    },
+  ] as const;
+
+  return (
+    <section className="threadspace-panel grid border border-border sm:grid-cols-2 xl:grid-cols-4">
+      {cells.map((cell) => (
+        <div
+          className="border-b border-border p-3 last:border-b-0 sm:border-r sm:[&:nth-child(2)]:border-r-0 sm:[&:nth-child(3)]:border-b-0 xl:border-b-0 xl:[&:nth-child(2)]:border-r xl:[&:nth-child(3)]:border-r"
+          key={cell.label}
+        >
+          <p className="font-mono text-[9px] tracking-[0.14em] text-muted-foreground uppercase">
+            {cell.label}
+          </p>
+          <p className="mt-1 text-sm font-semibold text-foreground">{cell.value}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{cell.detail}</p>
+        </div>
+      ))}
+    </section>
   );
 }
 
@@ -384,7 +438,7 @@ function NarrowDashboard({ projection }: { readonly projection: RoomsDashboardPr
 function DesktopDashboard({ projection }: { readonly projection: RoomsDashboardProjection }) {
   return (
     <div
-      className="hidden min-[900px]:grid min-[900px]:gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.8fr)]"
+      className="hidden min-[900px]:grid min-[900px]:gap-5 xl:grid-cols-2"
       data-rooms-dashboard-layout="desktop-columns"
     >
       <div className="grid content-start gap-5">
@@ -446,7 +500,10 @@ export function RoomsDashboard({ fixture, room, state, workspace }: RoomsDashboa
       <div className="hidden min-[900px]:block">
         <DashboardHeader projection={desktop} />
       </div>
-      <div className="mt-6">
+      <div className="mt-4">
+        <HealthSummary projection={desktop} />
+      </div>
+      <div className="mt-5">
         <NarrowDashboard projection={narrow} />
         <DesktopDashboard projection={desktop} />
       </div>

@@ -1,9 +1,9 @@
 import {
+  ActivityIcon,
   FileTextIcon,
   HashIcon,
-  LayoutDashboardIcon,
+  NetworkIcon,
   PlusIcon,
-  UsersIcon,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -61,8 +61,9 @@ function WorkspaceNavItem({
     <button
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-sidebar-muted-foreground transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
-        active && "bg-sidebar-row-selected text-sidebar-foreground",
+        "flex min-h-8 w-full min-w-0 items-center gap-2 rounded-sm border-l-2 border-transparent px-2 py-1.5 text-left text-sm text-sidebar-muted-foreground transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
+        active &&
+          "border-l-[var(--threadspace-cyan)] bg-sidebar-row-selected text-sidebar-foreground",
       )}
       onClick={onClick}
       type="button"
@@ -100,14 +101,18 @@ export function RoomsWorkspaceNavigation({
     <nav
       aria-label={room.name + " workspace"}
       className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden"
+      data-threadspace-navigation=""
     >
       <div className="border-b border-sidebar-border px-3 py-3">
-        <p className="truncate text-sm font-semibold text-sidebar-foreground">{room.name}</p>
-        <p className="mt-0.5 text-[11px] text-sidebar-muted-foreground">
+        <p className="font-mono text-[9px] tracking-[0.16em] text-sidebar-muted-foreground uppercase">
+          Room
+        </p>
+        <p className="mt-1 truncate text-sm font-semibold text-sidebar-foreground">{room.name}</p>
+        <p className="mt-1 font-mono text-[9px] tracking-[0.08em] text-sidebar-muted-foreground uppercase">
           {sourceMode === "local"
-            ? "Local T3 only"
+            ? "Local Threadspace"
             : sourceMode === "shared"
-              ? `T3 Connect · ${room.membershipRole}`
+              ? `Shared · ${room.membershipRole}`
               : `${room.locality === "local_only" ? "Local-only room" : "Shared room"} · ${room.membershipRole}`}
         </p>
         {sourceMode === "local" && localLiveUpdatesReconnecting ? (
@@ -123,8 +128,8 @@ export function RoomsWorkspaceNavigation({
         <WorkspaceNavItem
           active={surface.kind === "dashboard"}
           badge={room.unreadCount ?? undefined}
-          icon={LayoutDashboardIcon}
-          label="Dashboard"
+          icon={ActivityIcon}
+          label="Status"
           onClick={() => navigate({ kind: "dashboard" })}
         />
 
@@ -206,7 +211,7 @@ export function RoomsWorkspaceNavigation({
         ) : null}
 
         <p className="mb-1 mt-5 px-2 text-[10px] font-semibold tracking-[0.12em] text-sidebar-muted-foreground/65 uppercase">
-          Present
+          Network
         </p>
         <WorkspaceNavItem
           active={surface.kind === "present"}
@@ -217,7 +222,7 @@ export function RoomsWorkspaceNavigation({
                 workspace.presence.machine_ids.length
               : undefined
           }
-          icon={UsersIcon}
+          icon={NetworkIcon}
           label="People and machines"
           onClick={() => navigate({ kind: "present" })}
         />

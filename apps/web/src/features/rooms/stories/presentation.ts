@@ -127,7 +127,8 @@ export function localStoryNeedsCurrentHuman(
 }
 
 export function localStoryNextAction(story: RoomsLocalStory): string {
-  if (!isRoomsLocalStoryV2(story)) return "Upgrade the Rooms producer to continue this workflow";
+  if (!isRoomsLocalStoryV2(story))
+    return "Upgrade the Threadspace producer to continue this workflow";
   if (story.stage === "backlog") return "Claim and start";
   if (story.stage === "in-progress") {
     const gate = localStoryEvidenceGate(story);

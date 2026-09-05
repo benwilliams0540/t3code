@@ -54,7 +54,7 @@ export function localSourceStateCopy(state: RoomsLocalSourceFailure): {
     case "error":
       return {
         title: "Local workspace is unavailable",
-        message: state.error?.message ?? "The Rooms Local API request failed.",
+        message: state.error?.message ?? "The Threadspace Local API request failed.",
         canRetry: true,
       };
   }

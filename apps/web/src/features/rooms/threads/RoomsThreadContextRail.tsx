@@ -83,9 +83,14 @@ export function RoomsThreadContextRail({
       data-rooms-thread-context="open"
     >
       <header className="flex items-center gap-2">
-        <h2 className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-          Room context
-        </h2>
+        <div>
+          <h2 className="font-mono text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+            Room context
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Why this thread exists, what it made, and what happens next.
+          </p>
+        </div>
         <Button
           aria-label="Close Room context"
           className="ml-auto"
@@ -115,14 +120,21 @@ export function RoomsThreadContextRail({
         </section>
       ) : null}
       {story ? (
-        <section className="mt-5 rounded-xl border border-border bg-card p-4">
+        <section className="mt-5 border border-amber-500/35 bg-amber-500/[0.07] p-4">
+          <p className="font-mono text-[10px] font-semibold tracking-[0.14em] text-[var(--threadspace-amber)] uppercase">
+            Next action · Awaiting human
+          </p>
+          <p className="mt-2 text-sm font-semibold text-foreground">
+            {localStoryNextAction(story)}
+          </p>
+        </section>
+      ) : null}
+      {story ? (
+        <section className="mt-4 border border-border bg-card p-4">
           <p className="text-xs text-muted-foreground">{story.stage.replaceAll("-", " ")}</p>
           <h3 className="mt-2 text-sm font-semibold text-foreground">{story.title}</h3>
           <p className="mt-2 text-xs text-muted-foreground">
             {ownerName ? `${ownerName} owns` : "Unassigned"} · {evidence.length} evidence
-          </p>
-          <p className="mt-3 text-xs font-medium text-amber-700 dark:text-amber-300">
-            {localStoryNextAction(story)}
           </p>
           <Button
             className="mt-4"

@@ -57,14 +57,16 @@ import {
   type RoomsNativeThreadEntry,
 } from "../threads/roomsNativeThreads";
 import {
+  localStoryBlockingGroup,
+  localStoryBlockingGroupLabel,
   localStoryEvidenceGate,
   localStoryNeedsCurrentHuman,
   localStoryNextAction,
   localStoryOwnerId,
-  localStoryStageCounts,
   localStoryStageLabel,
   localStoryUpdatedAt,
   ROOMS_STORIES_VIEW_STORAGE_KEY,
+  ROOMS_STORY_BLOCKING_GROUPS,
   ROOMS_STORY_STAGE_ORDER,
   RoomsStoriesView,
 } from "./presentation";
@@ -826,6 +828,13 @@ function RoomsLocalStoryCard({
         </span>
       </div>
 
+      <section className="mt-5 border border-amber-500/35 bg-amber-500/[0.07] p-4">
+        <p className="font-mono text-[10px] font-semibold tracking-[0.14em] text-[var(--threadspace-amber)] uppercase">
+          Next human action
+        </p>
+        <p className="mt-2 text-sm font-semibold text-foreground">{localStoryNextAction(story)}</p>
+      </section>
+
       {story.native_thread ? (
         <RoomsLocalLinkedThreadStatus
           navigate={navigate}
@@ -904,6 +913,9 @@ function RoomsStorySummaryCard({
   const needsYou = currentPrincipalId
     ? localStoryNeedsCurrentHuman(story, currentPrincipalId)
     : false;
+  const blockingLabel = localStoryBlockingGroupLabel(
+    localStoryBlockingGroup(story, currentPrincipalId),
+  );
   const evidenceCount = isRoomsLocalStoryV2(story) ? story.evidence.length : 0;
   const threadState = !story.native_thread
     ? "thread not linked"
@@ -940,6 +952,9 @@ function RoomsStorySummaryCard({
           )}
         />
         <span>{localStoryStageLabel(story.stage)}</span>
+        <span className="border-l border-border pl-2 font-mono text-[9px] tracking-[0.08em] uppercase">
+          Blocking · {blockingLabel}
+        </span>
         <time className="ml-auto" dateTime={localStoryUpdatedAt(story)}>
           {formatRelativeTimeLabel(localStoryUpdatedAt(story))}
         </time>
@@ -1004,37 +1019,71 @@ function RoomsStoriesBoard({
   readonly stories: readonly RoomsLocalStory[];
   readonly threads: readonly RoomsNativeThreadEntry[];
 }) {
-  const counts = localStoryStageCounts(stories);
+  const [stageFilter, setStageFilter] = useState<string>("all");
   return (
-    <div
-      className="grid min-h-[28rem] min-w-[64rem] flex-1 grid-cols-4 items-start gap-3"
-      data-rooms-stories-layout="board"
-    >
-      {ROOMS_STORY_STAGE_ORDER.map((stage) => (
-        <section className="h-full rounded-xl border border-border bg-muted/10" key={stage}>
-          <header className="flex items-center gap-2 border-b border-border px-3 py-3">
-            <h2 className="text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-              {localStoryStageLabel(stage)}
-            </h2>
-            <span className="ml-auto text-xs text-muted-foreground">{counts.get(stage)}</span>
-          </header>
-          <div className="grid gap-2.5 p-2.5">
-            {stories
-              .filter((story) => story.stage === stage)
-              .map((story) => (
-                <RoomsStorySummaryCard
-                  currentPrincipalId={currentPrincipalId}
-                  displayPrincipal={displayPrincipal}
-                  key={story.id}
-                  onSelect={() => onSelect(story.id)}
-                  selected={selectedStoryId === story.id}
-                  story={story}
-                  threads={threads}
-                />
-              ))}
-          </div>
-        </section>
-      ))}
+    <div className="grid flex-1 content-start gap-3" data-rooms-stories-layout="board">
+      <div className="flex flex-wrap items-center gap-2 border border-border bg-muted/15 p-2">
+        <span className="px-1 font-mono text-[9px] tracking-[0.12em] text-muted-foreground uppercase">
+          Stage
+        </span>
+        {["all", ...ROOMS_STORY_STAGE_ORDER].map((stage) => (
+          <Button
+            aria-pressed={stageFilter === stage}
+            key={stage}
+            onClick={() => setStageFilter(stage)}
+            size="sm"
+            type="button"
+            variant={stageFilter === stage ? "secondary" : "ghost"}
+          >
+            {stage === "all" ? "All" : localStoryStageLabel(stage)}
+          </Button>
+        ))}
+      </div>
+      {ROOMS_STORY_BLOCKING_GROUPS.map((group) => {
+        const groupStories = stories.filter(
+          (story) =>
+            (stageFilter === "all" || story.stage === stageFilter) &&
+            localStoryBlockingGroup(story, currentPrincipalId) === group.key,
+        );
+        return (
+          <section
+            className="threadspace-panel border border-border bg-muted/10"
+            data-rooms-blocking-group={group.key}
+            key={group.key}
+          >
+            <header className="flex items-center gap-3 border-b border-border px-3 py-2.5">
+              <div>
+                <h2 className="text-xs font-semibold tracking-[0.08em] text-foreground uppercase">
+                  {group.label}
+                </h2>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">{group.detail}</p>
+              </div>
+              <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+                {groupStories.length}
+              </span>
+            </header>
+            {groupStories.length > 0 ? (
+              <div className="grid gap-2.5 p-2.5 xl:grid-cols-2">
+                {groupStories.map((story) => (
+                  <RoomsStorySummaryCard
+                    currentPrincipalId={currentPrincipalId}
+                    displayPrincipal={displayPrincipal}
+                    key={story.id}
+                    onSelect={() => onSelect(story.id)}
+                    selected={selectedStoryId === story.id}
+                    story={story}
+                    threads={threads}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="px-3 py-3 text-xs text-muted-foreground">
+                No stories in this blocking group.
+              </p>
+            )}
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -1149,13 +1198,13 @@ export function RoomsLocalStoriesSurface({
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-            {sourceLabel} durable work
+          <p className="threadspace-technical font-mono text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+            Fig. 02 · Work board · {sourceLabel}
           </p>
           <h1 className="mt-1 text-xl font-semibold text-foreground">Stories</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Rooms owns story stage and association. T3 remains the source of live thread, provider,
-            and execution status.
+            Threadspace keeps stage and blocking context separate. T3 remains the source of live
+            thread, provider, and execution status.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1191,7 +1240,7 @@ export function RoomsLocalStoriesSurface({
       ) : (
         <div className={cn("mt-6", view === "board" && "flex min-h-0 flex-1 flex-col")}>
           {view === "board" ? (
-            <div className="flex min-h-0 flex-1 overflow-x-auto pb-3">
+            <div className="flex min-h-0 flex-1 pb-3">
               <RoomsStoriesBoard
                 currentPrincipalId={currentPrincipalId}
                 displayPrincipal={displayPrincipal}

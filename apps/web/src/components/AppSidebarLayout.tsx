@@ -40,6 +40,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { RoomsWorkspaceRail } from "../features/rooms/shell/RoomsWorkspaceRail";
 import { ROOMS_SIDEBAR_OPEN_STORAGE_KEY } from "../features/rooms/shell/navigation";
 import { RoomsDataSourceProvider } from "../features/rooms/dataSource";
+import "../features/rooms/threadspace.css";
 
 const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "90px";
 const ROOMS_WORKSPACE_RAIL_WIDTH = "3.5rem";
@@ -265,7 +266,12 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
 
   return (
     <RoomsDataSourceProvider>
-      <SidebarProvider className="h-dvh! min-h-0!" defaultOpen style={sidebarProviderStyle}>
+      <SidebarProvider
+        className="h-dvh! min-h-0!"
+        data-threadspace-app={showRoomsSidebar ? "" : undefined}
+        defaultOpen
+        style={sidebarProviderStyle}
+      >
         {showRoomsSidebar ? (
           <RoomsWorkspaceRail
             reserveMacosWindowControls={roomsTitlebarPresentation.reserveMacosWindowControls}

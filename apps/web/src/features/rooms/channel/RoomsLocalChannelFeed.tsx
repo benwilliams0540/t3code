@@ -62,7 +62,7 @@ export function mergeRoomsLocalFeedPages(
       throw new RoomsLocalClientError({
         kind: "invalid_response",
         code: "feed_snapshot_mismatch",
-        message: "The Rooms Local feed changed identity within a pinned snapshot.",
+        message: "The Threadspace Local feed changed identity within a pinned snapshot.",
       });
     }
     for (const item of page.items) {
@@ -504,8 +504,11 @@ export function RoomsLocalChannelFeed({
       <div className="min-h-0 flex-1 overflow-y-auto" ref={scrollRef}>
         <main className="mx-auto flex min-h-full w-full max-w-4xl flex-col p-5 sm:p-8">
           <header className="mb-5 border-b border-border pb-5">
+            <p className="threadspace-technical mb-3 font-mono text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+              Conversation · Durable channel
+            </p>
             <div className="flex items-start gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/45">
+              <div className="flex size-10 shrink-0 items-center justify-center border border-border bg-muted/45">
                 <HashIcon aria-hidden className="size-4 text-muted-foreground" />
               </div>
               <div className="min-w-0">
