@@ -4,7 +4,7 @@ Known messy, unfinished, or deferred areas, so an agent picking up Rooms can see
 
 ## Product flow
 
-- **Sample and Local sources are still selectable.** Monroe wants the core flow only. The signed-out Shared panel no longer offers "Use Sample workspace" (#9), but Beta settings "Rooms content" and the Local-source error panel in `RoomsWorkspaceShell.tsx` still do. Drop them from the Alpha when asked; keep Sample for the certified fixtures in tests.
+- **Sample and Local sources are still selectable.** Decided 2026-09-04 (see `foundations.md`): remove Sample from the app, keep fixtures for tests. Monroe wants the core flow only. The signed-out Shared panel no longer offers "Use Sample workspace" (#9), but Beta settings "Rooms content" and the Local-source error panel in `RoomsWorkspaceShell.tsx` still do. Drop them from the Alpha when asked; keep Sample for the certified fixtures in tests.
 - **Status header has no health fact.** `RoomsInteractiveDashboard.tsx` carries a `TODO(rooms)`; a real fact needs native T3 mirroring or project-impact telemetry (benwilliams0540/t3rooms#1). Do not fake one.
 - **Native thread linking shows nothing.** `t3_environments` and `t3_mirrored_events` are empty on staging; the Rails adapter that mirrors T3 events was never run against a real environment. This is what would let Ben and Monroe see each other's agent work.
 - **`@Claw` cannot do real work.** Invocation is `promptMode: none`, no tools, channel text plus a host-health block (benwilliams0540/t3code#11 is the plan).
@@ -24,6 +24,8 @@ Known messy, unfinished, or deferred areas, so an agent picking up Rooms can see
 - **OpenClaw owns nothing on Tailscale now** (`gateway.tailscale.mode: off`). Switching it back to `serve` resets the node's Serve config and removes `/rooms`.
 
 ## Repository hygiene
+
+- **Upstream sync has no cadence yet.** Decision: track upstream closely, merge (never rebase) `main` into `integrate/rooms-current` on a schedule; recipe still to be written here.
 
 - **The main CI workflow cannot run on this fork** (Blacksmith runners). `rooms-focused.yml` is manual-only by Monroe's request; proof is local focused checks recorded in PR bodies.
 - **Draft #2 is superseded by the Threadspace stack** (#12, web/desktop slice, mobile slice). Close it with a link once the mobile slice merges.
