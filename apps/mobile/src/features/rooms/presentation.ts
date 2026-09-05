@@ -1,3 +1,8 @@
+import {
+  classifyRoomsStoryBlocking,
+  isRoomsStoryStage,
+  type RoomsStoryBlockingGroup,
+} from "@t3tools/client-runtime/rooms";
 import type { RoomsHumanStory, RoomsHumanStoryV2 } from "./contract";
 import { isRoomsHumanStoryV2 } from "./contract";
 
@@ -74,4 +79,33 @@ export function roomsReviewEvidenceSatisfied(story: RoomsHumanStoryV2): boolean 
   }
   if (story.story_type === "security") return kinds.has("test-run");
   return false;
+}
+
+export type { RoomsStoryBlockingGroup };
+
+// Derives the facts from the mobile Story shape and defers to the rule shared with web.
+export function roomsStoryBlockingGroup(
+  story: RoomsHumanStory,
+  principalId: string | null,
+): RoomsStoryBlockingGroup {
+  // A stage outside the shared workflow means the rule cannot answer; report unknown.
+  if (!isRoomsStoryStage(story.stage)) return "unknown";
+  return classifyRoomsStoryBlocking(
+    {
+      stage: story.stage,
+      workflowKnown: isRoomsHumanStoryV2(story),
+      ownerPrincipalId: roomsStoryOwnerId(story),
+      needsCurrentHuman: principalId !== null && roomsStoryNeedsHuman(story, principalId),
+    },
+    principalId,
+  );
+}
+
+export function roomsBlockingGroupLabel(group: RoomsStoryBlockingGroup): string {
+  return {
+    "waiting-on-you": "Waiting on you",
+    "waiting-on-someone-else": "Waiting on someone else",
+    "not-blocked": "Not blocked",
+    unknown: "Blocking unknown",
+  }[group];
 }

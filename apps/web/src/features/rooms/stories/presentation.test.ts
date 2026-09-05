@@ -11,6 +11,8 @@ import { RoomsLocalStoryV2 } from "../dataSource/localStoriesContract";
 import {
   countNewRoomsOutputSelections,
   localStoryEvidenceGate,
+  localStoryBlockingGroup,
+  localStoryBlockingGroupLabel,
   localStoryNeedsCurrentHuman,
   localStoryNextAction,
   localStoryOwnerId,
@@ -123,5 +125,23 @@ describe("Rooms story presentation", () => {
     expect(completed.reviews[0]?.reviewed_by).toBe("h:reviewer");
     expect(localStoryNeedsCurrentHuman(completed, "h:reviewer")).toBe(false);
     expect(localStoryStageCounts([completed]).get("done")).toBe(1);
+  });
+});
+
+describe("story blocking group", () => {
+  it("agrees with mobile on who a Story is waiting for", () => {
+    expect(localStoryBlockingGroup(story, story.created_by)).toBe("waiting-on-you");
+    expect(
+      localStoryBlockingGroup(
+        { ...story, gate: { ...story.gate!, reviewer_allowed: false } },
+        story.created_by,
+      ),
+    ).toBe("waiting-on-someone-else");
+    expect(localStoryBlockingGroup({ ...story, stage: "backlog" }, "h:someone")).toBe(
+      "not-blocked",
+    );
+    expect(localStoryBlockingGroup({ ...story, stage: "done" }, null)).toBe("not-blocked");
+    expect(localStoryBlockingGroup(story, null)).toBe("unknown");
+    expect(localStoryBlockingGroupLabel("waiting-on-you")).toBe("Waiting on you");
   });
 });

@@ -1,3 +1,8 @@
+import {
+  classifyRoomsStoryBlocking,
+  isRoomsStoryStage,
+  type RoomsStoryBlockingGroup,
+} from "@t3tools/client-runtime/rooms";
 import * as Schema from "effect/Schema";
 
 import type { RoomsLocalEvidenceKind, RoomsLocalStory } from "../dataSource/localStoriesContract";
@@ -155,4 +160,46 @@ export function localStoryStageCounts(
   for (const stage of ROOMS_STORY_STAGE_ORDER) counts.set(stage, 0);
   for (const story of stories) counts.set(story.stage, (counts.get(story.stage) ?? 0) + 1);
   return counts;
+}
+
+export type { RoomsStoryBlockingGroup };
+
+export const ROOMS_STORY_BLOCKING_GROUPS = [
+  { key: "waiting-on-you", label: "Waiting on you", detail: "Your next action is available" },
+  {
+    key: "waiting-on-someone-else",
+    label: "Waiting on someone else",
+    detail: "Another person or agent owns the next action",
+  },
+  { key: "not-blocked", label: "Not blocked", detail: "No human blocker is declared" },
+  { key: "unknown", label: "Unknown", detail: "The current contract cannot identify a blocker" },
+] as const satisfies readonly {
+  readonly key: RoomsStoryBlockingGroup;
+  readonly label: string;
+  readonly detail: string;
+}[];
+
+// Derives the facts from the Local/Shared Story shape and defers to the rule shared with mobile.
+export function localStoryBlockingGroup(
+  story: RoomsLocalStory,
+  currentPrincipalId: string | null,
+): RoomsStoryBlockingGroup {
+  // A stage outside the shared workflow means the rule cannot answer; report unknown.
+  if (!isRoomsStoryStage(story.stage)) return "unknown";
+  return classifyRoomsStoryBlocking(
+    {
+      stage: story.stage,
+      workflowKnown: isRoomsLocalStoryV2(story),
+      ownerPrincipalId: localStoryOwnerId(story),
+      needsCurrentHuman:
+        currentPrincipalId !== null && localStoryNeedsCurrentHuman(story, currentPrincipalId),
+    },
+    currentPrincipalId,
+  );
+}
+
+export function localStoryBlockingGroupLabel(group: RoomsStoryBlockingGroup): string {
+  return (
+    ROOMS_STORY_BLOCKING_GROUPS.find((candidate) => candidate.key === group)?.label ?? "Unknown"
+  );
 }

@@ -7,6 +7,8 @@ import {
   roomsReviewEvidenceSatisfied,
   roomsStageLabel,
   roomsStoryCanApproveAndComplete,
+  roomsBlockingGroupLabel,
+  roomsStoryBlockingGroup,
   roomsStoryNeedsHuman,
   roomsStoryOwnerId,
 } from "./presentation";
@@ -150,5 +152,18 @@ describe("Rooms mobile presentation", () => {
         ],
       }),
     ).toBe(true);
+  });
+});
+
+describe("story blocking group", () => {
+  it("agrees with web on who a Story is waiting for", () => {
+    const reviewer = "h:reviewer";
+    expect(roomsStoryBlockingGroup(story, reviewer)).toBe(
+      roomsStoryNeedsHuman(story, reviewer) ? "waiting-on-you" : "waiting-on-someone-else",
+    );
+    expect(roomsStoryBlockingGroup({ ...story, stage: "backlog" }, reviewer)).toBe("not-blocked");
+    expect(roomsStoryBlockingGroup({ ...story, stage: "done" }, null)).toBe("not-blocked");
+    expect(roomsStoryBlockingGroup(story, null)).toBe("unknown");
+    expect(roomsBlockingGroupLabel("unknown")).toBe("Blocking unknown");
   });
 });
