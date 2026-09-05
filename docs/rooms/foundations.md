@@ -26,7 +26,8 @@ Monroe's answers to the foundation questions, recorded so features are built aga
 ## Free self-hosting and paid setup
 
 - A GitHub release must let someone self-host their own room for free and connect other ThreadSpace clients over a tailnet or another supported network. They supply and operate the host and network.
-- The paid offering handles authentication, provisioning, and setup. It must not be a prerequisite for running or joining a self-managed room.
+- The paid offering handles internet tunneling, provisioning, and guided setup. Authentication and local hosting belong to the free core; paid services must not be a prerequisite for running or joining a self-managed room.
+- Google sign-in can provide basic account identity and email without Clerk. The recommended design also supports local enrollment so creating and joining LAN rooms does not require a cloud account. Identity proves who someone is; server-owned membership decides which rooms they can access.
 - Free self-hosting must work without our Clerk instance or permission from a maintainer. It still needs real participant authentication and room membership; network reachability alone is not room authority.
 - The client needs runtime server profiles and a join flow. Rebuilding a client with a different server URL or Clerk key is not acceptable release onboarding.
 - A room lives on a server; a server may host multiple separately authorized rooms. Creating a logical room does not provision a machine.

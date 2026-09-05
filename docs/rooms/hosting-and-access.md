@@ -1,7 +1,8 @@
 # ThreadSpace hosting and access
 
 Product direction confirmed by Monroe on 2026-09-05: the GitHub release enables free,
-self-managed rooms. The paid offering handles authentication, provisioning, and setup.
+self-managed rooms. The paid offering handles internet tunneling, provisioning, and setup.
+Authentication is part of the free core; Clerk is not a product requirement.
 The diagrams below distinguish inspected implementation from intended architecture.
 
 ## Intended product
@@ -15,7 +16,7 @@ flowchart TB
   Free --> LocalAuth[Server-controlled participant authentication]
   Free --> Core[Shared Rooms protocol and membership]
   Paid --> Setup[Provisioning and guided setup]
-  Paid --> ManagedAuth[Managed authentication]
+  Paid --> Connectivity[Managed internet connectivity]
   Paid --> Core
   Core --> Data[Room conversations, attachments and agent activity]
 ```
@@ -29,6 +30,39 @@ The free authentication mechanism is not implemented or selected yet. The recomm
 first design to evaluate is server-owned enrollment and revocable device sessions, using
 an established authentication implementation. Existing Clerk support can remain an adapter
 for managed deployments. The development-only Local identity is not a production fallback.
+
+## Identity, hosting, and connectivity are separate
+
+Monroe clarified on 2026-09-05 that someone should be able to use Google sign-in for
+basic account information and then host rooms on their own local network for free.
+Charging for managed internet connectivity and provisioning must not restrict local
+hosting, joining, conversation history, attachments, or agent participation.
+
+The recommended account design is optional Google sign-in alongside server-owned local
+enrollment. Making Google mandatory would still require an external service for first
+sign-in and account recovery. Offline-capable local enrollment is the recommended way
+to preserve an independently useful LAN product; the exact mechanism remains to be selected.
+
+- **Identity:** Google OpenID Connect can supply basic profile and email information with
+  the `openid profile email` scopes. Use the verified issuer and subject as the external
+  identity key, not email. Signing in does not automatically grant access to a room.
+- **Free hosting:** Run the server on the owner's computer or another host; connect clients
+  over a LAN, their own tailnet, or other supported private network. The server owns durable
+  room data, invites, membership, and revocable sessions. No ThreadSpace cloud account or
+  maintainer's Clerk workspace is required for local enrollment.
+- **Paid convenience:** Provision servers, operate tunnels/relays and guided setup. The same
+  room protocol remains usable with user-managed connectivity. Paid service expiration must
+  not erase or disable locally hosted rooms; managed connectivity can stop.
+
+Google sign-in requires an OAuth application registration and platform-specific client
+configuration. For desktop, use the system browser and authorization code flow with PKCE;
+it does not require Clerk. Clients must not forward a Google or another server's credentials
+to arbitrary room URLs. Credential exchange and room-server trust need an explicit design.
+Collecting a profile locally does not automatically send that email to the ThreadSpace company;
+any hosted account registration is a separate, user-visible action.
+
+Sources: [Google OpenID Connect](https://developers.google.com/identity/openid-connect/openid-connect),
+[installed application OAuth](https://developers.google.com/identity/protocols/oauth2/native-app).
 
 ## Inspected implementation today
 
@@ -99,19 +133,21 @@ Passkey provisioning and TestFlight remain separate work.
 
 ## Work order and acceptance
 
-1. Repair team access to the existing Clerk instance and its ThreadSpace origin registration.
-   This unlocks the current private development build without claiming self-hosting support.
-2. Implement runtime server profiles and explicit join/enrollment, with credentials and cached
+1. Implement runtime server profiles and explicit join/enrollment, with credentials and cached
    data isolated per server/account. Advertised server auth configuration must not silently
    override user trust or send an existing server's credentials to another server.
-3. Add and test a production self-hosted authentication path alongside Clerk, retaining the
+2. Add and test a production self-hosted authentication path alongside Clerk, retaining the
    server-owned membership and capability model. Evaluate established implementations before
    selecting the mechanism; do not weaken authentication to meet the free-hosting requirement.
-4. Package a reproducible server install with persistent data, first-owner setup, network
+3. Package a reproducible server install with persistent data, first-owner setup, network
    instructions, upgrades, backup and restore. The operator performs this once; friends only join.
-5. Prove an unrelated person can install the released artifacts, host a room outside our
+4. Prove an unrelated person can install the released artifacts, host a room outside our
    network, invite another client, reopen history, and reject an unauthorized participant
    without any maintainer account, copied session, paid ThreadSpace service, or custom client build.
+
+Repairing the existing Clerk instance can unblock the current private development build,
+but is an optional parallel task rather than a prerequisite for this work order. Evaluate
+Google account linking after the local host/join flow is independently usable.
 
 Paid provisioning wraps this same usable room system. Cross-server room migration, universal
 accounts, and federation are not established capabilities and need separate decisions if required.
