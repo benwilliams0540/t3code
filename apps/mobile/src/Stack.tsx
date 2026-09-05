@@ -398,16 +398,16 @@ export const RootStack = createNativeStackNavigator({
       screen: RoomsRouteScreen,
       linking: "rooms",
       options: {
-        ...GLASS_HEADER_OPTIONS,
-        title: "Rooms",
+        headerShown: false,
+        title: "Threadspace",
       },
     }),
     RoomsChannel: createNativeStackScreen({
       screen: RoomsRouteScreen,
       linking: "rooms/:roomId/:channelId",
       options: {
-        ...GLASS_HEADER_OPTIONS,
-        title: "Rooms",
+        headerShown: false,
+        title: "Threadspace",
       },
     }),
     ThreadTerminal: createNativeStackScreen({

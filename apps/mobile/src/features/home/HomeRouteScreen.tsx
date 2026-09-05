@@ -90,7 +90,7 @@ export function HomeRouteScreen() {
           afterSidebarButton={
             <>
               <NativeHeaderToolbar.Button
-                accessibilityLabel="Open Rooms"
+                accessibilityLabel="Open Threadspace"
                 icon="person.2"
                 onPress={() => navigation.navigate("Rooms")}
               />

@@ -1,13 +1,25 @@
 import {
   classifyRoomsStoryBlocking,
   isRoomsStoryStage,
+  ROOMS_STORY_BLOCKING_GROUPS,
   type RoomsStoryBlockingGroup,
 } from "@t3tools/client-runtime/rooms";
 import type { RoomsHumanStory, RoomsHumanStoryV2 } from "./contract";
 import { isRoomsHumanStoryV2 } from "./contract";
 
-export const ROOMS_MOBILE_SECTIONS = ["overview", "stories", "channels", "people"] as const;
+export const ROOMS_MOBILE_SECTIONS = ["room", "status", "stories", "network"] as const;
 export type RoomsMobileSection = (typeof ROOMS_MOBILE_SECTIONS)[number];
+
+export const ROOMS_STORY_STAGE_FILTERS = [
+  "all",
+  "backlog",
+  "in-progress",
+  "human-qa",
+  "done",
+] as const;
+export type RoomsStoryStageFilter = (typeof ROOMS_STORY_STAGE_FILTERS)[number];
+
+export { ROOMS_STORY_BLOCKING_GROUPS, type RoomsStoryBlockingGroup };
 
 export function roomsChannelLabel(name: string): string {
   const label = name.trim().replace(/^(?:#+\s*)+/u, "");
@@ -19,8 +31,8 @@ export function roomsStageLabel(stage: string): string {
     {
       backlog: "Backlog",
       "in-progress": "In progress",
-      "human-qa": "Needs review",
-      done: "Done",
+      "human-qa": "Awaiting review",
+      done: "Complete",
     }[stage] ?? stage
   );
 }
@@ -40,6 +52,62 @@ export function roomsStoryNeedsHuman(story: RoomsHumanStory, principalId: string
     );
   }
   return roomsStoryOwnerId(story) === principalId;
+}
+
+// Derives the facts from the mobile Story shape and defers to the rule shared with web.
+export function roomsStoryBlockingGroup(
+  story: RoomsHumanStory,
+  principalId: string | null,
+): RoomsStoryBlockingGroup {
+  // A stage outside the shared workflow means the rule cannot answer; report unknown.
+  if (!isRoomsStoryStage(story.stage)) return "unknown";
+  return classifyRoomsStoryBlocking(
+    {
+      stage: story.stage,
+      workflowKnown: isRoomsHumanStoryV2(story),
+      ownerPrincipalId: roomsStoryOwnerId(story),
+      needsCurrentHuman: principalId !== null && roomsStoryNeedsHuman(story, principalId),
+    },
+    principalId,
+  );
+}
+
+export function roomsBlockingGroupLabel(group: RoomsStoryBlockingGroup): string {
+  return {
+    "waiting-on-you": "Waiting on you",
+    "waiting-on-someone-else": "Waiting on someone else",
+    "not-blocked": "Not blocked",
+    unknown: "Blocking unknown",
+  }[group];
+}
+
+export function roomsStoryNextAction(story: RoomsHumanStory, principalId: string): string {
+  if (!isRoomsHumanStoryV2(story)) return "Open on desktop to inspect this older workflow.";
+  if (story.stage === "done") return "No human action is currently required.";
+  if (story.stage === "human-qa" && story.gate) {
+    if (story.gate.approved_review_id) {
+      return roomsStoryCanApproveAndComplete(story)
+        ? "Complete the approved Story."
+        : "Wait for the approved Story to become completion-ready.";
+    }
+    if (!story.gate.evidence_satisfied) return "Attach qualifying evidence from desktop.";
+    if (!story.gate.reviewer_allowed) return "Wait for another eligible person to review.";
+    return "Review the attached evidence, then approve and complete.";
+  }
+  const allowedTransition = story.allowed_next_transitions.find(
+    (transition) => transition.allowed && !transition.terminal,
+  );
+  if (story.stage === "in-progress" && !roomsReviewEvidenceSatisfied(story)) {
+    return "Attach qualifying evidence from desktop before requesting review.";
+  }
+  if (allowedTransition) {
+    if (allowedTransition.to === "in-progress") return "Claim and start this Story.";
+    if (allowedTransition.to === "human-qa") return "Request human review.";
+    return allowedTransition.label;
+  }
+  const ownerId = roomsStoryOwnerId(story);
+  if (ownerId && ownerId !== principalId) return "Waiting on the current owner.";
+  return "No supported next action is currently exposed.";
 }
 
 export function roomsStoryUpdatedAt(story: RoomsHumanStory): string {
@@ -79,33 +147,4 @@ export function roomsReviewEvidenceSatisfied(story: RoomsHumanStoryV2): boolean 
   }
   if (story.story_type === "security") return kinds.has("test-run");
   return false;
-}
-
-export type { RoomsStoryBlockingGroup };
-
-// Derives the facts from the mobile Story shape and defers to the rule shared with web.
-export function roomsStoryBlockingGroup(
-  story: RoomsHumanStory,
-  principalId: string | null,
-): RoomsStoryBlockingGroup {
-  // A stage outside the shared workflow means the rule cannot answer; report unknown.
-  if (!isRoomsStoryStage(story.stage)) return "unknown";
-  return classifyRoomsStoryBlocking(
-    {
-      stage: story.stage,
-      workflowKnown: isRoomsHumanStoryV2(story),
-      ownerPrincipalId: roomsStoryOwnerId(story),
-      needsCurrentHuman: principalId !== null && roomsStoryNeedsHuman(story, principalId),
-    },
-    principalId,
-  );
-}
-
-export function roomsBlockingGroupLabel(group: RoomsStoryBlockingGroup): string {
-  return {
-    "waiting-on-you": "Waiting on you",
-    "waiting-on-someone-else": "Waiting on someone else",
-    "not-blocked": "Not blocked",
-    unknown: "Blocking unknown",
-  }[group];
 }

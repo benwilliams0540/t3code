@@ -10,11 +10,6 @@ const contract = {
   version: 1,
   schema_uri: "contracts/rooms/human-shared/v1/schema.json",
 } as const;
-const feedContract = {
-  id: "rooms.human-shared",
-  version: 2,
-  schema_uri: "contracts/rooms/human-shared/v2/schema.json",
-} as const;
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -88,69 +83,6 @@ describe("Rooms native mobile client", () => {
         method: "POST",
         body: JSON.stringify({ request_id: requestId, body_markdown: "Hello from mobile" }),
       }),
-    );
-  });
-
-  it("loads and decodes typed Agent updates from the v2 feed route", async () => {
-    const fetchRequest = vi.fn(async () =>
-      jsonResponse({
-        contract: feedContract,
-        room_id: roomId,
-        channel_id: channelId,
-        page_info: {
-          after_seq: 0,
-          limit: 100,
-          snapshot_head_seq: 2,
-          next_cursor: 2,
-          has_more: false,
-        },
-        items: [
-          {
-            id: "feed-2",
-            room_id: roomId,
-            channel_id: channelId,
-            kind: "agent_invocation_update",
-            occurred_at: "2026-09-04T12:00:02.000Z",
-            summary: "Agent invocation running",
-            source_event: {
-              seq: 2,
-              event_id: "event-2",
-              type: "agent.invocation-started",
-              schema: 1,
-            },
-            attribution: {
-              mode: "explicit_principal",
-              writer_principal_id: "a:claw",
-              actor_principal_id: "a:claw",
-            },
-            payload: {
-              invocation_id: "invocation:one",
-              triggering_message: {
-                seq: 1,
-                event_id: "event-1",
-                type: "message.created",
-                schema: 1,
-              },
-              status: "running",
-              safe_error_code: null,
-              reply_source_event: null,
-            },
-          },
-        ],
-      }),
-    );
-    const client = createRoomsMobileClient({
-      baseUrl,
-      readToken: async () => "fresh-bearer",
-      fetch: fetchRequest,
-    });
-
-    await expect(client.getFeed(roomId, channelId)).resolves.toMatchObject({
-      items: [{ kind: "agent_invocation_update", payload: { status: "running" } }],
-    });
-    expect(fetchRequest).toHaveBeenCalledWith(
-      `${baseUrl}/rooms/human/v2/rooms/${encodeURIComponent(roomId)}/channels/${encodeURIComponent(channelId)}/feed?limit=100`,
-      expect.objectContaining({ method: "GET" }),
     );
   });
 
@@ -256,7 +188,7 @@ describe("Rooms native mobile client", () => {
       fetch: fetchRequest,
     });
     await expect(signedOut.getSession()).rejects.toEqual(
-      new RoomsMobileClientError("rooms_signed_out", "Sign in to open Shared Rooms.", 401),
+      new RoomsMobileClientError("rooms_signed_out", "Sign in to open Shared Threadspace.", 401),
     );
   });
 });
