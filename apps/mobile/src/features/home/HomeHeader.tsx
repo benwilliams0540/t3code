@@ -239,7 +239,7 @@ function AndroidHomeHeader(props: HomeHeaderProps) {
                 match exactly (ControlPill sizes via Tailwind classes and
                 resolves to a different box). */}
             <Pressable
-              accessibilityLabel="Open Rooms"
+              accessibilityLabel="Open Threadspace"
               accessibilityRole="button"
               onPress={props.onOpenRooms}
               className="size-11 items-center justify-center rounded-full bg-subtle"
@@ -325,7 +325,7 @@ function IosHomeHeader(props: HomeHeaderProps) {
             Platform.OS === "ios"
               ? () => [
                   withNativeGlassHeaderItem({
-                    accessibilityLabel: "Open Rooms",
+                    accessibilityLabel: "Open Threadspace",
                     icon: { name: "person.2", type: "sfSymbol" } as const,
                     identifier: "home-rooms",
                     label: "",

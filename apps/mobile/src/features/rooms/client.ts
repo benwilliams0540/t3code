@@ -60,7 +60,7 @@ async function parseResponse<T>(response: Response, decoder: (input: unknown) =>
   } catch {
     throw new RoomsMobileClientError(
       "rooms_invalid_json",
-      "The Rooms server returned invalid JSON.",
+      "The Threadspace server returned invalid JSON.",
       response.status,
     );
   }
@@ -75,7 +75,7 @@ async function parseResponse<T>(response: Response, decoder: (input: unknown) =>
       if (cause instanceof RoomsMobileClientError) throw cause;
       throw new RoomsMobileClientError(
         "rooms_http_error",
-        `The Rooms server returned HTTP ${response.status}.`,
+        `The Threadspace server returned HTTP ${response.status}.`,
         response.status,
       );
     }
@@ -85,7 +85,7 @@ async function parseResponse<T>(response: Response, decoder: (input: unknown) =>
   } catch {
     throw new RoomsMobileClientError(
       "rooms_contract_mismatch",
-      "The Rooms response does not match the supported rooms.human-shared contract.",
+      "The Threadspace response does not match rooms.human-shared v1.",
       response.status,
     );
   }
@@ -108,7 +108,11 @@ export function createRoomsMobileClient(options: {
   ): Promise<T> => {
     const bearer = await options.readToken();
     if (!bearer) {
-      throw new RoomsMobileClientError("rooms_signed_out", "Sign in to open Shared Rooms.", 401);
+      throw new RoomsMobileClientError(
+        "rooms_signed_out",
+        "Sign in to open Shared Threadspace.",
+        401,
+      );
     }
     const transportRequest: RoomsHumanHttpRequest = {
       baseUrl: options.baseUrl,
@@ -126,7 +130,7 @@ export function createRoomsMobileClient(options: {
       if (cause instanceof RoomsMobileClientError) throw cause;
       throw new RoomsMobileClientError(
         "rooms_transport_policy",
-        "The Rooms request is outside the native transport policy.",
+        "The Threadspace request is outside the native transport policy.",
       );
     }
     let response: Response;
@@ -147,14 +151,13 @@ export function createRoomsMobileClient(options: {
       if (cause instanceof RoomsMobileClientError) throw cause;
       throw new RoomsMobileClientError(
         "rooms_unreachable",
-        "Could not reach the private Rooms service. Check Tailscale and try again.",
+        "Could not reach the private Threadspace service. Check Tailscale and try again.",
       );
     }
     return parseResponse(response, decoder);
   };
 
   const roomPath = (roomId: string) => `/rooms/human/v1/rooms/${encodeURIComponent(roomId)}`;
-  const roomFeedPath = (roomId: string) => `/rooms/human/v2/rooms/${encodeURIComponent(roomId)}`;
 
   return {
     getSession: () => request("/rooms/human/v1/session", "GET", decodeSession),
@@ -163,7 +166,7 @@ export function createRoomsMobileClient(options: {
       if (workspace.room.id !== roomId) {
         throw new RoomsMobileClientError(
           "rooms_workspace_identity_mismatch",
-          "The Rooms workspace does not match the requested room.",
+          "The Threadspace workspace does not match the requested room.",
         );
       }
       return workspace;
@@ -173,21 +176,21 @@ export function createRoomsMobileClient(options: {
       if (stories.room_id !== roomId) {
         throw new RoomsMobileClientError(
           "rooms_story_identity_mismatch",
-          "The Rooms stories do not match the requested room.",
+          "The Threadspace stories do not match the requested room.",
         );
       }
       return stories;
     },
     getFeed: async (roomId: string, channelId: string) => {
       const feed = await request(
-        `${roomFeedPath(roomId)}/channels/${encodeURIComponent(channelId)}/feed?limit=100`,
+        `${roomPath(roomId)}/channels/${encodeURIComponent(channelId)}/feed?limit=100`,
         "GET",
         decodeFeed,
       );
       if (feed.room_id !== roomId || feed.channel_id !== channelId) {
         throw new RoomsMobileClientError(
           "rooms_feed_identity_mismatch",
-          "The Rooms feed does not match the requested room and channel.",
+          "The Threadspace feed does not match the requested room and channel.",
         );
       }
       return feed;
@@ -229,7 +232,7 @@ export function createRoomsMobileClient(options: {
       if (!matchesRequest || !validOutcome) {
         throw new RoomsMobileClientError(
           "rooms_change_contract_mismatch",
-          "The Rooms change response contradicts its requested cursor.",
+          "The Threadspace change response contradicts its requested cursor.",
         );
       }
       return change;
@@ -244,7 +247,7 @@ export function createRoomsMobileClient(options: {
       if (acknowledgement.room_id !== roomId) {
         throw new RoomsMobileClientError(
           "rooms_delivery_ack_mismatch",
-          "The Rooms acknowledgement does not match the requested room.",
+          "The Threadspace acknowledgement does not match the requested room.",
         );
       }
       return acknowledgement;

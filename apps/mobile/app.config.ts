@@ -74,6 +74,20 @@ const RELEASE_ASSETS = {
   androidNotificationColor: "#FFFFFF",
 } as const;
 
+const THREADSPACE_ALPHA_ASSETS = {
+  appIcon: "./assets/threadspace-alpha-paper-1024.png",
+  iosIcon: {
+    light: "./assets/threadspace-alpha-paper-1024.png",
+    dark: "./assets/threadspace-alpha-dark-1024.png",
+  },
+  splashIcon: "./assets/threadspace-alpha-paper-1024.png",
+  androidAdaptiveForeground: "./assets/threadspace-alpha-paper-1024.png",
+  androidAdaptiveBackgroundColor: "#F4EFE5",
+  androidMonochromeIcon: "./assets/android-icon-mark.png",
+  androidNotificationIcon: "./assets/android-notification-icon.png",
+  androidNotificationColor: "#2B8C89",
+} as const;
+
 const VARIANT_CONFIG = {
   development: {
     appName: "T3 Code Dev",
@@ -113,7 +127,7 @@ const VARIANT_CONFIG = {
     iosBundleIdentifier: `${THREADSPACE_PRODUCTION_BUNDLE_IDENTIFIER}.alpha`,
     androidPackage: `${THREADSPACE_PRODUCTION_BUNDLE_IDENTIFIER}.alpha`,
     relyingParty: "clerk.t3.codes",
-    assets: PREVIEW_ASSETS,
+    assets: THREADSPACE_ALPHA_ASSETS,
   },
 } as const;
 

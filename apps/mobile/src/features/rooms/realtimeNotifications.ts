@@ -9,7 +9,7 @@ const FOREGROUND_REALTIME_PRESENTATION = "foreground-realtime";
 export async function presentRoomsRealtimeNotification(event: RoomsRealtimeEvent): Promise<void> {
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: event.sender_display_name ?? "Rooms",
+      title: event.sender_display_name ?? "Threadspace",
       body: event.summary,
       data: {
         eventId: event.event_id,
