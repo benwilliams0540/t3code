@@ -157,7 +157,7 @@ function parseJson(response: RoomsLocalHttpResponse): unknown {
       kind: "invalid_response",
       status: response.status,
       code: "invalid_json_response",
-      message: "The Rooms Local API returned a response that was not JSON.",
+      message: "The Threadspace Local API returned a response that was not JSON.",
       cause,
     });
   }
@@ -193,7 +193,7 @@ function throwServerError(response: RoomsLocalHttpResponse, body: unknown): neve
       kind: "invalid_response",
       status: response.status,
       code: "invalid_error_response",
-      message: `The Rooms Local API returned HTTP ${response.status} without a valid error body.`,
+      message: `The Threadspace Local API returned HTTP ${response.status} without a valid error body.`,
       cause,
     });
   }
@@ -213,7 +213,7 @@ function decodeSuccess<T>(
       kind: "invalid_response",
       status: response.status,
       code: "contract_decode_failed",
-      message: `The Rooms Local API response does not match ${contractId}.`,
+      message: `The Threadspace Local API response does not match ${contractId}.`,
       cause,
     });
   }
@@ -247,7 +247,8 @@ function validateStory(story: RoomsLocalStoryType, roomId: string, storyId?: str
       kind: "invalid_response",
       status: 200,
       code: "story_contract_invariant_failed",
-      message: "The Rooms Local story response contradicts its room, identity, or ledger source.",
+      message:
+        "The Threadspace Local story response contradicts its room, identity, or ledger source.",
     });
   }
 }
@@ -301,7 +302,7 @@ function defaultTransport(): RoomsLocalTransport {
     throw new RoomsLocalClientError({
       kind: "transport",
       code: "local_transport_unavailable",
-      message: "This app shell cannot reach the Rooms Local API.",
+      message: "This app shell cannot reach the Threadspace Local API.",
     });
   }
   return transport;
@@ -337,7 +338,7 @@ export function createRoomsLocalChannelsClient(
       throw new RoomsLocalClientError({
         kind: "transport",
         code: "local_api_unreachable",
-        message: `Could not reach the Rooms Local API at ${validation.value}.`,
+        message: `Could not reach the Threadspace Local API at ${validation.value}.`,
         cause,
       });
     }
@@ -371,7 +372,7 @@ export function createRoomsLocalChannelsClient(
       throw new RoomsLocalClientError({
         kind: "transport",
         code: "local_api_unreachable",
-        message: `Could not reach the Rooms Local API at ${validation.value}.`,
+        message: `Could not reach the Threadspace Local API at ${validation.value}.`,
         cause,
       });
     }
@@ -389,7 +390,7 @@ export function createRoomsLocalChannelsClient(
         kind: "invalid_response",
         status: response.status,
         code: "story_v2_required",
-        message: "The Rooms Local lifecycle command did not return a version-2 story.",
+        message: "The Threadspace Local lifecycle command did not return a version-2 story.",
       });
     }
     return value;
@@ -457,7 +458,8 @@ export function createRoomsLocalChannelsClient(
           kind: "invalid_response",
           status: 200,
           code: "change_contract_invariant_failed",
-          message: "The Rooms Local change response contradicts its request or cursor outcome.",
+          message:
+            "The Threadspace Local change response contradicts its request or cursor outcome.",
         });
       }
       return response;
@@ -476,7 +478,8 @@ export function createRoomsLocalChannelsClient(
           kind: "invalid_response",
           status: 200,
           code: "story_collection_invariant_failed",
-          message: "The Rooms Local story collection contradicts its requested room or ordering.",
+          message:
+            "The Threadspace Local story collection contradicts its requested room or ordering.",
         });
       }
       result.stories.forEach((story) => validateStory(story, roomId));
@@ -527,13 +530,13 @@ export function createRoomsLocalChannelsClient(
         bodyEncoding: "base64",
         contentType: input.mediaType,
       });
-      const value = decodeSuccess(response, decodeCasTuple, "Rooms CAS tuple");
+      const value = decodeSuccess(response, decodeCasTuple, "Threadspace CAS tuple");
       if (!validCasTuple(value)) {
         throw new RoomsLocalClientError({
           kind: "invalid_response",
           status: response.status,
           code: "cas_tuple_invariant_failed",
-          message: "The Rooms CAS response does not contain a valid SHA-256 tuple.",
+          message: "The Threadspace CAS response does not contain a valid SHA-256 tuple.",
         });
       }
       return value;

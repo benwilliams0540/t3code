@@ -25,7 +25,7 @@ describe("app sidebar selection", () => {
 });
 
 describe("AppSidebarLayout sidebar exclusivity", () => {
-  it("hands non-Rooms chat routes into the complete v3 workspace", () => {
+  it("hands non-Threadspace chat routes into the complete v3 workspace", () => {
     for (const pathname of ["/", "/draft/draft-local", "/environment-local/thread-local"]) {
       expect(shouldRouteIntoRoomsWorkspace({ pathname, sidebarVariant: "v3" })).toBe(true);
     }
@@ -43,7 +43,7 @@ describe("AppSidebarLayout sidebar exclusivity", () => {
     ).toBe(false);
   });
 
-  it("uses Rooms as the only sidebar for v3", () => {
+  it("uses Threadspace as the only sidebar for v3", () => {
     expect(
       resolveAppSidebarPresentation({
         isOnSettings: false,
@@ -93,7 +93,7 @@ describe("AppSidebarLayout sidebar exclusivity", () => {
   });
 });
 
-describe("Rooms macOS title-bar presentation", () => {
+describe("Threadspace macOS title-bar presentation", () => {
   it("reserves the traffic-light strip only for windowed V3 on macOS desktop", () => {
     expect(
       resolveRoomsTitlebarPresentation({

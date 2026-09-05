@@ -9,6 +9,7 @@ import { Label } from "~/components/ui/label";
 
 import { useRoomsDataSource, type RoomsHumanSourceFailure } from "../dataSource";
 import { isRoomsLocalClientError } from "../dataSource/localChannelsClient";
+import { ThreadspaceBrand } from "./ThreadspaceIdentity";
 
 interface AccessError {
   readonly code: string;
@@ -18,7 +19,7 @@ interface AccessError {
 function accessError(cause: unknown): AccessError {
   return isRoomsLocalClientError(cause)
     ? { code: cause.code, message: cause.message }
-    : { code: "human_access_failed", message: "The shared Rooms access request failed." };
+    : { code: "human_access_failed", message: "The shared Threadspace access request failed." };
 }
 
 function validCredential(value: string): boolean {
@@ -31,27 +32,33 @@ export function roomsHumanAccessCopy(state: RoomsHumanSourceFailure): readonly [
       return ["Authenticating with T3 Connect", "Waiting for the current Clerk account session."];
     case "signed-out":
       return [
-        "Sign in to shared Rooms",
+        "Sign in to shared Threadspace",
         "Sign in with your T3 Connect account to load the rooms you belong to.",
       ];
     case "authenticated-nonmember":
       return [
         "Authenticated, not yet a member",
-        "This account reached Rooms successfully but has no shared-room membership.",
+        "This account reached Threadspace successfully but has no shared-room membership.",
       ];
     case "invited":
       return ["Invitation ready", "Review the bounded room and role metadata before joining."];
     case "expired":
-      return ["Rooms session expired", "Sign in to T3 Connect again, then retry the session."];
+      return [
+        "Threadspace session expired",
+        "Sign in to T3 Connect again, then retry the session.",
+      ];
     case "authorization-failure":
-      return ["Shared Rooms authorization failed", state.error?.message ?? "Access was denied."];
+      return [
+        "Shared Threadspace authorization failed",
+        state.error?.message ?? "Access was denied.",
+      ];
     case "invalid-configuration":
       return [
-        "Shared Rooms is not configured",
-        "This build needs the dedicated Rooms API origin and Clerk JWT template.",
+        "Shared Threadspace is not configured",
+        "This build needs the dedicated Threadspace API origin and Clerk JWT template.",
       ];
     case "error":
-      return ["Shared Rooms is unavailable", state.error?.message ?? "The request failed."];
+      return ["Shared Threadspace is unavailable", state.error?.message ?? "The request failed."];
   }
 }
 
@@ -142,12 +149,13 @@ export function RoomsHumanAccessPanel({ state }: { readonly state: RoomsHumanSou
   return (
     <section className="flex min-h-full flex-1 items-center justify-center overflow-y-auto p-6">
       <div className="w-full max-w-xl rounded-2xl border border-border bg-card p-7">
+        <ThreadspaceBrand />
         {state.status === "signed-out" ? (
-          <LogInIcon className="size-6 text-muted-foreground" />
+          <LogInIcon className="mt-6 size-6 text-muted-foreground" />
         ) : state.status === "invited" ? (
-          <TicketCheckIcon className="size-6 text-muted-foreground" />
+          <TicketCheckIcon className="mt-6 size-6 text-muted-foreground" />
         ) : (
-          <ShieldAlertIcon className="size-6 text-muted-foreground" />
+          <ShieldAlertIcon className="mt-6 size-6 text-muted-foreground" />
         )}
         <h1 className="mt-4 text-lg font-semibold">{copy[0]}</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{copy[1]}</p>

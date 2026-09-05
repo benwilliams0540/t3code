@@ -10,9 +10,9 @@ import storyAtHumanQaDocument from "../dataSource/fixtures/local-stories-v2-stor
 import { RoomsLocalStoryV2 } from "../dataSource/localStoriesContract";
 import {
   countNewRoomsOutputSelections,
-  localStoryEvidenceGate,
   localStoryBlockingGroup,
   localStoryBlockingGroupLabel,
+  localStoryEvidenceGate,
   localStoryNeedsCurrentHuman,
   localStoryNextAction,
   localStoryOwnerId,
@@ -52,6 +52,20 @@ describe("Rooms story presentation", () => {
         story.created_by,
       ),
     ).toBe(false);
+  });
+
+  it("groups blocking separately from stage without inferring unavailable ownership", () => {
+    expect(localStoryBlockingGroup(story, story.created_by)).toBe("waiting-on-you");
+    expect(
+      localStoryBlockingGroup(
+        { ...story, gate: { ...story.gate!, reviewer_allowed: false } },
+        story.created_by,
+      ),
+    ).toBe("waiting-on-someone-else");
+    expect(localStoryBlockingGroup({ ...story, stage: "done" }, story.created_by)).toBe(
+      "not-blocked",
+    );
+    expect(localStoryBlockingGroup(story, null)).toBe("unknown");
   });
 
   it("deduplicates attached and repeated output selections", () => {

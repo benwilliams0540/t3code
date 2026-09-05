@@ -84,7 +84,7 @@ export function failedLocalRoomsDataSourceState(error: unknown): RoomsLocalSourc
     rooms: [],
     error: {
       code: "unexpected_local_source_error",
-      message: error instanceof Error ? error.message : "Rooms Local failed unexpectedly.",
+      message: error instanceof Error ? error.message : "Threadspace Local failed unexpectedly.",
       httpStatus: null,
     },
   };

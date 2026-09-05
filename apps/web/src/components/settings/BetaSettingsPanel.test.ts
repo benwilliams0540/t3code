@@ -12,7 +12,7 @@ describe("Beta settings", () => {
     });
   });
 
-  it("shows Rooms configuration only for sidebar version 3", () => {
+  it("shows Threadspace configuration only for sidebar version 3", () => {
     expect(shouldShowRoomsBetaSettings("v1")).toBe(false);
     expect(shouldShowRoomsBetaSettings("v2")).toBe(false);
     expect(shouldShowRoomsBetaSettings("v3")).toBe(true);

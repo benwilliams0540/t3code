@@ -54,7 +54,7 @@ export function useRoomsFeedAutoScroll(
 }
 
 /**
- * One renderer for every Rooms feed. Sample and Local sources project into the same activity shape,
+ * One renderer for every Threadspace feed. Sample and Local sources project into the same activity shape,
  * so a channel looks the same whether its truth came from the checked-in fixture or the ledger.
  */
 export function RoomsActivityFeed({
@@ -77,7 +77,7 @@ export function RoomsActivityFeed({
         <li
           className={cn(
             row.kind === "activity" && row.activity.cardKind === "message" && onActivitySelect
-              ? "group/activity relative rounded-lg transition-shadow"
+              ? "group/activity relative transition-shadow"
               : "",
             row.kind === "activity" && row.activity.item.id === selectedActivityId
               ? "ring-2 ring-amber-400/70"

@@ -1,12 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
-import {
-  ArrowLeftIcon,
-  ArrowRightIcon,
-  ChevronRightIcon,
-  PanelLeftCloseIcon,
-  PanelLeftIcon,
-} from "lucide-react";
+import { ArrowLeftIcon, ArrowRightIcon, PanelLeftCloseIcon, PanelLeftIcon } from "lucide-react";
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 
 import { useAppSidebarVariantSelection } from "~/components/appSidebarVariant";
@@ -38,6 +32,7 @@ import {
   ROOMS_SIDEBAR_WIDTH_STORAGE_KEY,
 } from "./roomsSidebarWidth";
 import { RoomsWorkspaceSurfaceView } from "./RoomsWorkspaceSurface";
+import { ThreadspaceBrand, ThreadspaceThemeControl } from "./ThreadspaceIdentity";
 
 function subscribeToViewportWidth(onChange: () => void): () => void {
   window.addEventListener("resize", onChange);
@@ -126,14 +121,19 @@ function RoomsBreadcrumbBar({
   const breadcrumbs = buildRoomsBreadcrumbs(room, surface);
 
   return (
-    <header className="workspace-topbar drag-region relative z-40 flex shrink-0 items-center gap-1 border-b border-border pl-[calc(var(--rooms-titlebar-leading-inset)+0.75rem)] pr-3 sm:pl-[calc(var(--rooms-titlebar-leading-inset)+1rem)] sm:pr-4">
+    <header className="threadspace-topbar workspace-topbar drag-region relative z-40 flex shrink-0 items-center gap-1 border-b border-border pl-[calc(var(--rooms-titlebar-leading-inset)+0.75rem)] pr-3 sm:pl-[calc(var(--rooms-titlebar-leading-inset)+1rem)] sm:pr-4">
+      <ThreadspaceBrand showMark={false} />
       <Button
-        aria-label={isSidebarVisible ? "Collapse Rooms sidebar" : "Expand Rooms sidebar"}
+        aria-label={
+          isSidebarVisible ? "Collapse Threadspace navigation" : "Expand Threadspace navigation"
+        }
         aria-pressed={isSidebarVisible}
-        className="mr-1 hidden size-[var(--workspace-titlebar-control-size)] shrink-0 md:inline-flex"
+        className="ml-2 mr-1 hidden size-[var(--workspace-titlebar-control-size)] shrink-0 rounded-sm md:inline-flex"
         onClick={onToggleSidebar}
         size="icon"
-        title={isSidebarVisible ? "Collapse Rooms sidebar" : "Expand Rooms sidebar"}
+        title={
+          isSidebarVisible ? "Collapse Threadspace navigation" : "Expand Threadspace navigation"
+        }
         variant="ghost"
       >
         {isSidebarVisible ? <PanelLeftCloseIcon /> : <PanelLeftIcon />}
@@ -158,7 +158,13 @@ function RoomsBreadcrumbBar({
       >
         <ArrowRightIcon />
       </Button>
-      <div className="ml-1 flex min-w-0 items-center gap-1 text-sm">
+      <span
+        className="ml-2 hidden h-7 shrink-0 items-center border border-border bg-card px-2 font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase sm:inline-flex"
+        data-threadspace-plate="room"
+      >
+        Room
+      </span>
+      <div className="threadspace-technical ml-2 flex min-w-0 items-center gap-1 font-mono text-[11px] tracking-[0.07em]">
         {breadcrumbs.map((breadcrumb, index) => {
           const target = breadcrumb.target;
           return (
@@ -166,12 +172,7 @@ function RoomsBreadcrumbBar({
               className="flex min-w-0 items-center gap-1"
               key={breadcrumb.label + "-" + String(index)}
             >
-              {index > 0 ? (
-                <ChevronRightIcon
-                  aria-hidden
-                  className="size-3 shrink-0 text-muted-foreground/45"
-                />
-              ) : null}
+              {index > 0 ? <span className="shrink-0 text-muted-foreground/55">/</span> : null}
               {target ? (
                 <button
                   className="truncate text-muted-foreground hover:text-foreground"
@@ -187,9 +188,13 @@ function RoomsBreadcrumbBar({
           );
         })}
       </div>
-      <span className="ml-auto hidden rounded-full border border-border bg-muted/35 px-2 py-0.5 text-[10px] text-muted-foreground sm:inline-flex">
+      <span
+        className="ml-auto hidden h-7 items-center border border-border bg-muted/35 px-2 font-mono text-[10px] tracking-[0.08em] text-muted-foreground uppercase sm:inline-flex"
+        data-threadspace-plate="source"
+      >
         {roomsSurfaceSourceLabel(surface, room.sourceMode)}
       </span>
+      <ThreadspaceThemeControl />
     </header>
   );
 }
@@ -213,6 +218,9 @@ function RoomsSourceStatePanel({
     <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground">
       <section className="flex flex-1 items-center justify-center p-6">
         <div className="max-w-md rounded-2xl border border-border bg-card p-7 text-center">
+          <div className="mb-6 flex justify-center">
+            <ThreadspaceBrand />
+          </div>
           <h1 className="text-lg font-semibold">{title}</h1>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{message}</p>
           {errorCode ? (
@@ -221,7 +229,7 @@ function RoomsSourceStatePanel({
           <div className="mt-5 flex flex-wrap justify-center gap-2">
             {onRetry ? <Button onClick={onRetry}>Retry connection</Button> : null}
             <Button onClick={onOpenSettings} variant="outline">
-              Rooms settings
+              Threadspace settings
             </Button>
             <Button onClick={onUseSample} variant="outline">
               Use Sample workspace
@@ -361,7 +369,7 @@ export function RoomsWorkspaceShell({
     surface.kind === "native-draft" ||
     (state.mode !== "sample" && surface.kind === "channel");
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground">
+    <SidebarInset className="threadspace-shell h-dvh min-h-0 overflow-hidden bg-background text-foreground">
       <RoomsBreadcrumbBar
         isSidebarVisible={isSidebarVisible}
         onToggleSidebar={toggleSidebar}
@@ -399,7 +407,7 @@ export function RoomsWorkspaceShell({
           </div>
           {isSidebarVisible ? (
             <button
-              aria-label="Resize Rooms sidebar"
+              aria-label="Resize Threadspace navigation"
               className="absolute inset-y-0 -right-2 z-30 w-4 cursor-col-resize touch-none after:absolute after:inset-y-0 after:left-1/2 after:w-px hover:after:bg-sidebar-border"
               data-rooms-sidebar-resize-handle=""
               onPointerCancel={sidebarResizeHandlers.onPointerCancel}
@@ -407,7 +415,7 @@ export function RoomsWorkspaceShell({
               onPointerMove={sidebarResizeHandlers.onPointerMove}
               onPointerUp={sidebarResizeHandlers.onPointerUp}
               tabIndex={-1}
-              title="Drag to resize Rooms sidebar"
+              title="Drag to resize Threadspace navigation"
               type="button"
             />
           ) : null}
@@ -417,6 +425,14 @@ export function RoomsWorkspaceShell({
             "flex min-h-0 min-w-0 flex-1 flex-col",
             surfaceOwnsScrolling ? "overflow-hidden" : "overflow-y-auto",
           )}
+          data-threadspace-canvas={
+            surface.kind === "channel" ||
+            surface.kind === "native-thread" ||
+            surface.kind === "native-draft"
+              ? "quiet"
+              : "drafting"
+          }
+          data-threadspace-surface={surface.kind}
         >
           <details className="shrink-0 border-b border-sidebar-border bg-sidebar text-sidebar-foreground surface-grain md:hidden">
             <summary className="cursor-pointer px-4 py-2 text-sm font-medium text-foreground">

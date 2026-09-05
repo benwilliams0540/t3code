@@ -67,10 +67,14 @@ export function RoomsInteractivePresent({
   return (
     <div className="mx-auto w-full max-w-6xl p-5 sm:p-8" data-rooms-present="distinct-principals">
       <header>
-        <h1 className="text-2xl font-semibold text-foreground">People and machines</h1>
+        <p className="threadspace-technical font-mono text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+          Fig. 01 · Room topology · available identities
+        </p>
+        <h1 className="mt-1 text-2xl font-semibold text-foreground">People and machines</h1>
         <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
           People, agents, and machine registrations remain separate identities. Matching
-          self-reported names never merge two machine IDs.
+          self-reported names never merge two machine IDs. Reachability is unknown unless the
+          current workspace explicitly exposes it.
         </p>
       </header>
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
