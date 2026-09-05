@@ -14,8 +14,14 @@ import * as Path from "effect/Path";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopConfig from "./DesktopConfig.ts";
 import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
+import {
+  DESKTOP_BUILD_BRAND,
+  THREADSPACE_DESKTOP,
+  type DesktopBrand,
+} from "../../../../scripts/lib/desktop-brand.ts";
 
 export interface MakeDesktopEnvironmentInput {
+  readonly brand?: DesktopBrand;
   readonly dirname: string;
   readonly homeDirectory: string;
   readonly platform: NodeJS.Platform;
@@ -93,12 +99,13 @@ function resolveDesktopAppStageLabel(input: {
 function resolveDesktopAppBranding(input: {
   readonly isDevelopment: boolean;
   readonly appVersion: string;
+  readonly baseName: string;
 }): DesktopAppBranding {
   const stageLabel = resolveDesktopAppStageLabel(input);
   return {
-    baseName: APP_BASE_NAME,
+    baseName: input.baseName,
     stageLabel,
-    displayName: `${APP_BASE_NAME} (${stageLabel})`,
+    displayName: `${input.baseName} (${stageLabel})`,
   };
 }
 
@@ -140,6 +147,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
   const homeDirectory = input.homeDirectory;
   const devServerUrl = config.devServerUrl;
   const isDevelopment = Option.isSome(devServerUrl);
+  const isThreadSpace = (input.brand ?? DESKTOP_BUILD_BRAND) === "threadspace";
   const appDataDirectory =
     input.platform === "win32"
       ? Option.getOrElse(config.appDataDirectory, () =>
@@ -148,21 +156,40 @@ const make = Effect.fn("desktop.environment.make")(function* (
       : input.platform === "darwin"
         ? path.join(homeDirectory, "Library", "Application Support")
         : Option.getOrElse(config.xdgConfigHome, () => path.join(homeDirectory, ".config"));
-  const configuredBaseDir = config.t3Home;
-  const baseDir = Option.getOrElse(configuredBaseDir, () => path.join(homeDirectory, ".t3"));
+  const userDataDirName = isThreadSpace
+    ? isDevelopment
+      ? "threadspace-dev"
+      : THREADSPACE_DESKTOP.dataDirName
+    : isDevelopment
+      ? "t3code-dev"
+      : "t3code";
+  const configuredBaseDir = isThreadSpace
+    ? Option.orElse(config.threadspaceHome, () =>
+        input.isPackaged ? Option.none() : config.t3Home,
+      )
+    : config.t3Home;
+  const baseDir = Option.getOrElse(configuredBaseDir, () =>
+    isThreadSpace
+      ? path.join(appDataDirectory, userDataDirName, "runtime")
+      : path.join(homeDirectory, ".t3"),
+  );
   const rootDir = path.resolve(input.dirname, "../../..");
   const appRoot = input.isPackaged ? input.appPath : rootDir;
   const branding = resolveDesktopAppBranding({
     isDevelopment,
     appVersion: input.appVersion,
+    baseName: isThreadSpace ? THREADSPACE_DESKTOP.baseName : APP_BASE_NAME,
   });
   const displayName = branding.displayName;
   const stateDir = path.join(
     baseDir,
     isDevelopment && Option.isNone(configuredBaseDir) ? "dev" : "userdata",
   );
-  const userDataDirName = isDevelopment ? "t3code-dev" : "t3code";
-  const legacyUserDataDirName = isDevelopment ? "T3 Code (Dev)" : "T3 Code (Alpha)";
+  const legacyUserDataDirName = isThreadSpace
+    ? userDataDirName
+    : isDevelopment
+      ? "T3 Code (Dev)"
+      : "T3 Code (Alpha)";
   const resourcesPath = input.resourcesPath;
 
   return DesktopEnvironment.of({
@@ -203,10 +230,14 @@ const make = Effect.fn("desktop.environment.make")(function* (
     branding,
     displayName,
     appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>
-      isDevelopment ? "com.t3tools.t3code.dev" : "com.t3tools.t3code",
+      isThreadSpace
+        ? `${THREADSPACE_DESKTOP.appId}${isDevelopment ? ".dev" : ""}`
+        : isDevelopment
+          ? "com.t3tools.t3code.dev"
+          : "com.t3tools.t3code",
     ),
-    linuxDesktopEntryName: isDevelopment ? "t3code-dev.desktop" : "t3code.desktop",
-    linuxWmClass: isDevelopment ? "t3code-dev" : "t3code",
+    linuxDesktopEntryName: `${isThreadSpace ? userDataDirName : isDevelopment ? "t3code-dev" : "t3code"}.desktop`,
+    linuxWmClass: isThreadSpace ? userDataDirName : isDevelopment ? "t3code-dev" : "t3code",
     userDataDirName,
     legacyUserDataDirName,
     defaultDesktopSettings: DesktopAppSettings.resolveDefaultDesktopSettings(input.appVersion),
@@ -246,7 +277,9 @@ const make = Effect.fn("desktop.environment.make")(function* (
       path.join(resourcesPath, "resources", fileName),
       path.join(resourcesPath, fileName),
     ],
-    developmentDockIconPath: path.join(rootDir, "assets", "dev", "blueprint-macos-1024.png"),
+    developmentDockIconPath: isThreadSpace
+      ? path.join(rootDir, THREADSPACE_DESKTOP.macIconPng)
+      : path.join(rootDir, "assets", "dev", "blueprint-macos-1024.png"),
   });
 });
 

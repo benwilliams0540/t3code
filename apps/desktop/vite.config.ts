@@ -5,6 +5,7 @@ import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 const repoEnv = loadRepoEnv();
 const shouldLaunchElectronAfterPack = process.env.T3CODE_DESKTOP_DEV === "1";
 const publicConfigDefine = {
+  __T3CODE_DESKTOP_BRAND__: JSON.stringify(process.env.T3CODE_DESKTOP_BRAND ?? "t3code"),
   __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__: JSON.stringify(
     repoEnv.T3CODE_CLERK_PUBLISHABLE_KEY?.trim() ?? "",
   ),

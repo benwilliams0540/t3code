@@ -1,6 +1,7 @@
 import * as Config from "effect/Config";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Option from "effect/Option";
+import { DESKTOP_BUILD_BRAND } from "../../../../scripts/lib/desktop-brand.ts";
 
 const trimNonEmptyOption = (value: string): Option.Option<string> => {
   const trimmed = value.trim();
@@ -36,6 +37,7 @@ export const DesktopConfig = Config.all({
   appDataDirectory: trimmedString("APPDATA"),
   xdgConfigHome: trimmedString("XDG_CONFIG_HOME"),
   t3Home: trimmedString("T3CODE_HOME"),
+  threadspaceHome: trimmedString("THREADSPACE_HOME"),
   devServerUrl: Config.url("VITE_DEV_SERVER_URL").pipe(Config.option),
   appUserModelIdOverride: trimmedString("T3CODE_DESKTOP_APP_USER_MODEL_ID"),
   devRemoteT3ServerEntryPath: trimmedString("T3CODE_DEV_REMOTE_T3_SERVER_ENTRY_PATH"),
@@ -48,8 +50,12 @@ export const DesktopConfig = Config.all({
     Config.withDefault(10_000),
   ),
   appImagePath: trimmedString("APPIMAGE"),
-  disableAutoUpdate: optionalBoolean("T3CODE_DISABLE_AUTO_UPDATE"),
-  disableClerkPasskeys: optionalBoolean("T3CODE_DISABLE_CLERK_PASSKEYS"),
+  disableAutoUpdate: Config.boolean("T3CODE_DISABLE_AUTO_UPDATE").pipe(
+    Config.withDefault(DESKTOP_BUILD_BRAND === "threadspace"),
+  ),
+  disableClerkPasskeys: Config.boolean("T3CODE_DISABLE_CLERK_PASSKEYS").pipe(
+    Config.withDefault(DESKTOP_BUILD_BRAND === "threadspace"),
+  ),
   mockUpdates: optionalBoolean("T3CODE_DESKTOP_MOCK_UPDATES"),
   mockUpdateServerPort: Config.port("T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT").pipe(
     Config.withDefault(3000),

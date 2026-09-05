@@ -143,6 +143,19 @@ const withIdentity = <A, E, R>(
 };
 
 describe("DesktopAppIdentity", () => {
+  it.effect("does not reuse T3 Alpha's existing browser profile for ThreadSpace", () =>
+    withIdentity(
+      Effect.gen(function* () {
+        const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
+        assert.equal(
+          yield* identity.resolveUserDataPath,
+          "/Users/alice/Library/Application Support/threadspace-alpha",
+        );
+      }),
+      { legacyPathExists: true, environment: { brand: "threadspace" } },
+    ),
+  );
+
   it.effect("keeps using the legacy userData path when it already exists", () =>
     withIdentity(
       Effect.gen(function* () {

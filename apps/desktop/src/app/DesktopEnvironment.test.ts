@@ -35,6 +35,46 @@ const makeEnvironment = (
   DesktopEnvironment.DesktopEnvironment.pipe(Effect.provide(makeEnvironmentLayer(overrides, env)));
 
 describe("DesktopEnvironment", () => {
+  it.effect("isolates packaged ThreadSpace even when the launch environment names T3's home", () =>
+    Effect.gen(function* () {
+      const environment = yield* makeEnvironment(
+        { brand: "threadspace", isPackaged: true },
+        { T3CODE_HOME: "/Users/alice/.t3" },
+      );
+      assert.equal(environment.displayName, "ThreadSpace (Alpha)");
+      assert.equal(
+        environment.baseDir,
+        "/Users/alice/Library/Application Support/threadspace-alpha/runtime",
+      );
+      assert.equal(environment.stateDir, `${environment.baseDir}/userdata`);
+      assert.equal(environment.userDataDirName, "threadspace-alpha");
+      assert.equal(environment.legacyUserDataDirName, "threadspace-alpha");
+      assert.equal(environment.appUserModelId, "com.threadspace.alpha");
+    }),
+  );
+
+  it.effect("honors an explicit ThreadSpace home independently of a T3 home", () =>
+    Effect.gen(function* () {
+      const environment = yield* makeEnvironment(
+        { brand: "threadspace", isPackaged: true },
+        { THREADSPACE_HOME: "/tmp/threadspace", T3CODE_HOME: "/tmp/t3" },
+      );
+      assert.equal(environment.stateDir, "/tmp/threadspace/userdata");
+    }),
+  );
+
+  it.effect("keeps the worktree-provided dev home for unpackaged ThreadSpace", () =>
+    Effect.gen(function* () {
+      const environment = yield* makeEnvironment(
+        { brand: "threadspace" },
+        { T3CODE_HOME: "/worktree/.t3", VITE_DEV_SERVER_URL: "http://localhost:5173" },
+      );
+      assert.equal(environment.stateDir, "/worktree/.t3/userdata");
+      assert.equal(environment.displayName, "ThreadSpace (Dev)");
+      assert.equal(environment.userDataDirName, "threadspace-dev");
+    }),
+  );
+
   it.effect("derives state paths and development identity inside Effect", () =>
     Effect.gen(function* () {
       const environment = yield* makeEnvironment(
