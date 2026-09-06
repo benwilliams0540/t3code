@@ -26,7 +26,7 @@ Known messy, unfinished, or deferred areas, so an agent picking up Rooms can see
 
 ## Repository hygiene
 
-- **Upstream sync has no cadence yet.** Decision: track upstream closely, merge (never rebase) `main` into `integrate/rooms-current` on a schedule; recipe still to be written here.
+- **Upstream sync is materially behind.** `upstream-sync.md` records the biweekly/after-release merge recipe and a 2026-09-05 baseline: the fork's `main` was 1,343 commits behind upstream, while Rooms carried 92 commits and shared 83 changed paths with upstream. The first reconciliation is still pending; refresh the report before starting it.
 
 - **The main CI workflow cannot run on this fork** (Blacksmith runners). `rooms-focused.yml` is manual-only by Monroe's request; proof is local focused checks recorded in PR bodies.
 - **Draft #2 is superseded by the Threadspace stack** (#12, web/desktop slice, mobile slice). Close it with a link once the mobile slice merges.
