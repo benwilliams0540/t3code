@@ -110,10 +110,14 @@ Decision to confirm: the local session token is persisted in the client's local 
 server so reopening the app lands back in the room. It is revocable server-side and cleared
 on sign-out. Electron encrypted storage would be a follow-up hardening, not a blocker.
 
+Live proof completed 2026-09-06 against a running server (owner set-up, room, invite, friend
+enrollment, second-device sign-in, live reply, server restart, sign-out rejection, wrong
+password, stranger and bad-invite refusal): see `reports/app-local-sign-in-live-proof.md`.
+
 Not yet done: native mobile enrollment/server selection UI, a packaged one-command server
 install with persistent data and backups, plain-HTTP LAN origins (the client still requires
-HTTPS or loopback; a tailnet with Tailscale Serve satisfies this), and the end-to-end proof
-against a running server rather than tests.
+HTTPS or loopback; a tailnet with Tailscale Serve satisfies this), the Electron desktop
+walk-through, and screenshot attachments in the channel composer.
 
 ## Inspected implementation today
 
