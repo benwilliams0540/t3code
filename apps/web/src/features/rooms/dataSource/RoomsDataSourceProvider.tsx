@@ -13,12 +13,9 @@ import {
 } from "react";
 
 import {
-  activateLocalRoomsSession,
   assertRoomsAuthenticationGeneration,
-  deactivateLocalRoomsSession,
   readRoomsAuthenticationSnapshot,
   readRoomsClerkToken,
-  setRoomsAuthenticationOwner,
   subscribeRoomsAuthentication,
 } from "~/cloud/roomsAuth";
 import { resolveCloudPublicConfig } from "~/cloud/publicConfig";
@@ -39,6 +36,7 @@ import {
   type RoomsLocalCommandResult,
 } from "./localChannelsClient";
 import { createRoomsHumanClient } from "./humanSharedClient";
+import { publishRoomsServerAuthentication } from "./publishServerAuthentication";
 import {
   createRoomsLocalAuthClient,
   type RoomsLocalEnrollInput,
@@ -300,17 +298,11 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
   // uses. A stored local session is re-activated here on every launch; Clerk keeps
   // its own intent and is republished when ownership returns to it.
   useEffect(() => {
-    if (authProvider === "local") {
-      if (storedLocalSessionToken !== null && storedLocalSessionAccountId !== null) {
-        activateLocalRoomsSession(storedLocalSessionAccountId, storedLocalSessionToken);
-      } else {
-        deactivateLocalRoomsSession();
-      }
-      setRoomsAuthenticationOwner("local");
-      return;
-    }
-    deactivateLocalRoomsSession();
-    setRoomsAuthenticationOwner("clerk");
+    publishRoomsServerAuthentication(
+      authProvider,
+      storedLocalSessionAccountId,
+      storedLocalSessionToken,
+    );
   }, [authProvider, storedLocalSessionAccountId, storedLocalSessionToken]);
   const [mode, setPersistedMode] = useLocalStorage(
     ROOMS_DATA_SOURCE_STORAGE_KEY,

@@ -27,7 +27,8 @@ If the server has its own sign-in:
 
 **Sign out** on the dashboard revokes this device's session on the server. **Forget this
 server** also drops the server from this device. The client keeps your session for that
-server only and never sends it to another address.
+server only and never sends it to another address. Changing the hostname, scheme, or port
+requires signing in again, even if the new address reports the same server ID.
 
 ## Create a shared room
 

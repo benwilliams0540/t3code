@@ -96,6 +96,79 @@ describe("shared server profile", () => {
     });
   });
 
+  it.each([
+    ["hostname", "https://other.example"],
+    ["port", "https://rooms.tailnet.example:8443"],
+  ])("drops a session when another %s advertises the same server ID", (_part, baseUrl) => {
+    const selected = roomsProfileAfterDiscovery(profile, baseUrl, {
+      contract,
+      provider: "local",
+      server: { id: session.serverId },
+    });
+    expect(selected.session).toBeNull();
+  });
+
+  it("drops a session when the scheme changes on the same loopback host", () => {
+    const selected = roomsProfileAfterDiscovery(
+      { ...profile, baseUrl: "http://localhost:3000" },
+      "https://localhost:3000",
+      { contract, provider: "local", server: { id: session.serverId } },
+    );
+    expect(selected.session).toBeNull();
+  });
+
+  it.each([
+    "https://rooms.tailnet.example/",
+    "https://ROOMS.tailnet.example",
+    "https://rooms.tailnet.example:443",
+    " https://ROOMS.tailnet.example:443/ ",
+  ])("keeps the session for the same normalized origin %s", (baseUrl) => {
+    const discovered = { contract, provider: "local", server: { id: session.serverId } } as const;
+    expect(roomsProfileAfterDiscovery(profile, baseUrl, discovered).session).toBe(session);
+    expect(
+      roomsProfileAfterDiscovery({ ...profile, baseUrl }, profile.baseUrl, discovered).session,
+    ).toBe(session);
+  });
+
+  it("drops a session when the same origin reports a different server ID", () => {
+    const selected = roomsProfileAfterDiscovery(profile, profile.baseUrl, {
+      contract,
+      provider: "local",
+      server: { id: "srv:other" },
+    });
+    expect(selected.session).toBeNull();
+  });
+
+  it("does not treat two invalid origins as the same origin", () => {
+    const selected = roomsProfileAfterDiscovery(
+      { ...profile, baseUrl: "https://rooms.tailnet.example/path" },
+      "https://other.example/path",
+      { contract, provider: "local", server: { id: session.serverId } },
+    );
+    expect(selected.session).toBeNull();
+  });
+
+  it.each([
+    ["local", "clerk"],
+    ["clerk", "local"],
+  ] as const)("drops a session when switching from %s to %s auth", (before, after) => {
+    const selected = roomsProfileAfterDiscovery({ ...profile, provider: before }, profile.baseUrl, {
+      contract,
+      provider: after,
+      server: { id: session.serverId },
+    });
+    expect(selected.session).toBeNull();
+  });
+
+  it("does not restore a session whose server ID no longer matches the selected profile", () => {
+    const selected = roomsProfileAfterDiscovery(
+      { ...profile, serverId: "srv:other" },
+      profile.baseUrl,
+      { contract, provider: "local", server: { id: session.serverId } },
+    );
+    expect(selected.session).toBeNull();
+  });
+
   it("records a sign-in exactly as the server described it and clears it on sign-out", () => {
     const signedIn = roomsProfileAfterSignIn("https://rooms.tailnet.example", {
       contract,
