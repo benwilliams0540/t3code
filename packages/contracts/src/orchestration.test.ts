@@ -8,6 +8,7 @@ import {
   ModelSelection,
   OrchestrationCommand,
   OrchestrationEvent,
+  OrchestrationEventStreamItem,
   OrchestrationGetFullThreadDiffInput,
   OrchestrationGetTurnDiffInput,
   OrchestrationLatestTurn,
@@ -23,6 +24,7 @@ import {
   ThreadCreatedPayload,
   ThreadTurnDiff,
   ThreadTurnStartRequestedPayload,
+  OrchestrationSubscribeEventsInput,
 } from "./orchestration.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
 
@@ -52,7 +54,49 @@ function getOptionValue(
 const decodeThreadCreatedPayload = Schema.decodeUnknownEffect(ThreadCreatedPayload);
 const decodeOrchestrationCommand = Schema.decodeUnknownEffect(OrchestrationCommand);
 const decodeOrchestrationEvent = Schema.decodeUnknownEffect(OrchestrationEvent);
+const decodeOrchestrationEventStreamItem = Schema.decodeUnknownEffect(OrchestrationEventStreamItem);
+const decodeOrchestrationSubscribeEventsInput = Schema.decodeUnknownEffect(
+  OrchestrationSubscribeEventsInput,
+);
+const encodeOrchestrationEventStreamItem = Schema.encodeEffect(OrchestrationEventStreamItem);
 const decodeThreadMetaUpdatedPayload = Schema.decodeUnknownEffect(ThreadMetaUpdatedPayload);
+
+it.effect("decodes a resumable raw orchestration event subscription input", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeOrchestrationSubscribeEventsInput({
+      afterSequence: 0,
+      requestCompletionMarker: true,
+    });
+
+    assert.deepStrictEqual(parsed, {
+      afterSequence: 0,
+      requestCompletionMarker: true,
+    });
+  }),
+);
+
+it.effect("rejects a negative raw orchestration event cursor", () =>
+  Effect.gen(function* () {
+    const result = yield* Effect.exit(
+      decodeOrchestrationSubscribeEventsInput({
+        afterSequence: -1,
+      }),
+    );
+
+    assert.strictEqual(result._tag, "Failure");
+  }),
+);
+
+it.effect("round-trips raw orchestration event stream frames", () =>
+  Effect.gen(function* () {
+    const synchronized = yield* decodeOrchestrationEventStreamItem({
+      kind: "synchronized",
+    });
+    const encoded = yield* encodeOrchestrationEventStreamItem(synchronized);
+
+    assert.deepStrictEqual(encoded, { kind: "synchronized" });
+  }),
+);
 
 it.effect("parses turn diff input when fromTurnCount <= toTurnCount", () =>
   Effect.gen(function* () {

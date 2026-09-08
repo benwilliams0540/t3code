@@ -8,11 +8,12 @@
 > [!NOTE]
 > Uses native modules so using Expo Go is not supported. You need to use the Expo Dev Client.
 
-This app has three variants:
+This app has four variants:
 
 - `development`: Expo dev client, installable side-by-side as `T3 Code Dev`
 - `preview`: persistent internal preview build, installable side-by-side as `T3 Code Preview`
 - `production`: store/release build as `T3 Code`
+- `rooms`: self-contained Rooms dogfood build as `T3 Code Rooms`
 
 Run commands from `apps/mobile`.
 
@@ -62,6 +63,14 @@ Build and run the local iOS preview app:
 
 ```bash
 vp run ios:preview
+```
+
+Build the side-by-side Rooms dogfood app (`com.t3tools.t3code.rooms`). This local Personal Team
+build keeps the core Rooms experience but omits the same extensions and Apple-only capabilities
+listed above:
+
+```bash
+vp run ios:rooms
 ```
 
 Force the review diff highlighter engine:

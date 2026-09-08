@@ -293,6 +293,7 @@ const PROVIDER_STATUS_DEBOUNCE_MS = 200;
 // past this gap a single O(active-threads) snapshot is cheaper and bounded.
 // Matches the event store's default page size (DEFAULT_READ_FROM_SEQUENCE_LIMIT).
 const SHELL_RESUME_MAX_GAP = 1_000;
+const ORCHESTRATION_EVENT_LIVE_BUFFER_CAPACITY = 1_024;
 
 function toAuthAccessStreamEvent(
   change: PairingGrantStore.BootstrapCredentialChange | SessionStore.SessionCredentialChange,
@@ -1099,6 +1100,69 @@ const makeWsRpcLayer = (
                   }),
               ),
             ),
+            { "rpc.aggregate": "orchestration" },
+          ),
+        [ORCHESTRATION_WS_METHODS.subscribeEvents]: (input) =>
+          observeRpcStreamEffect(
+            ORCHESTRATION_WS_METHODS.subscribeEvents,
+            Effect.gen(function* () {
+              // Subscribe before capturing the durable head so events committed
+              // during replay are buffered for the live tail. A slow client gets
+              // a typed stream failure when this bounded queue fills; reconnecting
+              // from its last applied cursor is lossless, while silently dropping
+              // an event or growing memory without bound would not be.
+              const liveBuffer = yield* Queue.dropping<
+                OrchestrationEvent,
+                OrchestrationGetSnapshotError
+              >(ORCHESTRATION_EVENT_LIVE_BUFFER_CAPACITY);
+              yield* Effect.forkScoped(
+                orchestrationEngine.streamDomainEvents.pipe(
+                  Stream.runForEach((event) =>
+                    Queue.offer(liveBuffer, event).pipe(
+                      Effect.flatMap((accepted) =>
+                        accepted
+                          ? Effect.void
+                          : Queue.fail(
+                              liveBuffer,
+                              new OrchestrationGetSnapshotError({
+                                message:
+                                  "Orchestration event subscriber fell behind the live stream",
+                              }),
+                            ).pipe(Effect.andThen(Effect.interrupt)),
+                      ),
+                    ),
+                  ),
+                ),
+                { startImmediately: true },
+              );
+
+              const headSequence = yield* orchestrationEngine.latestSequence;
+              const replayCount = Math.max(0, headSequence - input.afterSequence);
+              const replay = orchestrationEngine.readEvents(input.afterSequence, replayCount).pipe(
+                Stream.map((event) => ({ kind: "event" as const, event })),
+                Stream.mapError(
+                  (cause) =>
+                    new OrchestrationGetSnapshotError({
+                      message: "Failed to replay orchestration events",
+                      cause,
+                    }),
+                ),
+              );
+
+              // Any event at or below the captured head is already represented
+              // by durable replay. Filtering that exact overlap also dedupes the
+              // same eventId published live while its persisted row is replayed.
+              const live = Stream.fromQueue(liveBuffer).pipe(
+                Stream.filter((event) => event.sequence > headSequence),
+                Stream.map((event) => ({ kind: "event" as const, event })),
+              );
+              const synchronizedThenLive =
+                input.requestCompletionMarker === true
+                  ? Stream.concat(Stream.make({ kind: "synchronized" as const }), live)
+                  : live;
+
+              return Stream.concat(replay, synchronizedThenLive);
+            }),
             { "rpc.aggregate": "orchestration" },
           ),
         [ORCHESTRATION_WS_METHODS.subscribeShell]: (input) =>

@@ -123,6 +123,10 @@
       "types": "./src/relayUrl.ts",
       "import": "./src/relayUrl.ts"
     },
+    "./roomsTransport": {
+      "types": "./src/roomsTransport.ts",
+      "import": "./src/roomsTransport.ts"
+    },
     "./relayJwt": {
       "types": "./src/relayJwt.ts",
       "import": "./src/relayJwt.ts"

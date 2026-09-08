@@ -35,9 +35,17 @@
       "types": "./src/platform/index.ts",
       "default": "./src/platform/index.ts"
     },
+    "./rooms": {
+      "types": "./src/rooms/index.ts",
+      "default": "./src/rooms/index.ts"
+    },
     "./relay": {
       "types": "./src/relay/index.ts",
       "default": "./src/relay/index.ts"
+    },
+    "./rooms/agent-turns": {
+      "types": "./src/rooms/agentTurns.ts",
+      "default": "./src/rooms/agentTurns.ts"
     },
     "./state/auth": {
       "types": "./src/state/auth.ts",

@@ -25,10 +25,11 @@ vi.mock("@clerk/electron/storage", () => ({
 import * as DesktopClerk from "./DesktopClerk.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 
-const makeDesktopClerkLayer = (isDevelopment = true) => {
+const makeDesktopClerkLayer = (isDevelopment = true, clerkPasskeysEnabled = true) => {
   const environment = DesktopEnvironment.DesktopEnvironment.of({
     stateDir: "/tmp/t3-state",
     isDevelopment,
+    clerkPasskeysEnabled,
   } as unknown as DesktopEnvironment.DesktopEnvironment["Service"]);
 
   return DesktopClerk.layer.pipe(
@@ -132,7 +133,10 @@ describe("DesktopClerk", () => {
     storageMock.mockReturnValue(storageAdapter);
     createClerkBridgeMock.mockReturnValue(bridge);
 
-    assert.equal(DesktopClerk.createDesktopClerkBridge("/tmp/t3-state", isDevelopment), bridge);
+    assert.equal(
+      DesktopClerk.createDesktopClerkBridge("/tmp/t3-state", isDevelopment, true),
+      bridge,
+    );
     assert.deepEqual(storageMock.mock.calls, [[{ path: "/tmp/t3-state" }]]);
     assert.deepEqual(createClerkBridgeMock.mock.calls, [
       [
@@ -145,5 +149,25 @@ describe("DesktopClerk", () => {
     ]);
     storageMock.mockClear();
     createClerkBridgeMock.mockClear();
+  });
+
+  it.effect("can disable passkeys for an unsigned local package", () => {
+    const cleanup = vi.fn();
+    storageMock.mockReturnValue(storageAdapter);
+    createClerkBridgeMock.mockReturnValue({ cleanup });
+
+    return Effect.gen(function* () {
+      yield* Effect.scoped(Layer.build(makeDesktopClerkLayer(false, false)));
+
+      assert.deepEqual(createClerkBridgeMock.mock.calls, [
+        [
+          {
+            storage: storageAdapter,
+            passkeys: false,
+            renderer: { scheme: "t3code", host: "app" },
+          },
+        ],
+      ]);
+    });
   });
 });

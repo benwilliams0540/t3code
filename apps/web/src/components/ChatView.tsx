@@ -176,7 +176,11 @@ import {
   deriveLogicalProjectKeyFromSettings,
   selectProjectGroupingSettings,
 } from "../logicalProject";
-import { buildDraftThreadRouteParams } from "../threadRoutes";
+import {
+  buildDraftThreadRouteDestination,
+  buildServerThreadRouteDestination,
+  resolveNewThreadDraftRouteScope,
+} from "../threadRoutes";
 import {
   type ComposerImageAttachment,
   type DraftThreadEnvMode,
@@ -462,7 +466,7 @@ function formatOutgoingPrompt(params: {
 const SCRIPT_TERMINAL_COLS = 120;
 const SCRIPT_TERMINAL_ROWS = 30;
 
-type ChatViewProps =
+type ChatViewProps = (
   | {
       environmentId: EnvironmentId;
       threadId: ThreadId;
@@ -482,7 +486,10 @@ type ChatViewProps =
       threadSyncPhase?: never;
       routeKind: "draft";
       draftId: DraftId;
-    };
+    }
+) & {
+  roomsRoomSlug?: string;
+};
 
 interface TerminalLaunchContext {
   threadId: ThreadId;
@@ -1136,11 +1143,12 @@ function ChatViewContent(props: ChatViewProps) {
     onDiffPanelOpen,
     reserveTitleBarControlInset = true,
     forceExpandedMobileComposer = false,
+    roomsRoomSlug,
   } = props;
   const draftId = routeKind === "draft" ? props.draftId : null;
   const threadSyncPhase = routeKind === "server" ? (props.threadSyncPhase ?? null) : null;
   const threadDetailLoading = threadSyncPhase === "loading";
-  const handleNewThread = useNewThreadHandler();
+  const handleNewThread = useNewThreadHandler(roomsRoomSlug ? { roomsRoomSlug } : undefined);
   const routeThreadRef = useMemo(
     () => scopeThreadRef(environmentId, threadId),
     [environmentId, threadId],
@@ -1221,6 +1229,44 @@ function ChatViewContent(props: ChatViewProps) {
   const timestampFormat = settings.timestampFormat;
   const autoOpenPlanSidebar = settings.autoOpenPlanSidebar;
   const navigate = useNavigate();
+  const navigateToDraftRoute = useCallback(
+    (nextDraftId: DraftId) => {
+      const destination = buildDraftThreadRouteDestination(
+        resolveNewThreadDraftRouteScope({}, roomsRoomSlug),
+        nextDraftId,
+      );
+      if (destination.kind === "rooms") {
+        return navigate({
+          to: destination.to,
+          params: destination.params,
+        });
+      }
+      return navigate({
+        to: destination.to,
+        params: destination.params,
+      });
+    },
+    [navigate, roomsRoomSlug],
+  );
+  const navigateToThreadRoute = useCallback(
+    (nextEnvironmentId: EnvironmentId, nextThreadId: ThreadId) => {
+      const destination = buildServerThreadRouteDestination(
+        scopeThreadRef(nextEnvironmentId, nextThreadId),
+        roomsRoomSlug,
+      );
+      if (destination.kind === "rooms") {
+        return navigate({
+          to: destination.to,
+          params: destination.params,
+        });
+      }
+      return navigate({
+        to: destination.to,
+        params: destination.params,
+      });
+    },
+    [navigate, roomsRoomSlug],
+  );
   const { resolvedTheme } = useTheme();
   // Granular store selectors — avoid subscribing to prompt changes.
   const composerRuntimeMode = useComposerDraftStore(
@@ -1759,10 +1805,7 @@ function ChatViewContent(props: ChatViewProps) {
           },
         );
         if (routeKind !== "draft" || draftId !== storedDraftSession.draftId) {
-          await navigate({
-            to: "/draft/$draftId",
-            params: buildDraftThreadRouteParams(storedDraftSession.draftId),
-          });
+          await navigateToDraftRoute(storedDraftSession.draftId);
         }
         return storedDraftSession.threadId;
       }
@@ -1793,10 +1836,7 @@ function ChatViewContent(props: ChatViewProps) {
         interactionMode: DEFAULT_INTERACTION_MODE,
         ...input,
       });
-      await navigate({
-        to: "/draft/$draftId",
-        params: buildDraftThreadRouteParams(nextDraftId),
-      });
+      await navigateToDraftRoute(nextDraftId);
       return nextThreadId;
     },
     [
@@ -1805,7 +1845,7 @@ function ChatViewContent(props: ChatViewProps) {
       getDraftSession,
       getDraftSessionByLogicalProjectKey,
       isServerThread,
-      navigate,
+      navigateToDraftRoute,
       projectGroupingSettings,
       routeKind,
       setDraftThreadContext,
@@ -5326,13 +5366,7 @@ function ChatViewContent(props: ChatViewProps) {
       // Signal that the plan sidebar should open on the new thread when enabled.
       planSidebarOpenOnNextThreadRef.current = autoOpenPlanSidebar;
       const navigateResult = await settlePromise(() =>
-        navigate({
-          to: "/$environmentId/$threadId",
-          params: {
-            environmentId: activeThread.environmentId,
-            threadId: nextThreadId,
-          },
-        }),
+        navigateToThreadRoute(activeThread.environmentId, nextThreadId),
       );
       failure = navigateResult._tag === "Failure" ? navigateResult : null;
     }
@@ -5377,7 +5411,7 @@ function ChatViewContent(props: ChatViewProps) {
     isConnecting,
     isSendBusy,
     isServerThread,
-    navigate,
+    navigateToThreadRoute,
     resetLocalDispatch,
     runtimeMode,
     startThreadTurn,

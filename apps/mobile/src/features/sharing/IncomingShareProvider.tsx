@@ -21,6 +21,7 @@ import {
   removeIncomingShareDraft,
   writeIncomingShareDraft,
 } from "./incoming-share-storage";
+import { isMissingShareAppGroupError, shouldIngestNativeShares } from "./sharingAvailability";
 
 type IncomingShareContextValue = {
   readonly pendingShare: IncomingShareDraft | null;
@@ -39,13 +40,7 @@ type IncomingShareContextValue = {
 const IncomingShareContext = React.createContext<IncomingShareContextValue | null>(null);
 
 function receiveSharingEnabled(): boolean {
-  if (Platform.OS === "android") {
-    return true;
-  }
-  if (Platform.OS !== "ios") {
-    return false;
-  }
-  return Constants.expoConfig?.extra?.iosPersonalTeamBuild !== true;
+  return shouldIngestNativeShares(Platform.OS, Constants.expoConfig?.extra?.iosPersonalTeamBuild);
 }
 
 async function resolvedPayloadsForImages(): Promise<ReadonlyArray<ResolvedSharePayload>> {
@@ -164,6 +159,7 @@ export function IncomingShareProvider(props: React.PropsWithChildren) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const refreshPromiseRef = useRef<Promise<void> | null>(null);
+  const nativeIngestionUnavailableRef = useRef(false);
   const mountedRef = useRef(false);
 
   useEffect(() => {
@@ -180,12 +176,22 @@ export function IncomingShareProvider(props: React.PropsWithChildren) {
 
     const operation = (async () => {
       try {
-        const snapshot = await incomingShareInbox.refresh({ ingestNative: enabled });
+        const snapshot = await incomingShareInbox.refresh({
+          ingestNative: enabled && !nativeIngestionUnavailableRef.current,
+        });
         if (mountedRef.current) {
           setDrafts(snapshot);
           setError(null);
         }
       } catch (cause) {
+        if (isMissingShareAppGroupError(cause)) {
+          // A reduced-capability local build has no app group. If an old or
+          // mismatched embedded manifest says otherwise, fail closed for this
+          // process instead of reopening an unactionable alert on every
+          // foreground transition.
+          nativeIngestionUnavailableRef.current = true;
+          console.warn("[incoming-share] native share app group is unavailable", cause);
+        }
         const persisted = await incomingShareInbox
           .refresh({ ingestNative: false })
           .catch(() => null);
@@ -193,7 +199,13 @@ export function IncomingShareProvider(props: React.PropsWithChildren) {
           if (persisted) {
             setDrafts(persisted);
           }
-          setError(cause instanceof Error ? cause : new Error("Could not import shared content."));
+          setError(
+            isMissingShareAppGroupError(cause)
+              ? null
+              : cause instanceof Error
+                ? cause
+                : new Error("Could not import shared content."),
+          );
         }
       }
     })().finally(() => {

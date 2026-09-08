@@ -27,6 +27,7 @@ import {
   relayDocsRedirectRoute,
   relayEnvironmentAuthLayer,
   relayNotFoundRoute,
+  roomsServerApi,
   serverApi,
   traceRelayHttpRequestWith,
   tokenApi,
@@ -57,6 +58,7 @@ import * as EnvironmentPublishSignatures from "./environments/EnvironmentPublish
 import * as ManagedEndpointProvider from "./environments/ManagedEndpointProvider.ts";
 import * as ManagedTunnelLimits from "./environments/ManagedTunnelLimits.ts";
 import * as MobileRegistrations from "./agentActivity/MobileRegistrations.ts";
+import * as RoomsMessagePublisher from "./rooms/RoomsMessagePublisher.ts";
 
 const webcryptoLayer = Layer.succeed(
   Crypto.Crypto,
@@ -84,6 +86,7 @@ const relayApiLayer = Layer.mergeAll(
   tokenApi,
   dpopClientApi,
   serverApi,
+  roomsServerApi,
 );
 
 const CloudMintKeyPair = Alchemy.KeyPair("CloudMintKeyPair");
@@ -129,6 +132,14 @@ export const ApiLive = Api.make(
     const apnsKeyId = yield* Config.string("APNS_KEY_ID");
     const apnsBundleId = yield* Config.string("APNS_BUNDLE_ID");
     const apnsPrivateKey = yield* Config.redacted("APNS_PRIVATE_KEY");
+    const roomsApnsEnvironment = yield* Config.schema(
+      RelayConfiguration.ApnsEnvironment,
+      "ROOMS_APNS_ENVIRONMENT",
+    );
+    const roomsApnsTeamId = yield* Config.string("ROOMS_APNS_TEAM_ID");
+    const roomsApnsKeyId = yield* Config.string("ROOMS_APNS_KEY_ID");
+    const roomsApnsBundleId = yield* Config.string("ROOMS_APNS_BUNDLE_ID");
+    const roomsApnsPrivateKey = yield* Config.redacted("ROOMS_APNS_PRIVATE_KEY");
     const apnsDeliveryJobSigningSecret = yield* randomApnsDeliveryJobSigningSecret;
     const apnsDeliveryQueueSender = yield* Cloudflare.Queues.WriteQueue(apnsDeliveryQueue);
 
@@ -139,6 +150,7 @@ export const ApiLive = Api.make(
     const clerkSecretKey = yield* Config.redacted("CLERK_SECRET_KEY");
     const clerkPublishableKey = yield* Config.string("CLERK_PUBLISHABLE_KEY");
     const clerkJwtAudience = yield* Config.string("CLERK_JWT_AUDIENCE");
+    const roomsPublishToken = yield* Config.redacted("ROOMS_PUBLISH_TOKEN");
 
     const cloudMintPrivateKey = yield* cloudMintKeyPair.privateKey;
     const cloudMintPublicKey = yield* cloudMintKeyPair.publicKey;
@@ -166,6 +178,13 @@ export const ApiLive = Api.make(
           bundleId: apnsBundleId,
           privateKey: apnsPrivateKey,
         },
+        roomsApns: {
+          environment: roomsApnsEnvironment,
+          teamId: roomsApnsTeamId,
+          keyId: roomsApnsKeyId,
+          bundleId: roomsApnsBundleId,
+          privateKey: roomsApnsPrivateKey,
+        },
         apnsDeliveryJobSigningSecret: yield* apnsDeliveryJobSigningSecret,
         clerkSecretKey,
         clerkPublishableKey,
@@ -174,6 +193,7 @@ export const ApiLive = Api.make(
         cloudMintPublicKey: yield* cloudMintPublicKey,
         managedEndpointBaseDomain: yield* managedEndpointZoneName,
         managedEndpointNamespace: stage,
+        roomsPublishToken,
       });
     });
 
@@ -186,7 +206,7 @@ export const ApiLive = Api.make(
     );
 
     const runtimeLayer = Layer.empty.pipe(
-      Layer.provideMerge(MobileRegistrations.layer),
+      Layer.provideMerge(Layer.merge(MobileRegistrations.layer, RoomsMessagePublisher.layer)),
       Layer.provideMerge(AgentActivityPublisher.layer),
       Layer.provideMerge(EnvironmentConnector.layer),
       Layer.provideMerge(EnvironmentLinker.layer),

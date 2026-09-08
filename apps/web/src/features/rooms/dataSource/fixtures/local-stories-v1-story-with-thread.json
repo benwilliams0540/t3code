@@ -1,0 +1,33 @@
+{
+  "id": "story:019fb900-1000-7000-8000-000000000020",
+  "room_id": "room:019fb900-1000-7000-8000-000000000001",
+  "title": "Finish configurable composer send shortcuts",
+  "story_type": "feature",
+  "workflow_version": 1,
+  "stage": "backlog",
+  "created_by": "h:019fb900-1000-7000-8000-000000000002",
+  "created_at": "2026-08-01T23:45:00.000Z",
+  "created_seq": 5,
+  "source_event": {
+    "seq": 5,
+    "event_id": "019fb900-1000-7000-8000-000000000021",
+    "type": "task.created",
+    "schema": 2
+  },
+  "native_thread": {
+    "room_id": "room:019fb900-1000-7000-8000-000000000001",
+    "story_id": "story:019fb900-1000-7000-8000-000000000020",
+    "environment_id": "environment-local",
+    "project_id": "project-rooms",
+    "thread_id": "thread-composer-shortcuts",
+    "linked_by": "h:019fb900-1000-7000-8000-000000000002",
+    "linked_at": "2026-08-01T23:46:00.000Z",
+    "linked_seq": 6,
+    "source_event": {
+      "seq": 6,
+      "event_id": "019fb900-1000-7000-8000-000000000022",
+      "type": "task.thread-linked",
+      "schema": 1
+    }
+  }
+}

@@ -1,0 +1,945 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rooms.local/contracts/workspace-read/v2/schema.json",
+  "title": "Rooms workspace-read contract v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract", "semantics", "principals", "rooms", "workspaces", "states"],
+  "properties": {
+    "contract": { "$ref": "#/$defs/contract" },
+    "semantics": { "$ref": "#/$defs/semantics" },
+    "principals": { "type": "array", "minItems": 4, "items": { "$ref": "#/$defs/principal" } },
+    "rooms": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/room" } },
+    "workspaces": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/workspace" } },
+    "states": { "type": "array", "minItems": 7, "items": { "$ref": "#/$defs/stateExample" } }
+  },
+  "$defs": {
+    "uuidV7": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "typedId": {
+      "type": "string",
+      "pattern": "^(fixture|room|workspace|channel|thread|run|task|document|revision|workflow|stage|evidence|decision|audit|feed-item|atlas|attention|activity|approval|source):[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "principalId": {
+      "type": "string",
+      "pattern": "^[ham]:[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "gitObjectId": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "nullableSequence": {
+      "oneOf": [
+        { "type": "integer", "minimum": 0 },
+        { "type": "null" }
+      ]
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "schema_uri", "fixture_id", "captured_at"],
+      "properties": {
+        "id": { "const": "rooms.workspace-read" },
+        "version": { "const": 2 },
+        "schema_uri": { "const": "https://rooms.local/contracts/workspace-read/v2/schema.json" },
+        "fixture_id": { "$ref": "#/$defs/typedId" },
+        "captured_at": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "semantics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["room_selection", "pagination", "unread", "authorization", "attribution", "freshness"],
+      "properties": {
+        "room_selection": { "const": "one_complete_workspace_per_declared_room" },
+        "pagination": { "const": "global_seq_ascending_exclusive_cursor_pinned_snapshot" },
+        "unread": { "const": "member_and_stream_monotonic_server_cursor" },
+        "authorization": { "const": "authentication_then_membership_then_role" },
+        "attribution": { "const": "rooms_writer_distinct_from_upstream_source_actor" },
+        "freshness": { "const": "reachability_independent_from_mirror_and_source_freshness" }
+      }
+    },
+    "principal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "display_name"],
+      "properties": {
+        "id": { "$ref": "#/$defs/principalId" },
+        "type": { "enum": ["human", "agent", "machine"] },
+        "display_name": { "type": "string", "minLength": 1 },
+        "machine_id": { "$ref": "#/$defs/principalId" },
+        "agent_kind": { "enum": ["execution", "adapter"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "agent" } } },
+          "then": { "required": ["machine_id", "agent_kind"] }
+        }
+      ]
+    },
+    "unread": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["read_through_seq", "latest_visible_seq", "count", "counted_event_seqs"],
+      "properties": {
+        "read_through_seq": { "type": "integer", "minimum": 0 },
+        "latest_visible_seq": { "type": "integer", "minimum": 0 },
+        "count": { "type": "integer", "minimum": 0 },
+        "counted_event_seqs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "room": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "slug", "name", "locality", "declared_by", "membership", "unread"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typedId" },
+        "slug": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "name": { "type": "string", "minLength": 1 },
+        "locality": { "enum": ["local_only", "shared"] },
+        "declared_by": { "$ref": "#/$defs/principalId" },
+        "membership": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "role"],
+          "properties": {
+            "status": { "const": "member" },
+            "role": { "enum": ["observer", "operator", "admin"] }
+          }
+        },
+        "unread": { "$ref": "#/$defs/unread" }
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "principal_id", "membership", "role"],
+      "properties": {
+        "status": { "const": "authorized" },
+        "principal_id": { "$ref": "#/$defs/principalId" },
+        "membership": { "const": "member" },
+        "role": { "enum": ["observer", "operator", "admin"] }
+      }
+    },
+    "cas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hash", "bytes", "media_type"],
+      "properties": {
+        "hash": { "$ref": "#/$defs/sha256" },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "media_type": { "type": "string", "minLength": 1 }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence", "reviewer"],
+      "properties": {
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "kinds"],
+          "properties": {
+            "mode": { "enum": ["any", "all"] },
+            "kinds": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "enum": ["command-output", "diff", "test-run", "artifact", "screenshot", "annotation", "link"] }
+            }
+          }
+        },
+        "reviewer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["required", "allowed_principal_types", "minimum_reviewers", "forbid_self_review"],
+          "properties": {
+            "required": { "type": "boolean" },
+            "allowed_principal_types": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "enum": ["human", "agent", "machine"] }
+            },
+            "minimum_reviewers": { "type": "integer", "minimum": 0 },
+            "forbid_self_review": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "key", "name", "position", "gate"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typedId" },
+        "key": { "enum": ["backlog", "in_progress", "human_qa", "done"] },
+        "name": { "type": "string", "minLength": 1 },
+        "position": { "type": "integer", "minimum": 0 },
+        "gate": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/gate" }
+          ]
+        }
+      }
+    },
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "story_type", "version", "stages"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typedId" },
+        "story_type": { "enum": ["feature", "security"] },
+        "version": { "type": "integer", "minimum": 1 },
+        "stages": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": { "$ref": "#/$defs/stage" }
+        }
+      }
+    },
+    "story": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "room_id", "title", "story_type", "workflow_id", "workflow_version", "stage_id", "owner_id", "delegate", "labels", "evidence_ids", "gate_state"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typedId" },
+        "room_id": { "$ref": "#/$defs/typedId" },
+        "title": { "type": "string", "minLength": 1 },
+        "story_type": { "enum": ["feature", "security"] },
+        "workflow_id": { "$ref": "#/$defs/typedId" },
+        "workflow_version": { "type": "integer", "minimum": 1 },
+        "stage_id": { "$ref": "#/$defs/typedId" },
+        "owner_id": { "$ref": "#/$defs/principalId" },
+        "delegate": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["agent_id", "thread_id", "run_id", "run_status"],
+              "properties": {
+                "agent_id": { "$ref": "#/$defs/principalId" },
+                "thread_id": { "$ref": "#/$defs/typedId" },
+                "run_id": { "$ref": "#/$defs/typedId" },
+                "run_status": { "enum": ["queued", "running", "blocked", "completed", "failed"] }
+              }
+            }
+          ]
+        },
+        "labels": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "evidence_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/typedId" } },
+        "gate_state": { "enum": ["not_applicable", "waiting_for_evidence", "waiting_for_review", "passed"] }
+      }
+    },
+    "channel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "room_id", "name", "purpose", "unread"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typedId" },
+        "room_id": { "$ref": "#/$defs/typedId" },
+        "name": { "type": "string", "pattern": "^# [a-z0-9-]+$" },
+        "purpose": { "type": "string", "minLength": 1 },
+        "unread": { "$ref": "#/$defs/unread" }
+      }
+    },
+    "sourceEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "event_id", "type", "schema"],
+      "properties": {
+        "seq": { "type": "integer", "minimum": 1 },
+        "event_id": { "$ref": "#/$defs/uuidV7" },
+        "type": { "type": "string", "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$" },
+        "schema": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "upstreamKnown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "source_id", "environment_id", "event_id", "sequence", "actor_kind"],
+      "properties": {
+        "status": { "const": "coarse" },
+        "source_id": { "$ref": "#/$defs/typedId" },
+        "environment_id": { "type": "string", "pattern": "^env:[a-z0-9-]+$" },
+        "event_id": { "type": "string", "minLength": 1 },
+        "sequence": { "type": "integer", "minimum": 0 },
+        "actor_kind": { "enum": ["human", "assistant", "system", "tool", "unknown"] }
+      }
+    },
+    "upstreamUnavailable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "source_id", "environment_id", "event_id", "sequence", "reason"],
+      "properties": {
+        "status": { "const": "unavailable" },
+        "source_id": { "$ref": "#/$defs/typedId" },
+        "environment_id": { "type": "string", "pattern": "^env:[a-z0-9-]+$" },
+        "event_id": { "type": "string", "minLength": 1 },
+        "sequence": { "type": "integer", "minimum": 0 },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "explicitAttribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "writer_principal_id", "actor_principal_id"],
+      "properties": {
+        "mode": { "const": "explicit_principal" },
+        "writer_principal_id": { "$ref": "#/$defs/principalId" },
+        "actor_principal_id": { "$ref": "#/$defs/principalId" }
+      }
+    },
+    "mirroredAttribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "writer_principal_id", "upstream"],
+      "properties": {
+        "mode": { "const": "mirrored_source" },
+        "writer_principal_id": { "$ref": "#/$defs/principalId" },
+        "upstream": {
+          "oneOf": [
+            { "$ref": "#/$defs/upstreamKnown" },
+            { "$ref": "#/$defs/upstreamUnavailable" }
+          ]
+        }
+      }
+    },
+    "attribution": {
+      "oneOf": [
+        { "$ref": "#/$defs/explicitAttribution" },
+        { "$ref": "#/$defs/mirroredAttribution" }
+      ]
+    },
+    "feedBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "room_id", "channel_id", "kind", "occurred_at", "summary", "source_event", "attribution", "payload"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typedId" },
+        "room_id": { "$ref": "#/$defs/typedId" },
+        "channel_id": { "$ref": "#/$defs/typedId" },
+        "kind": {
+          "enum": ["human_message", "reaction", "story_lifecycle", "run_lifecycle", "evidence_attached", "approval_requested", "approval_decided", "human_gate", "unknown_schema", "unavailable"]
+        },
+        "occurred_at": { "$ref": "#/$defs/timestamp" },
+        "summary": { "type": "string", "minLength": 1 },
+        "source_event": { "$ref": "#/$defs/sourceEvent" },
+        "attribution": { "$ref": "#/$defs/attribution" },
+        "payload": { "type": "object" }
+      }
+    },
+    "humanMessagePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["body_markdown"],
+      "properties": { "body_markdown": { "type": "string", "minLength": 1 } }
+    },
+    "reactionPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["emoji", "target_feed_item_id", "operation"],
+      "properties": {
+        "emoji": { "type": "string", "minLength": 1 },
+        "target_feed_item_id": { "$ref": "#/$defs/typedId" },
+        "operation": { "enum": ["added", "removed"] }
+      }
+    },
+    "storyLifecyclePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["story_id", "from_stage_id", "to_stage_id"],
+      "properties": {
+        "story_id": { "$ref": "#/$defs/typedId" },
+        "from_stage_id": {
+          "oneOf": [
+            { "$ref": "#/$defs/typedId" },
+            { "type": "null" }
+          ]
+        },
+        "to_stage_id": { "$ref": "#/$defs/typedId" }
+      }
+    },
+    "runLifecyclePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["thread_id", "run_id", "status"],
+      "properties": {
+        "thread_id": { "$ref": "#/$defs/typedId" },
+        "run_id": { "$ref": "#/$defs/typedId" },
+        "status": { "enum": ["queued", "running", "blocked", "completed", "failed"] }
+      }
+    },
+    "evidenceAttachedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["story_id", "evidence_id"],
+      "properties": {
+        "story_id": { "$ref": "#/$defs/typedId" },
+        "evidence_id": { "$ref": "#/$defs/typedId" }
+      }
+    },
+    "approvalPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approval_id", "story_id", "state", "scope"],
+      "properties": {
+        "approval_id": { "$ref": "#/$defs/typedId" },
+        "story_id": { "$ref": "#/$defs/typedId" },
+        "state": { "enum": ["requested", "approved", "needs_changes", "rejected"] },
+        "scope": { "enum": ["once", "session"] }
+      }
+    },
+    "humanGatePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["story_id", "stage_id", "state", "required_evidence_ids", "reviewer_ids"],
+      "properties": {
+        "story_id": { "$ref": "#/$defs/typedId" },
+        "stage_id": { "$ref": "#/$defs/typedId" },
+        "state": { "enum": ["waiting_for_evidence", "waiting_for_review", "passed"] },
+        "required_evidence_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/typedId" } },
+        "reviewer_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/principalId" } }
+      }
+    },
+    "unknownSchemaPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_type", "event_schema", "display"],
+      "properties": {
+        "event_type": { "type": "string", "minLength": 1 },
+        "event_schema": { "type": "integer", "minimum": 1 },
+        "display": { "const": "unknown_event" }
+      }
+    },
+    "unavailablePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resource_kind", "reason", "retryable"],
+      "properties": {
+        "resource_kind": { "enum": ["source_event", "evidence", "document", "thread"] },
+        "reason": { "type": "string", "minLength": 1 },
+        "retryable": { "type": "boolean" }
+      }
+    },
+    "feedItem": {
+      "oneOf": [
+        { "allOf": [{ "$ref": "#/$defs/feedBase" }, { "properties": { "kind": { "const": "human_message" }, "payload": { "$ref": "#/$defs/humanMessagePayload" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/feedBase" }, { "properties": { "kind": { "const": "reaction" }, "payload": { "$ref": "#/$defs/reactionPayload" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/feedBase" }, { "properties": { "kind": { "const": "story_lifecycle" }, "payload": { "$ref": "#/$defs/storyLifecyclePayload" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/feedBase" }, { "properties": { "kind": { "const": "run_lifecycle" }, "payload": { "$ref": "#/$defs/runLifecyclePayload" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/feedBase" }, { "properties": { "kind": { "const": "evidence_attached" }, "payload": { "$ref": "#/$defs/evidenceAttachedPayload" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/feedBase" }, { "properties": { "kind": { "const": "approval_requested" }, "payload": { "$ref": "#/$defs/approvalPayload" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/feedBase" }, { "properties": { "kind": { "const": "approval_decided" }, "payload": { "$ref": "#/$defs/approvalPayload" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/feedBase" }, { "properties": { "kind": { "const": "human_gate" }, "payload": { "$ref": "#/$defs/humanGatePayload" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/feedBase" }, { "properties": { "kind": { "const": "unknown_schema" }, "payload": { "$ref": "#/$defs/unknownSchemaPayload" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/feedBase" }, { "properties": { "kind": { "const": "unavailable" }, "payload": { "$ref": "#/$defs/unavailablePayload" } } }] }
+      ]
+    },
+    "pageInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["after_seq", "limit", "snapshot_head_seq", "next_cursor", "has_more"],
+      "properties": {
+        "after_seq": { "$ref": "#/$defs/nullableSequence" },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "snapshot_head_seq": { "type": "integer", "minimum": 1 },
+        "next_cursor": { "$ref": "#/$defs/nullableSequence" },
+        "has_more": { "type": "boolean" }
+      }
+    },
+    "feed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["room_id", "channel_id", "page_info", "items"],
+      "properties": {
+        "room_id": { "$ref": "#/$defs/typedId" },
+        "channel_id": { "$ref": "#/$defs/typedId" },
+        "page_info": { "$ref": "#/$defs/pageInfo" },
+        "items": { "type": "array", "items": { "$ref": "#/$defs/feedItem" } }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "room_id", "kind", "name", "revision", "reachability", "mirror"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typedId" },
+        "room_id": { "$ref": "#/$defs/typedId" },
+        "kind": { "enum": ["t3_environment", "git_repository"] },
+        "name": { "type": "string", "minLength": 1 },
+        "revision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["pinned_revision", "observed_head", "observed_at"],
+          "properties": {
+            "pinned_revision": { "$ref": "#/$defs/gitObjectId" },
+            "observed_head": { "$ref": "#/$defs/gitObjectId" },
+            "observed_at": { "$ref": "#/$defs/timestamp" }
+          }
+        },
+        "reachability": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "checked_at"],
+          "properties": {
+            "state": { "enum": ["reachable", "unreachable", "unknown"] },
+            "checked_at": { "$ref": "#/$defs/timestamp" }
+          }
+        },
+        "mirror": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["freshness", "as_of", "upstream_sequence"],
+          "properties": {
+            "freshness": { "enum": ["fresh", "stale", "unknown"] },
+            "as_of": { "$ref": "#/$defs/timestamp" },
+            "upstream_sequence": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "thread": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "room_id", "title", "delegated_agent_id", "machine_id", "source_id", "provider", "environment_id", "status", "as_of", "mirror", "machine"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typedId" },
+        "room_id": { "$ref": "#/$defs/typedId" },
+        "title": { "type": "string", "minLength": 1 },
+        "delegated_agent_id": { "$ref": "#/$defs/principalId" },
+        "machine_id": { "$ref": "#/$defs/principalId" },
+        "source_id": { "$ref": "#/$defs/typedId" },
+        "provider": { "type": "string", "minLength": 1 },
+        "environment_id": { "type": "string", "pattern": "^env:[a-z0-9-]+$" },
+        "status": { "enum": ["queued", "running", "blocked", "completed", "failed", "archived"] },
+        "as_of": { "$ref": "#/$defs/timestamp" },
+        "mirror": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["adapter_principal_id", "upstream_actor", "upstream_sequence", "last_synced_at", "freshness"],
+          "properties": {
+            "adapter_principal_id": { "$ref": "#/$defs/principalId" },
+            "upstream_actor": {
+              "oneOf": [
+                { "$ref": "#/$defs/upstreamKnown" },
+                { "$ref": "#/$defs/upstreamUnavailable" }
+              ]
+            },
+            "upstream_sequence": { "type": "integer", "minimum": 0 },
+            "last_synced_at": { "$ref": "#/$defs/timestamp" },
+            "freshness": { "enum": ["fresh", "stale", "unknown"] }
+          }
+        },
+        "machine": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reachable", "checked_at"],
+          "properties": {
+            "reachable": { "type": "boolean" },
+            "checked_at": { "$ref": "#/$defs/timestamp" }
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "room_id", "story_id", "run_id", "producer_id", "kind", "cas", "note", "occurred_at"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typedId" },
+        "room_id": { "$ref": "#/$defs/typedId" },
+        "story_id": { "$ref": "#/$defs/typedId" },
+        "run_id": {
+          "oneOf": [
+            { "$ref": "#/$defs/typedId" },
+            { "type": "null" }
+          ]
+        },
+        "producer_id": { "$ref": "#/$defs/principalId" },
+        "kind": { "enum": ["command-output", "diff", "test-run", "artifact", "screenshot", "annotation", "link"] },
+        "cas": { "$ref": "#/$defs/cas" },
+        "note": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        },
+        "occurred_at": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "room_id", "story_id", "author_id", "status", "title", "rationale_markdown", "occurred_at"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typedId" },
+        "room_id": { "$ref": "#/$defs/typedId" },
+        "story_id": {
+          "oneOf": [
+            { "$ref": "#/$defs/typedId" },
+            { "type": "null" }
+          ]
+        },
+        "author_id": { "$ref": "#/$defs/principalId" },
+        "status": { "enum": ["proposed", "accepted", "rejected", "superseded"] },
+        "title": { "type": "string", "minLength": 1 },
+        "rationale_markdown": { "type": "string", "minLength": 1 },
+        "occurred_at": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "room_id", "actor_id", "action", "subject", "source_event_id", "summary", "occurred_at"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typedId" },
+        "room_id": { "$ref": "#/$defs/typedId" },
+        "actor_id": { "$ref": "#/$defs/principalId" },
+        "action": { "enum": ["story_changed", "evidence_recorded", "decision_recorded", "approval_recorded", "mirror_observed"] },
+        "subject": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id"],
+          "properties": {
+            "kind": { "enum": ["story", "evidence", "decision", "thread", "document", "approval"] },
+            "id": { "$ref": "#/$defs/typedId" }
+          }
+        },
+        "source_event_id": { "$ref": "#/$defs/uuidV7" },
+        "summary": { "type": "string", "minLength": 1 },
+        "occurred_at": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "room_id", "title", "current_revision_id", "source", "freshness", "revisions", "atlas", "linked_story_ids", "linked_decision_ids"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typedId" },
+        "room_id": { "$ref": "#/$defs/typedId" },
+        "title": { "type": "string", "minLength": 1 },
+        "current_revision_id": { "$ref": "#/$defs/typedId" },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["remote_url", "pinned_revision", "observed_head"],
+          "properties": {
+            "remote_url": { "type": "string", "format": "uri" },
+            "pinned_revision": { "$ref": "#/$defs/gitObjectId" },
+            "observed_head": { "$ref": "#/$defs/gitObjectId" }
+          }
+        },
+        "freshness": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "compared_at", "observed_head"],
+          "properties": {
+            "state": { "enum": ["current", "queued", "stale"] },
+            "compared_at": { "$ref": "#/$defs/timestamp" },
+            "observed_head": { "$ref": "#/$defs/gitObjectId" }
+          }
+        },
+        "revisions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "author_id", "state", "created_at", "source_revision", "body_markdown"],
+            "properties": {
+              "id": { "$ref": "#/$defs/typedId" },
+              "author_id": { "$ref": "#/$defs/principalId" },
+              "state": { "enum": ["current", "queued", "superseded"] },
+              "created_at": { "$ref": "#/$defs/timestamp" },
+              "source_revision": { "$ref": "#/$defs/gitObjectId" },
+              "body_markdown": { "type": "string" }
+            }
+          }
+        },
+        "atlas": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "revision_id", "state", "route"],
+          "properties": {
+            "id": { "$ref": "#/$defs/typedId" },
+            "revision_id": { "$ref": "#/$defs/typedId" },
+            "state": { "enum": ["current", "queued", "stale"] },
+            "route": { "type": "string", "pattern": "^/rooms/" }
+          }
+        },
+        "linked_story_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/typedId" } },
+        "linked_decision_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/typedId" } }
+      }
+    },
+    "attention": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "kind", "priority", "story_id", "stage_id", "reason"],
+          "properties": {
+            "id": { "$ref": "#/$defs/typedId" },
+            "kind": { "const": "human_gate_pending" },
+            "priority": { "type": "integer", "minimum": 0 },
+            "story_id": { "$ref": "#/$defs/typedId" },
+            "stage_id": { "$ref": "#/$defs/typedId" },
+            "reason": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "kind", "priority", "thread_id", "reason"],
+          "properties": {
+            "id": { "$ref": "#/$defs/typedId" },
+            "kind": { "const": "blocked_run" },
+            "priority": { "type": "integer", "minimum": 0 },
+            "thread_id": { "$ref": "#/$defs/typedId" },
+            "reason": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "kind", "priority", "source_id", "reason"],
+          "properties": {
+            "id": { "$ref": "#/$defs/typedId" },
+            "kind": { "const": "stale_mirror" },
+            "priority": { "type": "integer", "minimum": 0 },
+            "source_id": { "$ref": "#/$defs/typedId" },
+            "reason": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+    "activity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "rank", "feed_item_id", "reason"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typedId" },
+        "rank": { "type": "integer", "minimum": 0 },
+        "feed_item_id": { "$ref": "#/$defs/typedId" },
+        "reason": { "enum": ["latest_room_activity", "latest_human_activity", "latest_work_activity"] }
+      }
+    },
+    "projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "stage_order", "groups"],
+      "properties": {
+        "kind": { "enum": ["desktop_board", "mobile_vertical_stages"] },
+        "stage_order": { "type": "array", "minItems": 4, "maxItems": 4, "uniqueItems": true, "items": { "$ref": "#/$defs/typedId" } },
+        "groups": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["stage_id", "story_ids"],
+            "properties": {
+              "stage_id": { "$ref": "#/$defs/typedId" },
+              "story_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/typedId" } }
+            }
+          }
+        }
+      }
+    },
+    "navigation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "label", "route"],
+      "properties": {
+        "key": { "enum": ["dashboard", "channels", "threads", "vision", "stories", "evidence", "audit_decisions", "present"] },
+        "label": { "type": "string", "minLength": 1 },
+        "route": { "type": "string", "pattern": "^/rooms/" }
+      }
+    },
+    "workspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "room_id", "authorization", "dashboard", "workflows", "stories", "channels", "feeds", "threads", "documents", "evidence", "decisions", "audit", "navigation", "presence", "sources", "source_events", "projections"],
+      "properties": {
+        "id": { "$ref": "#/$defs/typedId" },
+        "room_id": { "$ref": "#/$defs/typedId" },
+        "authorization": { "$ref": "#/$defs/authorization" },
+        "dashboard": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["vision", "needs_attention", "recent_activity"],
+          "properties": {
+            "vision": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["document_id", "headline", "summary"],
+              "properties": {
+                "document_id": { "$ref": "#/$defs/typedId" },
+                "headline": { "type": "string", "minLength": 1 },
+                "summary": { "type": "string", "minLength": 1 }
+              }
+            },
+            "needs_attention": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/attention" } },
+            "recent_activity": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/activity" } }
+          }
+        },
+        "workflows": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/workflow" } },
+        "stories": { "type": "array", "minItems": 4, "items": { "$ref": "#/$defs/story" } },
+        "channels": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/channel" } },
+        "feeds": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/feed" } },
+        "threads": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/thread" } },
+        "documents": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/document" } },
+        "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } },
+        "decisions": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/decision" } },
+        "audit": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/audit" } },
+        "navigation": { "type": "array", "minItems": 8, "maxItems": 8, "items": { "$ref": "#/$defs/navigation" } },
+        "presence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["human_ids", "agent_ids", "machine_ids"],
+          "properties": {
+            "human_ids": { "type": "array", "items": { "$ref": "#/$defs/principalId" } },
+            "agent_ids": { "type": "array", "items": { "$ref": "#/$defs/principalId" } },
+            "machine_ids": { "type": "array", "items": { "$ref": "#/$defs/principalId" } }
+          }
+        },
+        "sources": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/source" } },
+        "source_events": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/sourceEvent" } },
+        "projections": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "$ref": "#/$defs/projection" } }
+      }
+    },
+    "stateBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "request", "result"],
+      "properties": {
+        "kind": { "enum": ["authorized_workspace", "unauthenticated", "unauthorized", "empty", "stale_cursor", "reachable_but_stale", "unsupported_contract_version"] },
+        "request": { "type": "object" },
+        "result": { "type": "object" }
+      }
+    },
+    "workspaceRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["room_id", "principal_id", "contract_version"],
+      "properties": {
+        "room_id": { "$ref": "#/$defs/typedId" },
+        "principal_id": { "$ref": "#/$defs/principalId" },
+        "contract_version": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "authorizedResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "workspace_id", "room_id"],
+      "properties": {
+        "status": { "const": "ok" },
+        "workspace_id": { "$ref": "#/$defs/typedId" },
+        "room_id": { "$ref": "#/$defs/typedId" }
+      }
+    },
+    "errorResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "http_status", "code", "message"],
+      "properties": {
+        "status": { "const": "error" },
+        "http_status": { "type": "integer", "minimum": 400 },
+        "code": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 }
+      }
+    },
+    "emptyRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["room_id", "channel_id", "after_seq", "limit"],
+      "properties": {
+        "room_id": { "$ref": "#/$defs/typedId" },
+        "channel_id": { "$ref": "#/$defs/typedId" },
+        "after_seq": { "type": "integer", "minimum": 0 },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 200 }
+      }
+    },
+    "emptyResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "page_info", "items"],
+      "properties": {
+        "status": { "const": "ok" },
+        "page_info": { "$ref": "#/$defs/pageInfo" },
+        "items": { "type": "array", "maxItems": 0 }
+      }
+    },
+    "staleResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "http_status", "code", "retained_from_seq", "restart_after_seq", "message"],
+      "properties": {
+        "status": { "const": "error" },
+        "http_status": { "const": 409 },
+        "code": { "const": "stale_cursor" },
+        "retained_from_seq": { "type": "integer", "minimum": 1 },
+        "restart_after_seq": { "type": "integer", "minimum": 0 },
+        "message": { "type": "string", "minLength": 1 }
+      }
+    },
+    "reachableStaleResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "thread_id", "machine_reachable", "machine_checked_at", "mirror_freshness", "mirror_as_of", "upstream_sequence"],
+      "properties": {
+        "status": { "const": "ok" },
+        "thread_id": { "$ref": "#/$defs/typedId" },
+        "machine_reachable": { "const": true },
+        "machine_checked_at": { "$ref": "#/$defs/timestamp" },
+        "mirror_freshness": { "const": "stale" },
+        "mirror_as_of": { "$ref": "#/$defs/timestamp" },
+        "upstream_sequence": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "unsupportedResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "http_status", "code", "requested_version", "supported_versions", "message"],
+      "properties": {
+        "status": { "const": "error" },
+        "http_status": { "const": 406 },
+        "code": { "const": "unsupported_contract_version" },
+        "requested_version": { "type": "integer", "minimum": 1 },
+        "supported_versions": { "type": "array", "minItems": 2, "uniqueItems": true, "items": { "type": "integer", "minimum": 1 } },
+        "message": { "type": "string", "minLength": 1 }
+      }
+    },
+    "stateExample": {
+      "oneOf": [
+        { "allOf": [{ "$ref": "#/$defs/stateBase" }, { "properties": { "kind": { "const": "authorized_workspace" }, "request": { "$ref": "#/$defs/workspaceRequest" }, "result": { "$ref": "#/$defs/authorizedResult" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/stateBase" }, { "properties": { "kind": { "const": "unauthenticated" }, "request": { "type": "object", "additionalProperties": false, "required": ["room_id", "contract_version"], "properties": { "room_id": { "$ref": "#/$defs/typedId" }, "contract_version": { "type": "integer", "minimum": 1 } } }, "result": { "$ref": "#/$defs/errorResult" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/stateBase" }, { "properties": { "kind": { "const": "unauthorized" }, "request": { "$ref": "#/$defs/workspaceRequest" }, "result": { "$ref": "#/$defs/errorResult" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/stateBase" }, { "properties": { "kind": { "const": "empty" }, "request": { "$ref": "#/$defs/emptyRequest" }, "result": { "$ref": "#/$defs/emptyResult" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/stateBase" }, { "properties": { "kind": { "const": "stale_cursor" }, "request": { "$ref": "#/$defs/emptyRequest" }, "result": { "$ref": "#/$defs/staleResult" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/stateBase" }, { "properties": { "kind": { "const": "reachable_but_stale" }, "request": { "type": "object", "additionalProperties": false, "required": ["thread_id"], "properties": { "thread_id": { "$ref": "#/$defs/typedId" } } }, "result": { "$ref": "#/$defs/reachableStaleResult" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/stateBase" }, { "properties": { "kind": { "const": "unsupported_contract_version" }, "request": { "$ref": "#/$defs/workspaceRequest" }, "result": { "$ref": "#/$defs/unsupportedResult" } } }] }
+      ]
+    }
+  }
+}

@@ -97,6 +97,11 @@ function dispatchLocalStorageChange(key: string) {
   }
 }
 
+export const removeLocalStorageItemAndNotify = (key: string) => {
+  removeLocalStorageItem(key);
+  dispatchLocalStorageChange(key);
+};
+
 export function useLocalStorage<T, E>(
   key: string,
   initialValue: T,

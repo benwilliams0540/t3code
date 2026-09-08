@@ -1,0 +1,12 @@
+{
+  "room_id": "room:019fb9f0-1000-7000-8000-000000000001",
+  "channel_id": "channel:019fb9f0-2000-7000-8000-000000000001",
+  "page_info": {
+    "after_seq": 0,
+    "limit": 50,
+    "snapshot_head_seq": 3,
+    "next_cursor": 0,
+    "has_more": false
+  },
+  "items": []
+}

@@ -3,16 +3,20 @@ import type { ExpoConfig } from "expo/config";
 import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
-type AppVariant = "development" | "preview" | "production";
+type AppVariant = "development" | "preview" | "production" | "rooms" | "threadspace-alpha";
 
 const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);
 
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
 const isIosPersonalTeamBuild = repoEnv.T3CODE_IOS_PERSONAL_TEAM === "1";
+const iosTeamId = repoEnv.T3CODE_IOS_TEAM_ID?.trim().toUpperCase();
+const configuredApnsEnvironment = repoEnv.T3CODE_APNS_ENVIRONMENT?.trim();
 
 const personalTeamBundleIdentifier = repoEnv.T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID?.trim();
 const IOS_BUNDLE_IDENTIFIER_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
+const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/;
+const THREADSPACE_PRODUCTION_BUNDLE_IDENTIFIER = "com.brw.threadspace";
 
 const fromRepoRoot = (relativePath: string) => `../../${relativePath}`;
 
@@ -24,6 +28,17 @@ if (
   throw new Error(
     "T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID must be a reverse-DNS identifier such as com.example.t3code when T3CODE_IOS_PERSONAL_TEAM=1.",
   );
+}
+
+if (iosTeamId && !APPLE_TEAM_ID_PATTERN.test(iosTeamId)) {
+  throw new Error("T3CODE_IOS_TEAM_ID must be a 10-character Apple Developer Team ID.");
+}
+if (
+  configuredApnsEnvironment &&
+  configuredApnsEnvironment !== "sandbox" &&
+  configuredApnsEnvironment !== "production"
+) {
+  throw new Error("T3CODE_APNS_ENVIRONMENT must be sandbox or production.");
 }
 
 const DEVELOPMENT_ASSETS = {
@@ -59,6 +74,20 @@ const RELEASE_ASSETS = {
   androidNotificationColor: "#FFFFFF",
 } as const;
 
+const THREADSPACE_ALPHA_ASSETS = {
+  appIcon: "./assets/threadspace-alpha-paper-1024.png",
+  iosIcon: {
+    light: "./assets/threadspace-alpha-paper-1024.png",
+    dark: "./assets/threadspace-alpha-dark-1024.png",
+  },
+  splashIcon: "./assets/threadspace-alpha-paper-1024.png",
+  androidAdaptiveForeground: "./assets/threadspace-alpha-paper-1024.png",
+  androidAdaptiveBackgroundColor: "#F4EFE5",
+  androidMonochromeIcon: "./assets/android-icon-mark.png",
+  androidNotificationIcon: "./assets/android-notification-icon.png",
+  androidNotificationColor: "#2B8C89",
+} as const;
+
 const VARIANT_CONFIG = {
   development: {
     appName: "T3 Code Dev",
@@ -84,6 +113,22 @@ const VARIANT_CONFIG = {
     relyingParty: "clerk.t3.codes",
     assets: RELEASE_ASSETS,
   },
+  rooms: {
+    appName: "T3 Code Rooms",
+    scheme: "t3code-rooms",
+    iosBundleIdentifier: "com.t3tools.t3code.rooms",
+    androidPackage: "com.t3tools.t3code.rooms",
+    relyingParty: "clerk.t3.codes",
+    assets: PREVIEW_ASSETS,
+  },
+  "threadspace-alpha": {
+    appName: "Threadspace Alpha",
+    scheme: "threadspace-alpha",
+    iosBundleIdentifier: `${THREADSPACE_PRODUCTION_BUNDLE_IDENTIFIER}.alpha`,
+    androidPackage: `${THREADSPACE_PRODUCTION_BUNDLE_IDENTIFIER}.alpha`,
+    relyingParty: "clerk.t3.codes",
+    assets: THREADSPACE_ALPHA_ASSETS,
+  },
 } as const;
 
 function resolveAppVariant(value: string | undefined): AppVariant {
@@ -91,6 +136,8 @@ function resolveAppVariant(value: string | undefined): AppVariant {
     case "development":
     case "preview":
     case "production":
+    case "rooms":
+    case "threadspace-alpha":
       return value;
     default:
       return "production";
@@ -101,6 +148,20 @@ const variant = VARIANT_CONFIG[APP_VARIANT];
 const iosBundleIdentifier = isIosPersonalTeamBuild
   ? personalTeamBundleIdentifier!
   : variant.iosBundleIdentifier;
+const isForkOwnedVariant = APP_VARIANT === "rooms" || APP_VARIANT === "threadspace-alpha";
+const isThreadspaceAlpha = APP_VARIANT === "threadspace-alpha";
+const apsEnvironment =
+  configuredApnsEnvironment ?? (APP_VARIANT === "development" ? "sandbox" : "production");
+
+if (isThreadspaceAlpha && isIosPersonalTeamBuild) {
+  throw new Error("Threadspace Alpha must be signed by a paid Apple Developer team.");
+}
+if (isThreadspaceAlpha && !iosTeamId) {
+  throw new Error("Threadspace Alpha requires T3CODE_IOS_TEAM_ID from the active signing team.");
+}
+if (isThreadspaceAlpha && apsEnvironment !== "sandbox") {
+  throw new Error("Threadspace Alpha must be built with T3CODE_APNS_ENVIRONMENT=sandbox.");
+}
 
 const dmSansFonts = {
   regular: "@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.ttf",
@@ -135,7 +196,7 @@ const sharingPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       // Personal Teams cannot sign App Groups or extension targets. Keep the
       // reduced-capability local build usable while release builds expose the
       // real system share target.
-      enabled: !isIosPersonalTeamBuild,
+      enabled: !isIosPersonalTeamBuild && !isThreadspaceAlpha,
       extensionBundleIdentifier: `${iosBundleIdentifier}.sharing`,
       appGroupId: `group.${iosBundleIdentifier}`,
       activationRule: {
@@ -172,24 +233,32 @@ const config: ExpoConfig = {
   orientation: "portrait",
   icon: variant.assets.appIcon,
   userInterfaceStyle: "automatic",
-  updates: {
-    enabled: true,
-    url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
-    checkAutomatically: "ON_LOAD",
-    fallbackToCacheTimeout: 0,
-  },
+  updates: isForkOwnedVariant
+    ? {
+        // The fork-owned Rooms dogfood build is self-contained and must not
+        // contact the upstream T3 Expo project for over-the-air updates.
+        enabled: false,
+      }
+    : {
+        enabled: true,
+        url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+        checkAutomatically: "ON_LOAD",
+        fallbackToCacheTimeout: 0,
+      },
   ios: {
     icon: variant.assets.iosIcon,
     supportsTablet: true,
     bundleIdentifier: iosBundleIdentifier,
-    // Pin code signing to the T3 Tools team so non-interactive `expo run:ios`
-    // does not fall back to a personal team (which cannot sign app groups,
-    // Sign in with Apple, or push notification entitlements).
-    appleTeamId: "ARK85ZXQ4Z",
-    associatedDomains: [
-      `applinks:${variant.relyingParty}`,
-      `webcredentials:${variant.relyingParty}`,
-    ],
+    // Fork builds supply their paid team explicitly; otherwise Xcode may derive
+    // the team from the selected signing configuration.
+    appleTeamId: isIosPersonalTeamBuild ? undefined : iosTeamId,
+    ...(isThreadspaceAlpha
+      ? {}
+      : {
+          associatedDomains: isIosPersonalTeamBuild
+            ? []
+            : [`applinks:${variant.relyingParty}`, `webcredentials:${variant.relyingParty}`],
+        }),
     infoPlist: {
       NSAppTransportSecurity: {
         NSAllowsArbitraryLoads: true,
@@ -216,6 +285,10 @@ const config: ExpoConfig = {
     favicon: variant.assets.appIcon,
   },
   plugins: [
+    // Config-plugin mods of the same type run in reverse registration order.
+    // Register the Personal Team cleanup first so it removes capabilities
+    // added by later plugins after all of them have run.
+    ...(isIosPersonalTeamBuild ? ["./plugins/withoutIosPersonalTeamCapabilities.cjs"] : []),
     "expo-asset",
     [
       "expo-font",
@@ -243,7 +316,7 @@ const config: ExpoConfig = {
     ],
     "expo-secure-store",
     "expo-sqlite",
-    ...(isIosPersonalTeamBuild
+    ...(isIosPersonalTeamBuild || isThreadspaceAlpha
       ? [sharingPlugin]
       : ["./plugins/withShareExtensionDisplayName.cjs", sharingPlugin]),
     [
@@ -251,12 +324,15 @@ const config: ExpoConfig = {
       {
         icon: variant.assets.androidNotificationIcon,
         color: variant.assets.androidNotificationColor,
-        mode: APP_VARIANT === "development" ? "development" : "production",
+        mode: apsEnvironment === "sandbox" ? "development" : "production",
       },
     ],
     // appleSignIn must be gated here: withoutIosPersonalTeamCapabilities.cjs runs before
     // plugins earlier in this array, so it cannot strip the entitlement Clerk would add.
-    ["@clerk/expo", { theme: "./clerk-theme.json", appleSignIn: !isIosPersonalTeamBuild }],
+    [
+      "@clerk/expo",
+      { theme: "./clerk-theme.json", appleSignIn: !isIosPersonalTeamBuild && !isThreadspaceAlpha },
+    ],
     "expo-web-browser",
     [
       "expo-quick-actions",
@@ -311,24 +387,32 @@ const config: ExpoConfig = {
     // expo-widgets' — its dangerous mod wipes ios/ExpoWidgetsTarget/ (which
     // would delete the asset catalog) and its xcodeproj mod creates the widget
     // target (which must exist before the compile phase can be attached).
-    ...(!isIosPersonalTeamBuild ? ["./plugins/withWidgetLogoAsset.cjs", widgetsPlugin] : []),
+    ...(!isIosPersonalTeamBuild && !isThreadspaceAlpha
+      ? ["./plugins/withWidgetLogoAsset.cjs", widgetsPlugin]
+      : []),
     "./plugins/withIosSceneLifecycle.cjs",
     "./plugins/withAndroidCleartextTraffic.cjs",
     "./plugins/withAndroidGradleHeap.cjs",
     "./plugins/withAndroidModernPopupMenu.cjs",
     "./plugins/withAndroidModernAlertDialog.cjs",
     "./plugins/withAndroidPredictiveBackCompat.cjs",
-    ...(isIosPersonalTeamBuild ? ["./plugins/withoutIosPersonalTeamCapabilities.cjs"] : []),
   ],
   extra: {
     appVariant: APP_VARIANT,
+    apsEnvironment,
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
     relay: {
       url: repoEnv.T3CODE_RELAY_URL ?? null,
     },
+    rooms: {
+      apiUrl: repoEnv.T3CODE_ROOMS_API_URL ?? null,
+      jwtTemplate: repoEnv.T3CODE_ROOMS_CLERK_JWT_TEMPLATE ?? null,
+    },
     clerk: {
       publishableKey: repoEnv.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? null,
-      jwtTemplate: repoEnv.EXPO_PUBLIC_CLERK_JWT_TEMPLATE ?? null,
+      jwtTemplate: isThreadspaceAlpha
+        ? (repoEnv.T3CODE_ROOMS_CLERK_JWT_TEMPLATE ?? null)
+        : (repoEnv.EXPO_PUBLIC_CLERK_JWT_TEMPLATE ?? null),
     },
     // Native Google sign-in credentials. @clerk/expo reads these from `extra`
     // under their exact env-var names (not nested), and its config plugin reads
@@ -344,11 +428,15 @@ const config: ExpoConfig = {
       tracesDataset: repoEnv.EXPO_PUBLIC_OTLP_TRACES_DATASET ?? null,
       tracesToken: repoEnv.EXPO_PUBLIC_OTLP_TRACES_TOKEN ?? null,
     },
-    eas: {
-      projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
-    },
+    ...(isForkOwnedVariant
+      ? {}
+      : {
+          eas: {
+            projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+          },
+        }),
   },
-  owner: "pingdotgg",
+  ...(isForkOwnedVariant ? {} : { owner: "pingdotgg" }),
 };
 
 export default config;

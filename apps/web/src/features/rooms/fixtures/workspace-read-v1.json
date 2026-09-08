@@ -1,0 +1,678 @@
+{
+  "contract": {
+    "id": "rooms.workspace-read",
+    "version": 1,
+    "schema_uri": "https://rooms.local/contracts/workspace-read/v1/schema.json",
+    "fixture_id": "fixture:019fb900-0000-7000-8000-000000000001",
+    "captured_at": "2026-07-31T16:00:00.000Z"
+  },
+  "semantics": {
+    "pagination": {
+      "order": "global_seq_ascending",
+      "cursor": "exclusive_after_seq",
+      "snapshot": "first_page_pins_snapshot_head_seq",
+      "next_cursor": "last_item_seq_or_request_after_seq",
+      "has_more": "matching_item_exists_through_snapshot_head",
+      "stale_cursor": "error_with_restart_cursor"
+    },
+    "unread": {
+      "scope": "member_and_stream",
+      "cursor": "monotonic_read_through_seq",
+      "count": "counted_items_after_read_through_through_latest_visible",
+      "mark_read": "explicit_server_write_not_render_side_effect"
+    },
+    "authorization": {
+      "layers": [
+        "authentication",
+        "membership",
+        "role_authorization"
+      ],
+      "roles": [
+        "observer",
+        "operator",
+        "admin"
+      ],
+      "reachable_is_membership": false
+    },
+    "freshness": {
+      "reachability": "independent_machine_fact",
+      "mirror": "as_of_and_upstream_sequence",
+      "disagreement": "surface_reachable_but_stale"
+    }
+  },
+  "principals": [
+    {
+      "id": "h:019fb900-0001-7000-8000-000000000001",
+      "type": "human",
+      "display_name": "Ben"
+    },
+    {
+      "id": "h:019fb900-0001-7000-8000-000000000002",
+      "type": "human",
+      "display_name": "Maya"
+    },
+    {
+      "id": "m:019fb900-0002-7000-8000-000000000001",
+      "type": "machine",
+      "display_name": "Ben's MacBook"
+    },
+    {
+      "id": "m:019fb900-0002-7000-8000-000000000002",
+      "type": "machine",
+      "display_name": "Build Mac"
+    },
+    {
+      "id": "a:019fb900-0003-7000-8000-000000000001",
+      "type": "agent",
+      "display_name": "Codex on MacBook",
+      "machine_id": "m:019fb900-0002-7000-8000-000000000001"
+    },
+    {
+      "id": "a:019fb900-0003-7000-8000-000000000002",
+      "type": "agent",
+      "display_name": "Claude on Build Mac",
+      "machine_id": "m:019fb900-0002-7000-8000-000000000002"
+    }
+  ],
+  "rooms": [
+    {
+      "id": "room:019fb900-1000-7000-8000-000000000001",
+      "slug": "rooms-local",
+      "name": "Rooms",
+      "locality": "local_only",
+      "declared_by": "h:019fb900-0001-7000-8000-000000000001",
+      "membership": {
+        "status": "member",
+        "role": "admin"
+      },
+      "unread": {
+        "read_through_seq": 110,
+        "latest_visible_seq": 117,
+        "count": 7,
+        "counted_event_seqs": [111, 112, 113, 114, 115, 116, 117]
+      }
+    },
+    {
+      "id": "room:019fb900-1000-7000-8000-000000000002",
+      "slug": "camera-team",
+      "name": "Camera Team",
+      "locality": "shared",
+      "declared_by": "h:019fb900-0001-7000-8000-000000000002",
+      "membership": {
+        "status": "member",
+        "role": "observer"
+      },
+      "unread": {
+        "read_through_seq": 204,
+        "latest_visible_seq": 208,
+        "count": 2,
+        "counted_event_seqs": [205, 208]
+      }
+    }
+  ],
+  "workspace": {
+    "selected_room_id": "room:019fb900-1000-7000-8000-000000000001",
+    "authorization": {
+      "status": "authorized",
+      "principal_id": "h:019fb900-0001-7000-8000-000000000001",
+      "membership": "member",
+      "role": "admin"
+    },
+    "vision": {
+      "document_id": "document:019fb900-5000-7000-8000-000000000001",
+      "headline": "A project and collaboration plane around T3",
+      "summary": "Keep human intent, agent runs, stories, evidence, decisions, and presence connected without copying full agent traces into channels."
+    },
+    "workflow": {
+      "id": "workflow:019fb900-2000-7000-8000-000000000001",
+      "story_type": "feature",
+      "version": 1,
+      "stages": [
+        {
+          "id": "stage:019fb900-2001-7000-8000-000000000001",
+          "key": "backlog",
+          "name": "Backlog",
+          "position": 0,
+          "gate": null
+        },
+        {
+          "id": "stage:019fb900-2001-7000-8000-000000000002",
+          "key": "in_progress",
+          "name": "In progress",
+          "position": 1,
+          "gate": null
+        },
+        {
+          "id": "stage:019fb900-2001-7000-8000-000000000003",
+          "key": "human_qa",
+          "name": "Gate / Human QA",
+          "position": 2,
+          "gate": {
+            "allowed_principal_types": ["human"],
+            "required_evidence_kinds": ["test-run", "screenshot"],
+            "self_review": "forbidden"
+          }
+        },
+        {
+          "id": "stage:019fb900-2001-7000-8000-000000000004",
+          "key": "done",
+          "name": "Done",
+          "position": 3,
+          "gate": {
+            "allowed_principal_types": ["human", "agent"],
+            "required_evidence_kinds": ["test-run"],
+            "self_review": "forbidden"
+          }
+        }
+      ]
+    },
+    "stories": [
+      {
+        "id": "task:019fb900-3000-7000-8000-000000000001",
+        "title": "Add a project decision timeline",
+        "story_type": "feature",
+        "stage_id": "stage:019fb900-2001-7000-8000-000000000001",
+        "owner_id": "h:019fb900-0001-7000-8000-000000000002",
+        "delegate": null,
+        "labels": ["audit", "product"],
+        "evidence": {
+          "required_kinds": ["screenshot"],
+          "attached_ids": []
+        },
+        "gate_state": "not_applicable"
+      },
+      {
+        "id": "task:019fb900-3000-7000-8000-000000000002",
+        "title": "Freeze the workspace read fixture",
+        "story_type": "feature",
+        "stage_id": "stage:019fb900-2001-7000-8000-000000000002",
+        "owner_id": "h:019fb900-0001-7000-8000-000000000001",
+        "delegate": {
+          "agent_id": "a:019fb900-0003-7000-8000-000000000001",
+          "thread_id": "thread:019fb900-4000-7000-8000-000000000001",
+          "run_status": "running"
+        },
+        "labels": ["contract", "server"],
+        "evidence": {
+          "required_kinds": ["test-run"],
+          "attached_ids": ["evidence:019fb900-6000-7000-8000-000000000001"]
+        },
+        "gate_state": "waiting_for_evidence"
+      },
+      {
+        "id": "task:019fb900-3000-7000-8000-000000000003",
+        "title": "Verify the channel activity cards",
+        "story_type": "feature",
+        "stage_id": "stage:019fb900-2001-7000-8000-000000000003",
+        "owner_id": "h:019fb900-0001-7000-8000-000000000002",
+        "delegate": {
+          "agent_id": "a:019fb900-0003-7000-8000-000000000002",
+          "thread_id": "thread:019fb900-4000-7000-8000-000000000002",
+          "run_status": "blocked"
+        },
+        "labels": ["channels", "human-qa"],
+        "evidence": {
+          "required_kinds": ["test-run", "screenshot"],
+          "attached_ids": [
+            "evidence:019fb900-6000-7000-8000-000000000002",
+            "evidence:019fb900-6000-7000-8000-000000000003"
+          ]
+        },
+        "gate_state": "waiting_for_review"
+      },
+      {
+        "id": "task:019fb900-3000-7000-8000-000000000004",
+        "title": "Map T3 lifecycle events",
+        "story_type": "feature",
+        "stage_id": "stage:019fb900-2001-7000-8000-000000000004",
+        "owner_id": "h:019fb900-0001-7000-8000-000000000001",
+        "delegate": {
+          "agent_id": "a:019fb900-0003-7000-8000-000000000001",
+          "thread_id": "thread:019fb900-4000-7000-8000-000000000001",
+          "run_status": "completed"
+        },
+        "labels": ["adapter", "done"],
+        "evidence": {
+          "required_kinds": ["test-run"],
+          "attached_ids": ["evidence:019fb900-6000-7000-8000-000000000004"]
+        },
+        "gate_state": "passed"
+      }
+    ],
+    "channels": [
+      {
+        "id": "channel:019fb900-1100-7000-8000-000000000001",
+        "name": "# infra",
+        "purpose": "Infrastructure, adapters, machines, and delivery state",
+        "unread": {
+          "read_through_seq": 110,
+          "latest_visible_seq": 115,
+          "count": 3,
+          "counted_event_seqs": [111, 112, 115]
+        }
+      },
+      {
+        "id": "channel:019fb900-1100-7000-8000-000000000002",
+        "name": "# product",
+        "purpose": "Product intent, stories, evidence, and decisions",
+        "unread": {
+          "read_through_seq": 110,
+          "latest_visible_seq": 117,
+          "count": 4,
+          "counted_event_seqs": [113, 114, 116, 117]
+        }
+      }
+    ],
+    "feeds": [
+      {
+        "room_id": "room:019fb900-1000-7000-8000-000000000001",
+        "channel_id": "channel:019fb900-1100-7000-8000-000000000001",
+        "page_info": {
+          "after_seq": 110,
+          "limit": 50,
+          "snapshot_head_seq": 117,
+          "next_cursor": 115,
+          "has_more": false
+        },
+        "items": [
+          {
+            "id": "feed-item:019fb900-7000-7000-8000-000000000001",
+            "kind": "human_message",
+            "actor_id": "h:019fb900-0001-7000-8000-000000000002",
+            "occurred_at": "2026-07-31T15:41:00.000Z",
+            "summary": "The adapter is reachable again; please verify mirror freshness separately.",
+            "source_event": {
+              "seq": 111,
+              "event_id": "019fb900-7100-7000-8000-000000000001",
+              "type": "message.created",
+              "schema": 1
+            },
+            "data": {
+              "body_markdown": "The adapter is reachable again; please verify mirror freshness separately."
+            }
+          },
+          {
+            "id": "feed-item:019fb900-7000-7000-8000-000000000002",
+            "kind": "reaction",
+            "actor_id": "h:019fb900-0001-7000-8000-000000000001",
+            "occurred_at": "2026-07-31T15:42:00.000Z",
+            "summary": "Ben reacted with check mark.",
+            "source_event": {
+              "seq": 112,
+              "event_id": "019fb900-7100-7000-8000-000000000002",
+              "type": "reaction.added",
+              "schema": 1
+            },
+            "data": {
+              "emoji": "✅",
+              "target_item_id": "feed-item:019fb900-7000-7000-8000-000000000001"
+            }
+          },
+          {
+            "id": "feed-item:019fb900-7000-7000-8000-000000000005",
+            "kind": "run_lifecycle",
+            "actor_id": "a:019fb900-0003-7000-8000-000000000001",
+            "occurred_at": "2026-07-31T15:48:00.000Z",
+            "summary": "Workspace fixture run is validating the contract.",
+            "source_event": {
+              "seq": 115,
+              "event_id": "019fb900-7100-7000-8000-000000000005",
+              "type": "thread.status-set",
+              "schema": 1
+            },
+            "data": {
+              "thread_id": "thread:019fb900-4000-7000-8000-000000000001",
+              "status": "running"
+            }
+          }
+        ]
+      },
+      {
+        "room_id": "room:019fb900-1000-7000-8000-000000000001",
+        "channel_id": "channel:019fb900-1100-7000-8000-000000000002",
+        "page_info": {
+          "after_seq": 110,
+          "limit": 50,
+          "snapshot_head_seq": 117,
+          "next_cursor": 117,
+          "has_more": false
+        },
+        "items": [
+          {
+            "id": "feed-item:019fb900-7000-7000-8000-000000000003",
+            "kind": "human_message",
+            "actor_id": "h:019fb900-0001-7000-8000-000000000001",
+            "occurred_at": "2026-07-31T15:43:00.000Z",
+            "summary": "Keep the mobile projection vertical and stage-grouped.",
+            "source_event": {
+              "seq": 113,
+              "event_id": "019fb900-7100-7000-8000-000000000003",
+              "type": "message.created",
+              "schema": 1
+            },
+            "data": {
+              "body_markdown": "Keep the mobile projection vertical and stage-grouped."
+            }
+          },
+          {
+            "id": "feed-item:019fb900-7000-7000-8000-000000000004",
+            "kind": "story_lifecycle",
+            "actor_id": "a:019fb900-0003-7000-8000-000000000001",
+            "occurred_at": "2026-07-31T15:44:00.000Z",
+            "summary": "Freeze the workspace read fixture moved to In progress.",
+            "source_event": {
+              "seq": 114,
+              "event_id": "019fb900-7100-7000-8000-000000000004",
+              "type": "task.stage-set",
+              "schema": 1
+            },
+            "data": {
+              "task_id": "task:019fb900-3000-7000-8000-000000000002",
+              "stage_id": "stage:019fb900-2001-7000-8000-000000000002"
+            }
+          },
+          {
+            "id": "feed-item:019fb900-7000-7000-8000-000000000006",
+            "kind": "evidence_attached",
+            "actor_id": "a:019fb900-0003-7000-8000-000000000002",
+            "occurred_at": "2026-07-31T15:51:00.000Z",
+            "summary": "A screenshot was attached for channel-card review.",
+            "source_event": {
+              "seq": 116,
+              "event_id": "019fb900-7100-7000-8000-000000000006",
+              "type": "evidence.attached",
+              "schema": 1
+            },
+            "data": {
+              "task_id": "task:019fb900-3000-7000-8000-000000000003",
+              "evidence_id": "evidence:019fb900-6000-7000-8000-000000000003",
+              "kind": "screenshot",
+              "cas": {
+                "hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                "bytes": 48231,
+                "media_type": "image/png"
+              }
+            }
+          },
+          {
+            "id": "feed-item:019fb900-7000-7000-8000-000000000007",
+            "kind": "approval_decided",
+            "actor_id": "h:019fb900-0001-7000-8000-000000000002",
+            "occurred_at": "2026-07-31T15:55:00.000Z",
+            "summary": "Human QA is waiting for the fresh test run before approval.",
+            "source_event": {
+              "seq": 117,
+              "event_id": "019fb900-7100-7000-8000-000000000007",
+              "type": "approval.decided",
+              "schema": 1
+            },
+            "data": {
+              "task_id": "task:019fb900-3000-7000-8000-000000000003",
+              "decision": "needs_changes",
+              "scope": "once"
+            }
+          }
+        ]
+      }
+    ],
+    "threads": [
+      {
+        "id": "thread:019fb900-4000-7000-8000-000000000001",
+        "title": "SRV-1A workspace fixture",
+        "agent_id": "a:019fb900-0003-7000-8000-000000000001",
+        "machine_id": "m:019fb900-0002-7000-8000-000000000001",
+        "provider": "openai-codex",
+        "environment": {
+          "id": "env:t3rooms-local",
+          "name": "t3rooms local lane"
+        },
+        "status": "running",
+        "as_of": "2026-07-31T15:58:00.000Z",
+        "mirror": {
+          "upstream_sequence": 481,
+          "last_synced_at": "2026-07-31T15:58:00.000Z",
+          "freshness": "fresh"
+        },
+        "machine": {
+          "reachable": true,
+          "checked_at": "2026-07-31T15:58:03.000Z"
+        }
+      },
+      {
+        "id": "thread:019fb900-4000-7000-8000-000000000002",
+        "title": "Channel-card visual review",
+        "agent_id": "a:019fb900-0003-7000-8000-000000000002",
+        "machine_id": "m:019fb900-0002-7000-8000-000000000002",
+        "provider": "anthropic-claude",
+        "environment": {
+          "id": "env:build-mac",
+          "name": "Build Mac workspace"
+        },
+        "status": "blocked",
+        "as_of": "2026-07-31T15:20:00.000Z",
+        "mirror": {
+          "upstream_sequence": 91,
+          "last_synced_at": "2026-07-31T15:20:00.000Z",
+          "freshness": "stale"
+        },
+        "machine": {
+          "reachable": true,
+          "checked_at": "2026-07-31T15:58:03.000Z"
+        }
+      }
+    ],
+    "project_navigation": [
+      {
+        "key": "vision",
+        "label": "Vision",
+        "route": "/rooms/rooms-local/project/vision"
+      },
+      {
+        "key": "stories",
+        "label": "Stories",
+        "route": "/rooms/rooms-local/project/stories"
+      },
+      {
+        "key": "evidence",
+        "label": "Evidence",
+        "route": "/rooms/rooms-local/project/evidence"
+      },
+      {
+        "key": "audit_decisions",
+        "label": "Audit & Decisions",
+        "route": "/rooms/rooms-local/project/audit-decisions"
+      }
+    ],
+    "documents": [
+      {
+        "id": "document:019fb900-5000-7000-8000-000000000001",
+        "title": "Rooms Vision",
+        "current_revision_id": "revision:019fb900-5100-7000-8000-000000000001",
+        "source": {
+          "remote_url": "https://github.com/benwilliams0540/rooms",
+          "sha": "033f337b7f5ee6e61de2c0277e716486698211a2",
+          "source_head": "02e787d2ce45c5e1a9bd9fb6554b6f7fe3547a62"
+        },
+        "freshness": {
+          "state": "stale",
+          "compared_at": "2026-07-31T15:57:00.000Z",
+          "source_head": "02e787d2ce45c5e1a9bd9fb6554b6f7fe3547a62"
+        },
+        "revisions": [
+          {
+            "id": "revision:019fb900-5100-7000-8000-000000000001",
+            "author_id": "h:019fb900-0001-7000-8000-000000000001",
+            "state": "current",
+            "created_at": "2026-07-31T14:00:00.000Z",
+            "source_hash": "033f337b7f5ee6e61de2c0277e716486698211a2",
+            "body_markdown": "# Rooms Vision\n\nKeep project truth connected around T3."
+          },
+          {
+            "id": "revision:019fb900-5100-7000-8000-000000000002",
+            "author_id": "a:019fb900-0003-7000-8000-000000000001",
+            "state": "queued",
+            "created_at": "2026-07-31T15:56:00.000Z",
+            "source_hash": "02e787d2ce45c5e1a9bd9fb6554b6f7fe3547a62",
+            "body_markdown": "# Rooms Vision\n\nKeep human intent and agent execution connected around T3."
+          }
+        ],
+        "atlas": {
+          "id": "atlas:019fb900-5200-7000-8000-000000000001",
+          "revision_id": "revision:019fb900-5100-7000-8000-000000000001",
+          "state": "stale",
+          "route": "/rooms/rooms-local/project/vision/atlas"
+        }
+      }
+    ],
+    "presence": {
+      "human_ids": [
+        "h:019fb900-0001-7000-8000-000000000001",
+        "h:019fb900-0001-7000-8000-000000000002"
+      ],
+      "agent_ids": [
+        "a:019fb900-0003-7000-8000-000000000001",
+        "a:019fb900-0003-7000-8000-000000000002"
+      ],
+      "machine_ids": [
+        "m:019fb900-0002-7000-8000-000000000001",
+        "m:019fb900-0002-7000-8000-000000000002"
+      ]
+    },
+    "projections": [
+      {
+        "kind": "desktop_board",
+        "stage_order": [
+          "stage:019fb900-2001-7000-8000-000000000001",
+          "stage:019fb900-2001-7000-8000-000000000002",
+          "stage:019fb900-2001-7000-8000-000000000003",
+          "stage:019fb900-2001-7000-8000-000000000004"
+        ],
+        "groups": [
+          {
+            "stage_id": "stage:019fb900-2001-7000-8000-000000000001",
+            "story_ids": ["task:019fb900-3000-7000-8000-000000000001"]
+          },
+          {
+            "stage_id": "stage:019fb900-2001-7000-8000-000000000002",
+            "story_ids": ["task:019fb900-3000-7000-8000-000000000002"]
+          },
+          {
+            "stage_id": "stage:019fb900-2001-7000-8000-000000000003",
+            "story_ids": ["task:019fb900-3000-7000-8000-000000000003"]
+          },
+          {
+            "stage_id": "stage:019fb900-2001-7000-8000-000000000004",
+            "story_ids": ["task:019fb900-3000-7000-8000-000000000004"]
+          }
+        ]
+      },
+      {
+        "kind": "mobile_vertical_stages",
+        "stage_order": [
+          "stage:019fb900-2001-7000-8000-000000000001",
+          "stage:019fb900-2001-7000-8000-000000000002",
+          "stage:019fb900-2001-7000-8000-000000000003",
+          "stage:019fb900-2001-7000-8000-000000000004"
+        ],
+        "groups": [
+          {
+            "stage_id": "stage:019fb900-2001-7000-8000-000000000001",
+            "story_ids": ["task:019fb900-3000-7000-8000-000000000001"]
+          },
+          {
+            "stage_id": "stage:019fb900-2001-7000-8000-000000000002",
+            "story_ids": ["task:019fb900-3000-7000-8000-000000000002"]
+          },
+          {
+            "stage_id": "stage:019fb900-2001-7000-8000-000000000003",
+            "story_ids": ["task:019fb900-3000-7000-8000-000000000003"]
+          },
+          {
+            "stage_id": "stage:019fb900-2001-7000-8000-000000000004",
+            "story_ids": ["task:019fb900-3000-7000-8000-000000000004"]
+          }
+        ]
+      }
+    ]
+  },
+  "states": [
+    {
+      "name": "unauthenticated",
+      "request": {
+        "room_id": "room:019fb900-1000-7000-8000-000000000001",
+        "principal_context": null
+      },
+      "result": {
+        "status": "error",
+        "http_status": 401,
+        "code": "authorization_context_missing",
+        "message": "Verified principal context is required."
+      }
+    },
+    {
+      "name": "unauthorized",
+      "request": {
+        "room_id": "room:019fb900-1000-7000-8000-000000000003",
+        "principal_id": "h:019fb900-0001-7000-8000-000000000001",
+        "service_reachable": true
+      },
+      "result": {
+        "status": "error",
+        "http_status": 403,
+        "code": "room_membership_required",
+        "message": "Reachability does not create room membership."
+      }
+    },
+    {
+      "name": "empty",
+      "request": {
+        "room_id": "room:019fb900-1000-7000-8000-000000000001",
+        "channel_id": "channel:019fb900-1100-7000-8000-000000000002",
+        "after_seq": 117,
+        "limit": 50
+      },
+      "result": {
+        "status": "ok",
+        "page_info": {
+          "after_seq": 117,
+          "limit": 50,
+          "snapshot_head_seq": 117,
+          "next_cursor": 117,
+          "has_more": false
+        },
+        "items": []
+      }
+    },
+    {
+      "name": "stale_cursor",
+      "request": {
+        "room_id": "room:019fb900-1000-7000-8000-000000000001",
+        "channel_id": "channel:019fb900-1100-7000-8000-000000000001",
+        "after_seq": 42,
+        "limit": 50
+      },
+      "result": {
+        "status": "error",
+        "http_status": 409,
+        "code": "stale_cursor",
+        "retained_from_seq": 100,
+        "restart_after_seq": 99,
+        "message": "The requested cursor predates retained history; refresh from the restart cursor."
+      }
+    },
+    {
+      "name": "reachable_but_stale",
+      "request": {
+        "thread_id": "thread:019fb900-4000-7000-8000-000000000002"
+      },
+      "result": {
+        "status": "ok",
+        "machine_reachable": true,
+        "machine_checked_at": "2026-07-31T15:58:03.000Z",
+        "mirror_freshness": "stale",
+        "mirror_as_of": "2026-07-31T15:20:00.000Z",
+        "upstream_sequence": 91
+      }
+    }
+  ]
+}

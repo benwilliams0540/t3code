@@ -958,6 +958,53 @@ export const DesktopPreviewAutomationWaitForInputSchema = Schema.Struct({
   input: PreviewAutomationWaitForInput,
 });
 
+export const RoomsLocalHttpRequestSchema = Schema.Struct({
+  baseUrl: Schema.String,
+  path: Schema.String,
+  method: Schema.Literals(["GET", "POST"]),
+  body: Schema.optionalKey(Schema.String),
+  bodyEncoding: Schema.optionalKey(Schema.Literals(["utf8", "base64"])),
+  contentType: Schema.optionalKey(Schema.String),
+});
+export type RoomsLocalHttpRequest = typeof RoomsLocalHttpRequestSchema.Type;
+
+export const RoomsLocalHttpResponseSchema = Schema.Struct({
+  status: Schema.Int,
+  headers: Schema.Record(Schema.String, Schema.String),
+  body: Schema.String,
+});
+export type RoomsLocalHttpResponse = typeof RoomsLocalHttpResponseSchema.Type;
+
+export const RoomsHumanHttpRequestSchema = Schema.Struct({
+  baseUrl: Schema.String,
+  path: Schema.String,
+  method: Schema.Literals(["GET", "POST"]),
+  // Absent only on the server-owned sign-in routes; every other route requires it.
+  bearer: Schema.optionalKey(Schema.String),
+  body: Schema.optionalKey(Schema.String),
+  bodyEncoding: Schema.optionalKey(Schema.Literals(["utf8", "base64"])),
+  contentType: Schema.optionalKey(Schema.String),
+});
+export type RoomsHumanHttpRequest = typeof RoomsHumanHttpRequestSchema.Type;
+
+export const RoomsHumanHttpResponseSchema = RoomsLocalHttpResponseSchema;
+export type RoomsHumanHttpResponse = typeof RoomsHumanHttpResponseSchema.Type;
+
+export const DesktopNotificationRequestSchema = Schema.Struct({
+  id: Schema.String.check(Schema.isTrimmed(), Schema.isNonEmpty(), Schema.isMaxLength(128)),
+  title: Schema.String.check(Schema.isTrimmed(), Schema.isNonEmpty(), Schema.isMaxLength(120)),
+  body: Schema.String.check(Schema.isTrimmed(), Schema.isNonEmpty(), Schema.isMaxLength(240)),
+});
+export type DesktopNotificationRequest = typeof DesktopNotificationRequestSchema.Type;
+
+export const DesktopNotificationResultSchema = Schema.Literals([
+  "shown",
+  "duplicate",
+  "focused",
+  "unsupported",
+]);
+export type DesktopNotificationResult = typeof DesktopNotificationResultSchema.Type;
+
 export interface DesktopBridge {
   getAppBranding: () => DesktopAppBranding | null;
   // One bootstrap per pool instance currently registered with bootstrap
@@ -967,6 +1014,9 @@ export interface DesktopBridge {
   getLocalEnvironmentBearerToken: () => Promise<string>;
   getClientSettings: () => Promise<ClientSettings | null>;
   setClientSettings: (settings: ClientSettings) => Promise<void>;
+  requestRoomsLocal?: (request: RoomsLocalHttpRequest) => Promise<RoomsLocalHttpResponse>;
+  requestRoomsHuman?: (request: RoomsHumanHttpRequest) => Promise<RoomsHumanHttpResponse>;
+  showNotification?: (request: DesktopNotificationRequest) => Promise<DesktopNotificationResult>;
   getConnectionCatalog?: () => Promise<string | null>;
   setConnectionCatalog?: (catalog: string) => Promise<boolean>;
   clearConnectionCatalog?: () => Promise<void>;
@@ -1121,6 +1171,12 @@ export interface LocalApi {
   persistence: {
     getClientSettings: () => Promise<ClientSettings | null>;
     setClientSettings: (settings: ClientSettings) => Promise<void>;
+  };
+  roomsLocal?: {
+    request: (request: RoomsLocalHttpRequest) => Promise<RoomsLocalHttpResponse>;
+  };
+  roomsHuman?: {
+    request: (request: RoomsHumanHttpRequest) => Promise<RoomsHumanHttpResponse>;
   };
 }
 

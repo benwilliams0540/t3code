@@ -7,10 +7,13 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 
 import * as Electron from "electron";
+import { DESKTOP_BUILD_BRAND, THREADSPACE_DESKTOP } from "../../../../scripts/lib/desktop-brand.ts";
 
 export const DESKTOP_HOST = "app";
-export const DESKTOP_PRODUCTION_SCHEME = "t3code";
-export const DESKTOP_DEVELOPMENT_SCHEME = "t3code-dev";
+export const DESKTOP_PRODUCTION_SCHEME =
+  DESKTOP_BUILD_BRAND === "threadspace" ? THREADSPACE_DESKTOP.scheme : "t3code";
+export const DESKTOP_DEVELOPMENT_SCHEME =
+  DESKTOP_BUILD_BRAND === "threadspace" ? THREADSPACE_DESKTOP.developmentScheme : "t3code-dev";
 
 export function getDesktopScheme(isDevelopment: boolean): string {
   return isDevelopment ? DESKTOP_DEVELOPMENT_SCHEME : DESKTOP_PRODUCTION_SCHEME;

@@ -1,4 +1,9 @@
 import type { ContextMenuItem, LocalApi } from "@t3tools/contracts";
+import {
+  normalizeRoomsOrigin,
+  resolveRoomsHumanRequestUrl,
+  validateRoomsHumanRequestBody,
+} from "@t3tools/shared/roomsTransport";
 
 import { resetRequestLatencyStateForTests } from "./rpc/requestLatencyState";
 import { showContextMenuFallback } from "./contextMenuFallback";
@@ -56,6 +61,72 @@ function createBrowserLocalApi(): LocalApi {
           return window.desktopBridge.setClientSettings(settings);
         }
         writeBrowserClientSettings(settings);
+      },
+    },
+    roomsLocal: {
+      request: async (request) => {
+        if (window.desktopBridge?.requestRoomsLocal) {
+          return window.desktopBridge.requestRoomsLocal(request);
+        }
+        const target = new URL(request.path, request.baseUrl);
+        const body =
+          request.body === undefined
+            ? undefined
+            : request.bodyEncoding === "base64"
+              ? Uint8Array.from(atob(request.body), (character) => character.charCodeAt(0))
+              : request.body;
+        const response = await fetch(target, {
+          method: request.method,
+          ...(body === undefined
+            ? {}
+            : {
+                headers: { "content-type": request.contentType ?? "application/json" },
+                body,
+              }),
+        });
+        return {
+          status: response.status,
+          headers: Object.fromEntries(response.headers.entries()),
+          body: await response.text(),
+        };
+      },
+    },
+    roomsHuman: {
+      request: async (request) => {
+        if (window.desktopBridge?.requestRoomsHuman) {
+          return window.desktopBridge.requestRoomsHuman(request);
+        }
+        const target = resolveRoomsHumanRequestUrl(request);
+        if (normalizeRoomsOrigin("local", request.baseUrl) === null) {
+          throw new Error("Shared Rooms HTTPS requires the signed desktop transport.");
+        }
+        const validatedBody = validateRoomsHumanRequestBody(request);
+        const body =
+          validatedBody === null
+            ? undefined
+            : validatedBody.bodyEncoding === "base64"
+              ? Uint8Array.from(atob(validatedBody.body), (character) => character.charCodeAt(0))
+              : validatedBody.body;
+        const response = await fetch(target, {
+          method: request.method,
+          credentials: "omit",
+          redirect: "manual",
+          headers: {
+            ...(request.bearer === undefined ? {} : { authorization: `Bearer ${request.bearer}` }),
+            ...(body === undefined
+              ? {}
+              : { "content-type": validatedBody?.contentType ?? "application/json" }),
+          },
+          ...(body === undefined ? {} : { body }),
+        });
+        if (response.status >= 300 && response.status < 400) {
+          throw new Error("Rooms human API redirects are not allowed.");
+        }
+        return {
+          status: response.status,
+          headers: Object.fromEntries(response.headers.entries()),
+          body: await response.text(),
+        };
       },
     },
   };

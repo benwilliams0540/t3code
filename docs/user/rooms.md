@@ -1,0 +1,107 @@
+# Rooms
+
+Rooms brings the shared work around a project into T3 Code. Open **Version 3** in the sidebar,
+select a Rooms source, and then select a project.
+
+The Shared source needs a T3 Connect account. When you are signed out, the Rooms workspace shows
+**Sign in to T3 Connect** in place of the room; the Rooms workspace has its own rail instead of the
+app sidebar, so that button is the way in. The same button appears when your Rooms session has
+expired.
+
+## Use your own server
+
+The Shared source can also talk to a Threadspace server you or a friend host. In the access
+panel, enter the server URL under **Change server** and choose **Connect**. The client asks
+the server which sign-in it uses before showing any form.
+
+If the server has its own sign-in:
+
+- **Set up server** appears when nobody owns the server yet. Paste the setup token the host
+  printed with `bin/rails rooms:local:issue_setup`, pick a username, a password of at least 10
+  characters, and a display name. You become the owner.
+- **Join with invitation** takes a room ID and invite token from a room admin plus your new
+  username, password, and display name. One step creates your account and puts you in the room.
+- **Sign in** works on any device with the same username and password.
+- **Reset password** takes a reset token the host issues with
+  `USERNAME=<name> bin/rails rooms:local:issue_password_reset`. It signs out every other device.
+
+**Sign out** on the dashboard revokes this device's session on the server. **Forget this
+server** also drops the server from this device. The client keeps your session for that
+server only and never sends it to another address. Changing the hostname, scheme, or port
+requires signing in again, even if the new address reports the same server ID.
+
+## Create a shared room
+
+After signing in, choose **New room** from the room rail or the first-room screen.
+Enter a name and check the server shown in the dialog. Creation makes your account the
+room's admin and opens its **#general** channel. Existing members can create additional
+rooms from the same rail. You do not need a Clerk administrator account, an operator
+setup token, or permission from another room's owner to create your own room.
+
+If a request fails, **Retry creation** reuses the same request ID. The server returns
+the existing room if the first attempt succeeded. Changing the name starts a new request.
+The optional operator setup-token flow remains available for managed provisioning.
+
+This requires a reachable Rooms server with the self-service creation route and working
+sign-in configuration. A private development server is not a public hosted service;
+downloading the client alone does not provision a server. Release onboarding must state
+which service users join and how they connect to it.
+
+## Find the work that needs attention
+
+The dashboard leads with **Needs you**, then shows active work, the project's vision status,
+momentum, and recent durable activity. Counts and story state come from the selected Rooms source;
+T3 Code does not fill missing records with sample data.
+
+Open **Stories** to switch between a board and a list with a detail pane. The board/list preference
+is stored on the current device. Story ownership is shown from durable workflow history. A current
+human can claim a backlog story, attach evidence, move it into review once the evidence gate is
+satisfied, and approve and complete it when authorized. Reviews and completion remain separate
+server records even though the UI offers them as one action.
+
+## Move between discussion and execution
+
+Channels keep messages in their real Rooms routes. Select a message to shape it into a story. The
+current server contract cannot persist a message-to-story link, so the action is explicitly labeled
+**Create without link** and no durable relationship is implied.
+
+When a message addresses an Agent, Rooms keeps that request visible as one Agent turn:
+
+- **Claw is working…** means the connector recorded the invocation but no reply is recorded yet.
+- **Taking longer than expected** appears after 30 seconds without a terminal reply. It does not
+  claim that the invocation failed.
+- A successful reply replaces the progress state and stays attributed to the Agent.
+- **Claw couldn’t respond** includes a safe reason such as unavailable, timed out, rate limited, or
+  rejected. Gateway details are never displayed.
+
+Rooms does not automatically retry failed Agent requests. A retry could execute the same request
+twice until the protocol defines explicit idempotency and double-execution rules.
+
+Opening a Rooms thread keeps the native T3 thread surface and adds a collapsible context rail. When
+the thread is exactly linked to a story, the rail shows its owner, stage, evidence, and next action.
+The current thread contract does not expose a selectable output inventory, so Rooms shows that
+capability as unavailable instead of fabricating attachments.
+
+## Know what is authoritative
+
+**Evidence**, **Decisions**, and **People and machines** are projections of the selected Rooms
+source. People, agents, and machines remain separate principals even when they share a display
+name. Vision revision history, provenance, and freshness are shown only when the source contract
+provides them; otherwise the Vision route explains exactly which capability is unavailable.
+
+Loading, empty, unavailable, stale, and stopped states stay visible. Check the source and project
+shown in the Rooms header before acting, especially after changing accounts or environments.
+
+## Mobile
+
+The side-by-side `T3 Code Rooms` mobile build connects directly to the configured private HTTPS
+Human endpoint with a fresh dedicated Clerk token for every request. From the Threads screen, open
+Rooms to review attention items, inspect and advance stories, read or send channel messages, open an
+exact linked T3 thread, and distinguish people, agents, and machines.
+
+Agent turns use the same running, replied, failed, and delayed presentation on mobile. The latest
+Agent state is announced as an accessible live update.
+
+The initial mobile surface refreshes when opened and on pull-to-refresh. Evidence upload, story
+creation, room creation, vision revision history, invitations, and administration remain desktop/web actions. Mobile
+shows those limits explicitly instead of substituting local fixtures or browser state.

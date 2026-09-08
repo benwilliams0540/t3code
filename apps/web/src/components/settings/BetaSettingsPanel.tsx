@@ -1,17 +1,97 @@
+import * as Schema from "effect/Schema";
+import {
+  type ComposerSendShortcut,
+  DEFAULT_ROOMS_LOCAL_API_BASE_URL,
+} from "@t3tools/contracts/settings";
 import { useEffect, useState } from "react";
 
+import { useClientSettings, useUpdateClientSettings } from "../../hooks/useSettings";
+import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
+import { useLocalStorage } from "../../hooks/useLocalStorage";
+import { useRoomsDataSource, type RoomsDataSourceMode } from "../../features/rooms/dataSource";
+import { buildRoomsDiagnostics } from "../../features/rooms/dataSource/diagnostics";
+import { resetRoomsBetaSettings } from "../../features/rooms/dataSource/reset";
+import { validateRoomsLocalApiBaseUrl } from "../../features/rooms/dataSource/localChannelsClient";
+import { resolveCloudPublicConfig } from "../../cloud/publicConfig";
+import { ROOMS_LAST_ROUTE_STORAGE_KEY } from "../../features/rooms/shell/navigation";
 import {
-  useClientSettings,
-  useSidebarV2Enabled,
-  useUpdateClientSettings,
-} from "../../hooks/useSettings";
+  ROOMS_PROJECT_BINDINGS_STORAGE_KEY,
+  RoomsProjectBindings,
+  type RoomsProjectBindings as RoomsProjectBindingsType,
+} from "../../features/rooms/threads/roomProjectBindings";
+import { type AppSidebarVariant, useAppSidebarVariantSelection } from "../appSidebarVariant";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
+import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { Radio, RadioGroup } from "../ui/radio-group";
 import { Switch } from "../ui/switch";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 
 const AUTO_SETTLE_MIN_DAYS = 1;
 const AUTO_SETTLE_MAX_DAYS = 90;
 const AUTO_SETTLE_DEFAULT_DAYS = 3;
+
+const COMPOSER_SEND_SHORTCUT_OPTIONS = [
+  ["enter", "Enter", "Enter sends; Shift+Enter inserts a newline."],
+  [
+    "modifier_when_multiline",
+    "Modifier for multiline",
+    "Enter sends one line. After a newline, use ⌘/Ctrl+Enter.",
+  ],
+  ["modifier_always", "Always use modifier", "Only ⌘/Ctrl+Enter sends."],
+] as const satisfies readonly (readonly [ComposerSendShortcut, string, string])[];
+
+export function composerShortcutPatch(target: "channel" | "thread", value: ComposerSendShortcut) {
+  return target === "channel"
+    ? { channelComposerSendShortcut: value }
+    : { threadComposerSendShortcut: value };
+}
+
+export function shouldShowRoomsBetaSettings(sidebarVariant: AppSidebarVariant): boolean {
+  return sidebarVariant === "v3";
+}
+
+function ComposerSendShortcutControl({
+  label,
+  onChange,
+  value,
+}: {
+  readonly label: string;
+  readonly onChange: (value: ComposerSendShortcut) => void;
+  readonly value: ComposerSendShortcut;
+}) {
+  return (
+    <RadioGroup
+      aria-label={label}
+      className="grid gap-2 py-3 lg:grid-cols-3"
+      onValueChange={(nextValue) => onChange(nextValue as ComposerSendShortcut)}
+      value={value}
+    >
+      {COMPOSER_SEND_SHORTCUT_OPTIONS.map(([shortcut, title, description]) => (
+        <label
+          className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border bg-background px-3 py-3 has-[[data-checked]]:border-primary has-[[data-checked]]:ring-1 has-[[data-checked]]:ring-primary/30"
+          key={shortcut}
+        >
+          <Radio className="mt-0.5" value={shortcut} />
+          <span className="min-w-0">
+            <span className="block text-sm font-medium text-foreground">{title}</span>
+            <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+              {description}
+            </span>
+          </span>
+        </label>
+      ))}
+    </RadioGroup>
+  );
+}
 
 function AutoSettleDaysInput({
   value,
@@ -54,10 +134,72 @@ function AutoSettleDaysInput({
   );
 }
 
+function RoomsLocalApiBaseUrlInput({
+  onCommit,
+  value,
+}: {
+  readonly onCommit: (value: string) => void;
+  readonly value: string;
+}) {
+  const [draft, setDraft] = useState(value);
+  const validation = validateRoomsLocalApiBaseUrl(draft);
+  useEffect(() => setDraft(value), [value]);
+
+  const commit = () => {
+    if (validation.ok) onCommit(validation.value);
+  };
+
+  return (
+    <div className="grid w-full gap-1.5 py-3">
+      <Input
+        aria-invalid={!validation.ok}
+        aria-label="Threadspace Local API address"
+        onBlur={commit}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            commit();
+          }
+        }}
+        placeholder={DEFAULT_ROOMS_LOCAL_API_BASE_URL}
+        value={draft}
+      />
+      <p className={validation.ok ? "text-xs text-muted-foreground" : "text-xs text-destructive"}>
+        {validation.ok ? "Loopback only. Alternate local ports are supported." : validation.message}
+      </p>
+    </div>
+  );
+}
+
 export function BetaSettingsPanel() {
-  const sidebarV2Enabled = useSidebarV2Enabled();
+  const humanRoomsConfig = resolveCloudPublicConfig();
+  const [sidebarVariant, setSidebarVariant] = useAppSidebarVariantSelection();
+  const { localConfig, mode, selectedBySource, selectedRoom, setMode, state } =
+    useRoomsDataSource();
+  const [resetRoomsOpen, setResetRoomsOpen] = useState(false);
+  const [sampleBindings] = useLocalStorage(
+    ROOMS_PROJECT_BINDINGS_STORAGE_KEY,
+    Object.freeze({}) as RoomsProjectBindingsType,
+    RoomsProjectBindings,
+  );
+  const [lastRoomsRoute] = useLocalStorage(
+    ROOMS_LAST_ROUTE_STORAGE_KEY,
+    null,
+    Schema.NullOr(Schema.String),
+  );
+  const { copyToClipboard, isCopied } = useCopyToClipboard({
+    target: "Threadspace diagnostics",
+  });
   const sidebarAutoSettleAfterDays = useClientSettings(
     (settings) => settings.sidebarAutoSettleAfterDays,
+  );
+  const roomsLocalApiBaseUrl = useClientSettings((settings) => settings.roomsLocalApiBaseUrl);
+  const channelComposerSendShortcut = useClientSettings(
+    (settings) => settings.channelComposerSendShortcut,
+  );
+  const threadComposerSendShortcut = useClientSettings(
+    (settings) => settings.threadComposerSendShortcut,
   );
   const updateSettings = useUpdateClientSettings();
 
@@ -65,24 +207,47 @@ export function BetaSettingsPanel() {
     <SettingsPageContainer>
       <SettingsSection title="Beta features">
         <SettingsRow
-          title="Sidebar v2"
-          description="One flat thread list in creation order. Active work renders as rich cards; settled threads collapse to compact rows. Settling requires an up-to-date server — on older servers threads simply stay active. Switch back any time."
-          control={
-            <Switch
-              checked={sidebarV2Enabled}
-              // Touching the switch pins the choice, so a nightly build that
-              // defaults v2 on does not flip it back after the user opts out.
-              onCheckedChange={(checked) =>
-                updateSettings({
-                  sidebarV2Enabled: Boolean(checked),
-                  sidebarV2ConfiguredByUser: true,
-                })
-              }
-              aria-label="Enable the sidebar v2 beta"
-            />
-          }
-        />
-        {sidebarV2Enabled ? (
+          title="Sidebar version"
+          description="Choose one navigation model. Version 1, Version 2, and Threadspace never render at the same time."
+        >
+          <RadioGroup
+            aria-label="Sidebar version"
+            className="grid gap-2 py-3 sm:grid-cols-3"
+            onValueChange={(value) => {
+              const variant = value as AppSidebarVariant;
+              setSidebarVariant(variant);
+              // Preserve the established v1/v2 setting as a compatible
+              // fallback if the local three-way selection is ever cleared.
+              updateSettings({
+                sidebarV2Enabled: variant === "v2",
+                sidebarV2ConfiguredByUser: true,
+              });
+            }}
+            value={sidebarVariant}
+          >
+            {(
+              [
+                ["v1", "Version 1", "Original project and thread tree."],
+                ["v2", "Version 2", "Flat, lifecycle-oriented thread list."],
+                ["v3", "Threadspace", "Room navigation, channels, Stories, and native T3 context."],
+              ] as const
+            ).map(([value, title, description]) => (
+              <label
+                className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border bg-background px-3 py-3 has-[[data-checked]]:border-primary has-[[data-checked]]:ring-1 has-[[data-checked]]:ring-primary/30"
+                key={value}
+              >
+                <Radio className="mt-0.5" value={value} />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-foreground">{title}</span>
+                  <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+                    {description}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </RadioGroup>
+        </SettingsRow>
+        {sidebarVariant === "v2" ? (
           <>
             <SettingsRow
               title="Auto-settle inactive threads"
@@ -113,7 +278,160 @@ export function BetaSettingsPanel() {
             ) : null}
           </>
         ) : null}
+        {shouldShowRoomsBetaSettings(sidebarVariant) ? (
+          <>
+            <SettingsRow
+              title="Channel send shortcut"
+              description="Choose when Enter sends messages in local Threadspace channels."
+            >
+              <ComposerSendShortcutControl
+                label="Channel send shortcut"
+                onChange={(value) => updateSettings(composerShortcutPatch("channel", value))}
+                value={channelComposerSendShortcut}
+              />
+            </SettingsRow>
+            <SettingsRow
+              title="Thread send shortcut"
+              description="Choose when Enter sends prompts through the native T3 composer."
+            >
+              <ComposerSendShortcutControl
+                label="Thread send shortcut"
+                onChange={(value) => updateSettings(composerShortcutPatch("thread", value))}
+                value={threadComposerSendShortcut}
+              />
+            </SettingsRow>
+            <SettingsRow
+              title="Threadspace content"
+              description="Sample is certified demonstration data. Local is the development-only fallback. Shared uses T3 Connect and server-backed human membership."
+            >
+              <RadioGroup
+                aria-label="Threadspace content"
+                className="grid gap-2 py-3 sm:grid-cols-3"
+                onValueChange={(value) => setMode(value as RoomsDataSourceMode)}
+                value={mode}
+              >
+                {(
+                  [
+                    ["sample", "Sample workspace", "Certified Threadspace data for evaluation."],
+                    ["local", "Local workspace", "Actual local T3 projects and threads only."],
+                    [
+                      "shared",
+                      "Shared Threadspace",
+                      "Authenticated multiplayer through T3 Connect.",
+                    ],
+                  ] as const
+                ).map(([value, title, description]) => (
+                  <label
+                    className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border bg-background px-3 py-3 has-[[data-checked]]:border-primary has-[[data-checked]]:ring-1 has-[[data-checked]]:ring-primary/30"
+                    key={value}
+                  >
+                    <Radio className="mt-0.5" value={value} />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-foreground">{title}</span>
+                      <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+                        {description}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </RadioGroup>
+            </SettingsRow>
+            <SettingsRow
+              title="Shared Threadspace"
+              description="Build-time, non-secret status for the dedicated Threadspace Clerk template and supervised loopback transport. Credentials are requested just in time and are never stored here."
+            >
+              <div className="grid gap-1 py-3 text-xs text-muted-foreground">
+                <p>
+                  T3 Connect:{" "}
+                  {humanRoomsConfig.clerkPublishableKey ? "configured" : "not configured"}
+                </p>
+                <p>
+                  Threadspace JWT template:{" "}
+                  {humanRoomsConfig.roomsClerkJwtTemplate ? "configured" : "not configured"}
+                </p>
+                <p>Threadspace loopback API: {humanRoomsConfig.roomsApiUrl ?? "not configured"}</p>
+              </div>
+            </SettingsRow>
+            <SettingsRow
+              title="Local Threadspace API"
+              description="Development-only loopback service for one durable Local workspace. This is not remote or multiplayer connectivity."
+            >
+              <RoomsLocalApiBaseUrlInput
+                onCommit={(value) => updateSettings({ roomsLocalApiBaseUrl: value })}
+                value={roomsLocalApiBaseUrl}
+              />
+              <p className="pb-3 text-xs text-muted-foreground">
+                Current source state:{" "}
+                <span className="font-medium text-foreground">{state.status}</span>
+                {state.status !== "ready" && state.error ? ` · ${state.error.code}` : ""}
+              </p>
+            </SettingsRow>
+            <SettingsRow
+              title="Threadspace diagnostics"
+              description="Copy a redacted snapshot of the Threadspace mode, selected IDs, project references, source state, and last Threadspace route."
+              control={
+                <Button
+                  onClick={() =>
+                    copyToClipboard(
+                      buildRoomsDiagnostics({
+                        mode,
+                        state,
+                        selectedBySource,
+                        selectedRoomId: selectedRoom?.id ?? null,
+                        localConfig,
+                        sampleBindings,
+                        lastRoomsRoute,
+                        localApiBaseUrl: roomsLocalApiBaseUrl,
+                      }),
+                      undefined,
+                    )
+                  }
+                  size="sm"
+                  variant="outline"
+                >
+                  {isCopied ? "Copied" : "Copy Threadspace diagnostics"}
+                </Button>
+              }
+            />
+            <SettingsRow
+              title="Reset Threadspace beta settings"
+              description="Return Threadspace to Sample and clear only Threadspace source, selection, project-binding, and navigation preferences. T3 projects and threads are never removed."
+              control={
+                <Button onClick={() => setResetRoomsOpen(true)} size="sm" variant="outline">
+                  Reset Threadspace…
+                </Button>
+              }
+            />
+          </>
+        ) : null}
       </SettingsSection>
+      {shouldShowRoomsBetaSettings(sidebarVariant) ? (
+        <AlertDialog open={resetRoomsOpen} onOpenChange={setResetRoomsOpen}>
+          <AlertDialogPopup>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Reset Threadspace beta settings?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This clears only Threadspace source, room selection, local bindings, and navigation
+                layout. It does not delete T3 projects, threads, prompts, credentials, or app
+                settings.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+              <Button
+                onClick={() => {
+                  resetRoomsBetaSettings();
+                  updateSettings({ roomsLocalApiBaseUrl: DEFAULT_ROOMS_LOCAL_API_BASE_URL });
+                  setResetRoomsOpen(false);
+                }}
+                variant="destructive"
+              >
+                Reset Threadspace settings
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogPopup>
+        </AlertDialog>
+      ) : null}
     </SettingsPageContainer>
   );
 }

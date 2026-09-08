@@ -49,6 +49,18 @@
       "channel": "production",
       "environment": "production",
       "autoIncrement": true
+    },
+    "threadspace-alpha": {
+      "corepack": true,
+      "env": {
+        "APP_VARIANT": "threadspace-alpha",
+        "T3CODE_APNS_ENVIRONMENT": "sandbox",
+        "NODE_OPTIONS": "--max-old-space-size=4096"
+      },
+      "distribution": "internal",
+      "ios": {
+        "buildConfiguration": "Release"
+      }
     }
   },
   "submit": {

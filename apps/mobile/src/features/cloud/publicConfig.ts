@@ -1,12 +1,13 @@
 import Constants from "expo-constants";
 import { relayClerkTokenOptions } from "@t3tools/shared/relayAuth";
 import { normalizeSecureRelayUrl } from "@t3tools/shared/relayUrl";
+import { normalizeRoomsOrigin } from "@t3tools/shared/roomsTransport";
 import * as Schema from "effect/Schema";
 
 export class CloudPublicConfigMissingError extends Schema.TaggedErrorClass<CloudPublicConfigMissingError>()(
   "CloudPublicConfigMissingError",
   {
-    key: Schema.Literal("T3CODE_CLERK_JWT_TEMPLATE"),
+    key: Schema.Literals(["T3CODE_CLERK_JWT_TEMPLATE", "T3CODE_ROOMS_CLERK_JWT_TEMPLATE"]),
   },
 ) {
   override get message(): string {
@@ -21,6 +22,10 @@ export interface CloudPublicConfig {
   };
   readonly relay: {
     readonly url: string | null;
+  };
+  readonly rooms: {
+    readonly apiUrl: string | null;
+    readonly jwtTemplate: string | null;
   };
   readonly observability: {
     readonly tracesUrl: string | null;
@@ -65,6 +70,10 @@ export function resolveCloudPublicConfig(extra: ExpoExtra = Constants.expoConfig
     relay: {
       url: normalizeSecureRelayUrl(trimNonEmpty(extra?.relay?.url) ?? ""),
     },
+    rooms: {
+      apiUrl: normalizeRoomsOrigin("shared", trimNonEmpty(extra?.rooms?.apiUrl) ?? ""),
+      jwtTemplate: trimNonEmpty(extra?.rooms?.jwtTemplate),
+    },
     observability: {
       tracesUrl: normalizeSecureUrl(extra?.observability?.tracesUrl),
       tracesDataset: trimNonEmpty(extra?.observability?.tracesDataset),
@@ -76,6 +85,16 @@ export function resolveCloudPublicConfig(extra: ExpoExtra = Constants.expoConfig
 export function hasCloudPublicConfig(): boolean {
   const config = resolveCloudPublicConfig();
   return Boolean(config.clerk.publishableKey && config.clerk.jwtTemplate && config.relay.url);
+}
+
+export function hasRoomsPublicConfig(): boolean {
+  const config = resolveCloudPublicConfig();
+  return Boolean(config.clerk.publishableKey && config.rooms.apiUrl && config.rooms.jwtTemplate);
+}
+
+export function shouldMountCloudAuthProvider(): boolean {
+  const config = resolveCloudPublicConfig();
+  return Boolean(config.clerk.publishableKey && (hasCloudPublicConfig() || hasRoomsPublicConfig()));
 }
 
 type Configured<T> = {
@@ -102,4 +121,12 @@ export function resolveRelayClerkTokenOptions() {
     throw new CloudPublicConfigMissingError({ key: "T3CODE_CLERK_JWT_TEMPLATE" });
   }
   return relayClerkTokenOptions(jwtTemplate);
+}
+
+export function resolveRoomsClerkTokenOptions() {
+  const { jwtTemplate } = resolveCloudPublicConfig().rooms;
+  if (!jwtTemplate) {
+    throw new CloudPublicConfigMissingError({ key: "T3CODE_ROOMS_CLERK_JWT_TEMPLATE" });
+  }
+  return { template: jwtTemplate } as const;
 }

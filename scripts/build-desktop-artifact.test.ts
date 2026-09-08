@@ -26,8 +26,10 @@ import {
   MissingMacPasskeyProvisioningProfileError,
   renderMacPasskeyEntitlements,
   resolveClerkPasskeyNativeArtifacts,
+  resolveConfiguredMacPasskeySigningConfiguration,
   resolveMacPasskeySigningConfiguration,
   resolveDesktopRuntimeDependencies,
+  resolveServerRuntimeDependencies,
   resolveFffNativeDependencies,
   resolveBuildOptions,
   resolveDesktopBuildIconAssets,
@@ -85,6 +87,42 @@ function iconResizeSpawnerLayer(
 }
 
 it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
+  it.effect("packages ThreadSpace with separate identity and no upstream update feed", () =>
+    Effect.gen(function* () {
+      const config = yield* createBuildConfig(
+        "mac",
+        "dmg",
+        "0.0.34",
+        true,
+        false,
+        undefined,
+        undefined,
+      );
+      assert.equal(config.appId, "com.threadspace.alpha");
+      assert.equal(config.productName, "ThreadSpace (Alpha)");
+      assert.equal(config.artifactName, "ThreadSpace-${version}-${arch}.${ext}");
+      assert.notProperty(config, "publish");
+      assert.deepEqual((config.mac as Record<string, unknown>).protocols, [
+        { name: "ThreadSpace", schemes: ["threadspace", "threadspace-dev"] },
+      ]);
+      assert.equal(
+        resolveDesktopBuildIconAssets("0.0.34", "threadspace").macIconPng,
+        "apps/mobile/assets/threadspace-alpha-dark-1024.png",
+      );
+    }).pipe(
+      Effect.provide(
+        ConfigProvider.layer(
+          ConfigProvider.fromEnv({
+            env: {
+              T3CODE_DESKTOP_BRAND: "threadspace",
+              GITHUB_REPOSITORY: "pingdotgg/t3code",
+            },
+          }),
+        ),
+      ),
+    ),
+  );
+
   it("resolves the dedicated nightly updater channel from nightly versions", () => {
     assert.equal(resolveDesktopUpdateChannel("0.0.17-nightly.20260413.42"), "nightly");
     assert.equal(resolveDesktopUpdateChannel("0.0.17"), "latest");
@@ -175,6 +213,28 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       {
         "@effect/platform-node": "4.0.0-beta.59",
         effect: "4.0.0-beta.59",
+      },
+    );
+  });
+
+  it("omits bundled workspace packages from staged server dependencies", () => {
+    assert.deepStrictEqual(
+      resolveServerRuntimeDependencies(
+        {
+          "@effect/platform-node": "catalog:",
+          "@t3tools/rooms-agent-api": "workspace:*",
+          effect: "catalog:",
+          yaml: "2.8.2",
+        },
+        {
+          "@effect/platform-node": "4.0.0-beta.59",
+          effect: "4.0.0-beta.59",
+        },
+      ),
+      {
+        "@effect/platform-node": "4.0.0-beta.59",
+        effect: "4.0.0-beta.59",
+        yaml: "2.8.2",
       },
     );
   });
@@ -409,6 +469,40 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       rpDomains: ["example.clerk.accounts.dev"],
       provisioningProfilePath: "/tmp/t3code.provisionprofile",
     });
+  });
+
+  it("allows ordinary signed macOS builds without passkey provisioning", () => {
+    const configuration = resolveConfiguredMacPasskeySigningConfiguration({
+      T3CODE_CLERK_PUBLISHABLE_KEY: `pk_test_${btoa("example.clerk.accounts.dev$")}`,
+    });
+
+    assert.isUndefined(configuration);
+  });
+
+  it("enables macOS passkey signing when passkey-specific configuration is present", () => {
+    const configuration = resolveConfiguredMacPasskeySigningConfiguration({
+      T3CODE_APPLE_TEAM_ID: "abc1234567",
+      T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
+      T3CODE_CLERK_PUBLISHABLE_KEY: `pk_test_${btoa("example.clerk.accounts.dev$")}`,
+    });
+
+    assert.deepStrictEqual(configuration, {
+      appId: "com.t3tools.t3code",
+      teamId: "ABC1234567",
+      rpDomains: ["example.clerk.accounts.dev"],
+      provisioningProfilePath: "/tmp/t3code.provisionprofile",
+    });
+  });
+
+  it("rejects partial opt-in to macOS passkey signing", () => {
+    assert.throws(
+      () =>
+        resolveConfiguredMacPasskeySigningConfiguration({
+          T3CODE_APPLE_TEAM_ID: "ABC1234567",
+          T3CODE_CLERK_PUBLISHABLE_KEY: `pk_test_${btoa("example.clerk.accounts.dev$")}`,
+        }),
+      MissingMacPasskeyProvisioningProfileError,
+    );
   });
 
   it("normalizes explicit macOS passkey RP domains and renders required entitlements", () => {

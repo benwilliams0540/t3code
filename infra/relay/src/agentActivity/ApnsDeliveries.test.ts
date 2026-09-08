@@ -96,6 +96,36 @@ const aggregate: RelayAgentActivityAggregateState = {
   ],
 };
 
+describe("APNs credential routing", () => {
+  it("selects the separate Rooms signing team only for its exact bundle", () => {
+    const roomsApns = {
+      environment: "sandbox" as const,
+      teamId: "rooms-team",
+      keyId: "rooms-key",
+      privateKey: Redacted.make("rooms-private-key"),
+      bundleId: "com.brw.threadspace.alpha",
+    };
+    const configuration = { apns: config.apns, roomsApns };
+
+    expect(
+      ApnsDeliveries.credentialsForTarget(configuration, {
+        user_id: "user",
+        device_id: "rooms-device",
+        bundle_id: roomsApns.bundleId,
+        aps_environment: "sandbox",
+      }),
+    ).toEqual(roomsApns);
+    expect(
+      ApnsDeliveries.credentialsForTarget(configuration, {
+        user_id: "user",
+        device_id: "t3-device",
+        bundle_id: "com.t3tools.t3code",
+        aps_environment: "production",
+      }).teamId,
+    ).toBe(config.apns.teamId);
+  });
+});
+
 const enabledPreferences = JSON.stringify({
   liveActivitiesEnabled: true,
   notificationsEnabled: true,

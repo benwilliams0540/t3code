@@ -1,0 +1,508 @@
+import { useNavigate } from "@tanstack/react-router";
+import * as Schema from "effect/Schema";
+import { ArrowLeftIcon, ArrowRightIcon, PanelLeftCloseIcon, PanelLeftIcon } from "lucide-react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
+
+import { useAppSidebarVariantSelection } from "~/components/appSidebarVariant";
+import { Button } from "~/components/ui/button";
+import { SidebarInset } from "~/components/ui/sidebar";
+import { useLocalStorage } from "~/hooks/useLocalStorage";
+import { useResizableWidth } from "~/hooks/useResizableWidth";
+import { cn } from "~/lib/utils";
+
+import { findSourceRoomBySlug, useRoomsDataSource, type RoomsSourceRoom } from "../dataSource";
+import { workspaceForDeclaredRoom } from "../model/selection";
+import {
+  buildRoomsBreadcrumbs,
+  isRoomsWorkspaceEnabled,
+  roomsSurfaceSourceLabel,
+  roomsRoutePath,
+  ROOMS_LAST_ROUTE_STORAGE_KEY,
+  ROOMS_SIDEBAR_OPEN_STORAGE_KEY,
+  type RoomsNavigationTarget,
+  type RoomsWorkspaceSurface,
+} from "./navigation";
+import { localSourceStateCopy } from "./localSourceStateCopy";
+import { RoomsHumanAccessPanel } from "./RoomsHumanAccessPanel";
+import { RoomsWorkspaceNavigation, type RoomsWorkspaceNavigate } from "./RoomsWorkspaceNavigation";
+import {
+  resolveRoomsSidebarMaximumWidth,
+  ROOMS_SIDEBAR_DEFAULT_WIDTH,
+  ROOMS_SIDEBAR_MIN_WIDTH,
+  ROOMS_SIDEBAR_WIDTH_STORAGE_KEY,
+} from "./roomsSidebarWidth";
+import { RoomsWorkspaceSurfaceView } from "./RoomsWorkspaceSurface";
+import { ThreadspaceBrand, ThreadspaceThemeControl } from "./ThreadspaceIdentity";
+
+function subscribeToViewportWidth(onChange: () => void): () => void {
+  window.addEventListener("resize", onChange);
+  return () => window.removeEventListener("resize", onChange);
+}
+
+function readViewportWidth(): number {
+  return window.innerWidth;
+}
+
+function useNavigateWithinRoom(
+  room: RoomsSourceRoom | null,
+): (target: RoomsNavigationTarget) => void {
+  const navigate = useNavigate();
+  return useCallback(
+    (target: RoomsNavigationTarget) => {
+      if (!room) return;
+      switch (target.kind) {
+        case "dashboard":
+          void navigate({
+            to: "/rooms/$roomSlug/dashboard",
+            params: { roomSlug: room.slug },
+          });
+          return;
+        case "channel":
+          void navigate({
+            to: "/rooms/$roomSlug/channels/$channelSlug",
+            params: { roomSlug: room.slug, channelSlug: target.channelSlug },
+          });
+          return;
+        case "threads":
+          void navigate({
+            to: "/rooms/$roomSlug/threads",
+            params: { roomSlug: room.slug },
+          });
+          return;
+        case "native-thread":
+          void navigate({
+            to: "/rooms/$roomSlug/threads/$environmentId/$threadId",
+            params: {
+              roomSlug: room.slug,
+              environmentId: target.environmentId,
+              threadId: target.threadId,
+            },
+          });
+          return;
+        case "project":
+          void navigate({
+            to: "/rooms/$roomSlug/project/$projectSection",
+            params: { roomSlug: room.slug, projectSection: target.projectSection },
+          });
+          return;
+        case "project-view":
+          void navigate({
+            to: "/rooms/$roomSlug/project/$projectSection/$projectView",
+            params: {
+              roomSlug: room.slug,
+              projectSection: target.projectSection,
+              projectView: target.projectView,
+            },
+          });
+          return;
+        case "present":
+          void navigate({
+            to: "/rooms/$roomSlug/present",
+            params: { roomSlug: room.slug },
+          });
+      }
+    },
+    [navigate, room?.slug],
+  );
+}
+
+function RoomsBreadcrumbBar({
+  isSidebarVisible,
+  onToggleSidebar,
+  room,
+  surface,
+}: {
+  readonly isSidebarVisible: boolean;
+  readonly onToggleSidebar: () => void;
+  readonly room: RoomsSourceRoom;
+  readonly surface: RoomsWorkspaceSurface;
+}) {
+  const navigateWithinRoom = useNavigateWithinRoom(room);
+  const breadcrumbs = buildRoomsBreadcrumbs(room, surface);
+
+  return (
+    <header className="threadspace-topbar workspace-topbar drag-region relative z-40 flex shrink-0 items-center gap-1 border-b border-border pl-[calc(var(--rooms-titlebar-leading-inset)+0.75rem)] pr-3 sm:pl-[calc(var(--rooms-titlebar-leading-inset)+1rem)] sm:pr-4">
+      <ThreadspaceBrand showMark={false} />
+      <Button
+        aria-label={
+          isSidebarVisible ? "Collapse Threadspace navigation" : "Expand Threadspace navigation"
+        }
+        aria-pressed={isSidebarVisible}
+        className="ml-2 mr-1 hidden size-[var(--workspace-titlebar-control-size)] shrink-0 rounded-sm md:inline-flex"
+        onClick={onToggleSidebar}
+        size="icon"
+        title={
+          isSidebarVisible ? "Collapse Threadspace navigation" : "Expand Threadspace navigation"
+        }
+        variant="ghost"
+      >
+        {isSidebarVisible ? <PanelLeftCloseIcon /> : <PanelLeftIcon />}
+      </Button>
+      <Button
+        aria-label="Go back"
+        className="shrink-0"
+        onClick={() => window.history.back()}
+        size="icon-xs"
+        title="Back"
+        variant="ghost"
+      >
+        <ArrowLeftIcon />
+      </Button>
+      <Button
+        aria-label="Go forward"
+        className="shrink-0"
+        onClick={() => window.history.forward()}
+        size="icon-xs"
+        title="Forward"
+        variant="ghost"
+      >
+        <ArrowRightIcon />
+      </Button>
+      <span
+        className="ml-2 hidden h-7 shrink-0 items-center border border-border bg-card px-2 font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase sm:inline-flex"
+        data-threadspace-plate="room"
+      >
+        Room
+      </span>
+      <div className="threadspace-technical ml-2 flex min-w-0 items-center gap-1 font-mono text-[11px] tracking-[0.07em]">
+        {breadcrumbs.map((breadcrumb, index) => {
+          const target = breadcrumb.target;
+          return (
+            <div
+              className="flex min-w-0 items-center gap-1"
+              key={breadcrumb.label + "-" + String(index)}
+            >
+              {index > 0 ? <span className="shrink-0 text-muted-foreground/55">/</span> : null}
+              {target ? (
+                <button
+                  className="truncate text-muted-foreground hover:text-foreground"
+                  onClick={() => navigateWithinRoom(target)}
+                  type="button"
+                >
+                  {breadcrumb.label}
+                </button>
+              ) : (
+                <span className="truncate font-medium text-foreground">{breadcrumb.label}</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <span
+        className="ml-auto hidden h-7 items-center border border-border bg-muted/35 px-2 font-mono text-[10px] tracking-[0.08em] text-muted-foreground uppercase sm:inline-flex"
+        data-threadspace-plate="source"
+      >
+        {roomsSurfaceSourceLabel(surface, room.sourceMode)}
+      </span>
+      <ThreadspaceThemeControl />
+    </header>
+  );
+}
+
+function RoomsSourceStatePanel({
+  errorCode,
+  message,
+  onOpenSettings,
+  onRetry,
+  onUseSample,
+  title,
+}: {
+  readonly errorCode?: string | undefined;
+  readonly message: string;
+  readonly onOpenSettings: () => void;
+  readonly onRetry?: (() => void) | undefined;
+  readonly onUseSample: () => void;
+  readonly title: string;
+}) {
+  return (
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground">
+      <section className="flex flex-1 items-center justify-center p-6">
+        <div className="max-w-md rounded-2xl border border-border bg-card p-7 text-center">
+          <div className="mb-6 flex justify-center">
+            <ThreadspaceBrand />
+          </div>
+          <h1 className="text-lg font-semibold">{title}</h1>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{message}</p>
+          {errorCode ? (
+            <code className="mt-2 block text-[10px] text-muted-foreground">{errorCode}</code>
+          ) : null}
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            {onRetry ? <Button onClick={onRetry}>Retry connection</Button> : null}
+            <Button onClick={onOpenSettings} variant="outline">
+              Threadspace settings
+            </Button>
+            <Button onClick={onUseSample} variant="outline">
+              Use Sample workspace
+            </Button>
+          </div>
+        </div>
+      </section>
+    </SidebarInset>
+  );
+}
+
+export function RoomsWorkspaceShell({
+  roomSlug,
+  surface,
+}: {
+  readonly roomSlug: string;
+  readonly surface: RoomsWorkspaceSurface;
+}) {
+  const navigate = useNavigate();
+  const [sidebarVariant] = useAppSidebarVariantSelection();
+  const { localLiveUpdatesStatus, retryLocalWorkspace, selectRoom, selectedRoom, setMode, state } =
+    useRoomsDataSource();
+  const room = findSourceRoomBySlug(state, roomSlug);
+  const currentRoute = roomsRoutePath(roomSlug, surface);
+  const [, setLastRoomsRoute] = useLocalStorage(
+    ROOMS_LAST_ROUTE_STORAGE_KEY,
+    null,
+    Schema.NullOr(Schema.String),
+  );
+  const [isSidebarVisible, setSidebarVisible] = useLocalStorage(
+    ROOMS_SIDEBAR_OPEN_STORAGE_KEY,
+    true,
+    Schema.Boolean,
+  );
+  const toggleSidebar = useCallback(() => {
+    setSidebarVisible((visible) => !visible);
+  }, [setSidebarVisible]);
+  const viewportWidth = useSyncExternalStore(subscribeToViewportWidth, readViewportWidth);
+  const { width: sidebarWidth, handlers: sidebarResizeHandlers } = useResizableWidth({
+    storageKey: ROOMS_SIDEBAR_WIDTH_STORAGE_KEY,
+    defaultWidth: ROOMS_SIDEBAR_DEFAULT_WIDTH,
+    minWidth: ROOMS_SIDEBAR_MIN_WIDTH,
+    maxWidth: resolveRoomsSidebarMaximumWidth(viewportWidth),
+    edge: "right",
+  });
+  const navigateWithinRoom = useNavigateWithinRoom(room);
+  useEffect(() => {
+    if (!isRoomsWorkspaceEnabled(sidebarVariant)) {
+      void navigate({ to: "/", replace: true });
+      return;
+    }
+    if (room) {
+      selectRoom(room);
+      setLastRoomsRoute(currentRoute);
+      return;
+    }
+    if (state.status === "ready" && selectedRoom) {
+      void navigate({
+        to: "/rooms/$roomSlug/dashboard",
+        params: { roomSlug: selectedRoom.slug },
+        replace: true,
+      });
+    }
+  }, [
+    currentRoute,
+    navigate,
+    room,
+    selectRoom,
+    selectedRoom,
+    setLastRoomsRoute,
+    sidebarVariant,
+    state.status,
+  ]);
+  useEffect(() => {
+    if (
+      state.status !== "ready" ||
+      state.mode !== "local" ||
+      !room ||
+      surface.kind !== "channel" ||
+      state.workspace.channels.some((channel) => channel.slug === surface.channelSlug)
+    ) {
+      return;
+    }
+    const firstChannel = state.workspace.channels[0];
+    if (firstChannel) {
+      void navigate({
+        to: "/rooms/$roomSlug/channels/$channelSlug",
+        params: { roomSlug: room.slug, channelSlug: firstChannel.slug },
+        replace: true,
+      });
+    } else {
+      void navigate({
+        to: "/rooms/$roomSlug/dashboard",
+        params: { roomSlug: room.slug },
+        replace: true,
+      });
+    }
+  }, [navigate, room, state, surface]);
+
+  if (!isRoomsWorkspaceEnabled(sidebarVariant)) {
+    return <SidebarInset className="h-dvh min-h-0 bg-background" />;
+  }
+
+  if (state.status !== "ready") {
+    if (state.mode === "shared") {
+      return (
+        <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground">
+          <RoomsHumanAccessPanel state={state} />
+        </SidebarInset>
+      );
+    }
+    const copy = localSourceStateCopy(state);
+    return (
+      <RoomsSourceStatePanel
+        errorCode={state.error?.code}
+        message={copy.message}
+        onOpenSettings={() => void navigate({ to: "/settings/beta" })}
+        onRetry={copy.canRetry ? () => void retryLocalWorkspace() : undefined}
+        onUseSample={() => setMode("sample")}
+        title={copy.title}
+      />
+    );
+  }
+
+  if (!room) {
+    return <SidebarInset className="h-dvh min-h-0 bg-background" />;
+  }
+
+  const workspace = (() => {
+    if (state.mode !== "sample") return null;
+    const declaredRoom = state.fixture.rooms.find((candidate) => candidate.id === room.id);
+    return declaredRoom ? workspaceForDeclaredRoom(state.fixture, declaredRoom.id) : null;
+  })();
+  const localWorkspace = state.mode === "sample" ? null : state.workspace;
+  const surfaceOwnsScrolling =
+    surface.kind === "native-thread" ||
+    surface.kind === "native-draft" ||
+    (state.mode !== "sample" && surface.kind === "channel");
+  return (
+    <SidebarInset className="threadspace-shell h-dvh min-h-0 overflow-hidden bg-background text-foreground">
+      <RoomsBreadcrumbBar
+        isSidebarVisible={isSidebarVisible}
+        onToggleSidebar={toggleSidebar}
+        room={room}
+        surface={surface}
+      />
+      <div className="flex min-h-0 min-w-0 flex-1">
+        <aside
+          aria-hidden={!isSidebarVisible}
+          className={cn(
+            "relative hidden shrink-0 overflow-hidden border-r bg-sidebar text-sidebar-foreground surface-grain transition-[width,border-color] duration-200 ease-linear motion-reduce:transition-none md:flex",
+            isSidebarVisible ? "border-sidebar-border" : "pointer-events-none border-transparent",
+          )}
+          data-rooms-sidebar=""
+          data-state={isSidebarVisible ? "expanded" : "collapsed"}
+          inert={!isSidebarVisible}
+          style={{ width: isSidebarVisible ? `${sidebarWidth}px` : "0px" }}
+        >
+          <div
+            className={cn(
+              "flex min-h-0 shrink-0 transition-transform duration-200 ease-linear motion-reduce:transition-none",
+              !isSidebarVisible && "-translate-x-full",
+            )}
+            style={{ width: `${sidebarWidth}px` }}
+          >
+            <RoomsWorkspaceNavigation
+              localLiveUpdatesReconnecting={localLiveUpdatesStatus === "reconnecting"}
+              localWorkspace={localWorkspace}
+              navigate={navigateWithinRoom as RoomsWorkspaceNavigate}
+              room={room}
+              sourceMode={state.mode}
+              surface={surface}
+              workspace={workspace}
+            />
+          </div>
+          {isSidebarVisible ? (
+            <button
+              aria-label="Resize Threadspace navigation"
+              className="absolute inset-y-0 -right-2 z-30 w-4 cursor-col-resize touch-none after:absolute after:inset-y-0 after:left-1/2 after:w-px hover:after:bg-sidebar-border"
+              data-rooms-sidebar-resize-handle=""
+              onPointerCancel={sidebarResizeHandlers.onPointerCancel}
+              onPointerDown={sidebarResizeHandlers.onPointerDown}
+              onPointerMove={sidebarResizeHandlers.onPointerMove}
+              onPointerUp={sidebarResizeHandlers.onPointerUp}
+              tabIndex={-1}
+              title="Drag to resize Threadspace navigation"
+              type="button"
+            />
+          ) : null}
+        </aside>
+        <div
+          className={cn(
+            "flex min-h-0 min-w-0 flex-1 flex-col",
+            surfaceOwnsScrolling ? "overflow-hidden" : "overflow-y-auto",
+          )}
+          data-threadspace-canvas={
+            surface.kind === "channel" ||
+            surface.kind === "native-thread" ||
+            surface.kind === "native-draft"
+              ? "quiet"
+              : "drafting"
+          }
+          data-threadspace-surface={surface.kind}
+        >
+          <details className="shrink-0 border-b border-sidebar-border bg-sidebar text-sidebar-foreground surface-grain md:hidden">
+            <summary className="cursor-pointer px-4 py-2 text-sm font-medium text-foreground">
+              {room.name} navigation
+            </summary>
+            <div className="max-h-[42vh] w-60 max-w-full overflow-y-auto">
+              <RoomsWorkspaceNavigation
+                localLiveUpdatesReconnecting={localLiveUpdatesStatus === "reconnecting"}
+                localWorkspace={localWorkspace}
+                navigate={navigateWithinRoom as RoomsWorkspaceNavigate}
+                room={room}
+                sourceMode={state.mode}
+                surface={surface}
+                workspace={workspace}
+              />
+            </div>
+          </details>
+          <div className={cn("min-h-0 flex-1", surfaceOwnsScrolling && "flex")}>
+            <RoomsWorkspaceSurfaceView
+              navigate={navigateWithinRoom as RoomsWorkspaceNavigate}
+              room={room}
+              sourceState={state}
+              surface={surface}
+              workspace={workspace}
+            />
+          </div>
+        </div>
+      </div>
+    </SidebarInset>
+  );
+}
+
+export function RoomsWorkspaceLanding() {
+  const navigate = useNavigate();
+  const [sidebarVariant] = useAppSidebarVariantSelection();
+  const { retryLocalWorkspace, selectedRoom, setMode, state } = useRoomsDataSource();
+  useEffect(() => {
+    if (!isRoomsWorkspaceEnabled(sidebarVariant)) {
+      void navigate({ to: "/", replace: true });
+      return;
+    }
+    if (selectedRoom) {
+      void navigate({
+        to: "/rooms/$roomSlug/dashboard",
+        params: { roomSlug: selectedRoom.slug },
+        replace: true,
+      });
+    }
+  }, [navigate, selectedRoom, sidebarVariant]);
+
+  if (state.status !== "ready") {
+    if (state.mode === "shared") {
+      return (
+        <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground">
+          <RoomsHumanAccessPanel state={state} />
+        </SidebarInset>
+      );
+    }
+    const copy = localSourceStateCopy(state);
+    return (
+      <RoomsSourceStatePanel
+        errorCode={state.error?.code}
+        message={copy.message}
+        onOpenSettings={() => void navigate({ to: "/settings/beta" })}
+        onRetry={copy.canRetry ? () => void retryLocalWorkspace() : undefined}
+        onUseSample={() => setMode("sample")}
+        title={copy.title}
+      />
+    );
+  }
+
+  return <SidebarInset className="h-dvh min-h-0 bg-background" />;
+}

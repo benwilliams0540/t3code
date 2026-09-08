@@ -69,6 +69,7 @@ import * as EnvironmentPublishSignatures from "../environments/EnvironmentPublis
 import * as MobileRegistrations from "../agentActivity/MobileRegistrations.ts";
 import { withSpanAttributes } from "../observability.ts";
 import * as RelayDb from "../db.ts";
+import * as RoomsMessagePublisher from "../rooms/RoomsMessagePublisher.ts";
 
 const relayCorsAllowedMethods = ["GET", "POST", "DELETE", "OPTIONS"] as const;
 const relayCorsAllowedHeaders = [
@@ -981,6 +982,47 @@ export const serverApi = HttpApiBuilder.group(
         }),
         mapRelayCommonApiErrors("not_authorized"),
       ),
+    );
+  }),
+);
+
+function relayBearerValue(value: string): string | null {
+  return /^Bearer ([^\s]+)$/u.exec(value)?.[1] ?? null;
+}
+
+function constantTimeEqual(left: string, right: string): boolean {
+  const leftBytes = new TextEncoder().encode(left);
+  const rightBytes = new TextEncoder().encode(right);
+  if (leftBytes.length !== rightBytes.length) return false;
+  let difference = 0;
+  for (let index = 0; index < leftBytes.length; index += 1) {
+    difference |= leftBytes[index]! ^ rightBytes[index]!;
+  }
+  return difference === 0;
+}
+
+export function verifyRoomsPublishBearer(authorization: string, expected: string): boolean {
+  const supplied = relayBearerValue(authorization);
+  return supplied !== null && expected.length > 0 && constantTimeEqual(supplied, expected);
+}
+
+export const roomsServerApi = HttpApiBuilder.group(
+  RelayApi,
+  "roomsServer",
+  Effect.fnUntraced(function* (handlers) {
+    const publisher = yield* RoomsMessagePublisher.RoomsMessagePublisher;
+    const config = yield* RelayConfiguration.RelayConfiguration;
+    return handlers.handle(
+      "publishRoomsMessage",
+      Effect.fn("relay.api.roomsServer.publishRoomsMessage")(function* (args) {
+        const expected = config.roomsPublishToken ? Redacted.value(config.roomsPublishToken) : null;
+        if (!expected || !verifyRoomsPublishBearer(args.headers.authorization, expected)) {
+          return yield* relayAuthInvalidError("not_authorized");
+        }
+        return yield* publisher
+          .publish(args.payload)
+          .pipe(Effect.catch(() => relayInternalErrorResponse("upstream_unavailable")));
+      }),
     );
   }),
 );

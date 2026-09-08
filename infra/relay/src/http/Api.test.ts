@@ -26,6 +26,7 @@ import {
   revokeEnvironmentLinkRecord,
   traceRelayHttpRequestWith,
   unlinkEnvironmentRecord,
+  verifyRoomsPublishBearer,
   verifyRelayClientBearerToken,
   withoutCapturedParentSpan,
 } from "./Api.ts";
@@ -39,6 +40,16 @@ vi.mock("@clerk/backend", () => ({
   createClerkClient: vi.fn(),
   verifyToken: vi.fn(),
 }));
+
+describe("Rooms server authentication", () => {
+  it("accepts only an exact bearer token", () => {
+    expect(verifyRoomsPublishBearer("Bearer server-secret", "server-secret")).toBe(true);
+    expect(verifyRoomsPublishBearer("Bearer wrong-secret", "server-secret")).toBe(false);
+    expect(verifyRoomsPublishBearer("server-secret", "server-secret")).toBe(false);
+    expect(verifyRoomsPublishBearer("Bearer server-secret extra", "server-secret")).toBe(false);
+    expect(verifyRoomsPublishBearer("Bearer server-secret", "")).toBe(false);
+  });
+});
 
 const relaySettings: RelayConfiguration.RelayConfiguration["Service"] = {
   relayIssuer: "https://relay.example.test",

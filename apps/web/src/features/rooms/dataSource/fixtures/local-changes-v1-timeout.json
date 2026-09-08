@@ -1,0 +1,12 @@
+{
+  "contract": {
+    "id": "rooms.local-changes",
+    "version": 1,
+    "schema_uri": "contracts/rooms/local-changes/v1/schema.json"
+  },
+  "room_id": "room:019fbe90-0000-7000-8000-000000000001",
+  "after_seq": 42,
+  "head_seq": 42,
+  "changed": false,
+  "reason": "timeout"
+}

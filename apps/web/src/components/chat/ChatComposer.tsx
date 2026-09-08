@@ -90,6 +90,13 @@ import { type ComposerCommandItem, ComposerCommandMenu } from "./ComposerCommand
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
+import { ComposerQuickActionsMenu } from "./ComposerQuickActionsMenu";
+import {
+  COMPOSER_QUICK_ACTION_IMAGE_ACCEPT,
+  composerQuickActionInsertion,
+  selectedComposerImageFiles,
+  type ComposerQuickActionTrigger,
+} from "./composerQuickActions";
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
@@ -998,6 +1005,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const mobileComposerExpandReleaseFrameRef = useRef<number | null>(null);
   const mobileComposerExpandInFlightRef = useRef(false);
   const dragDepthRef = useRef(0);
+  const quickActionImageInputRef = useRef<HTMLInputElement | null>(null);
   const stashPulseKeyRef = useRef(0);
   const stashPulseTimeoutRef = useRef<number | null>(null);
   /**
@@ -1888,7 +1896,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     }
     if (
       key === "Enter" &&
-      shouldSubmitComposerOnEnter({ isMobileViewport, shiftKey: event.shiftKey })
+      shouldSubmitComposerOnEnter({
+        ctrlKey: event.ctrlKey,
+        draft: promptRef.current,
+        isComposing: event.isComposing,
+        isMobileViewport,
+        keyCode: event.keyCode,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        shortcut: settings.threadComposerSendShortcut,
+      })
     ) {
       submitComposer();
       return true;
@@ -2390,6 +2407,30 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       prompt.length,
       needsLeadingSpace ? ` ${text}` : text,
     );
+  };
+
+  // ------------------------------------------------------------------
+  // Callbacks: quick actions (the ＋ control)
+  // ------------------------------------------------------------------
+  const openComposerImagePicker = () => {
+    quickActionImageInputRef.current?.click();
+  };
+
+  const onQuickActionImagesSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = selectedComposerImageFiles(event.target.files);
+    // Reset first so re-picking the same file still fires a change event.
+    event.target.value = "";
+    if (files.length > 0) addComposerImages(files);
+  };
+
+  const insertQuickActionTrigger = (trigger: ComposerQuickActionTrigger) => {
+    const { text, ensureLeadingBoundary } = composerQuickActionInsertion(
+      trigger,
+      promptRef.current,
+    );
+    if (insertComposerTextAtEnd(text, { ensureLeadingBoundary })) {
+      composerEditorRef.current?.focusAtEnd();
+    }
   };
 
   // File-tree drags land as mentions. Handled in the capture phase so the
@@ -3063,6 +3104,28 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               )}
             >
               <div className="-m-1 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <input
+                  accept={COMPOSER_QUICK_ACTION_IMAGE_ACCEPT}
+                  className="hidden"
+                  multiple
+                  onChange={onQuickActionImagesSelected}
+                  ref={quickActionImageInputRef}
+                  tabIndex={-1}
+                  type="file"
+                />
+                <ComposerQuickActionsMenu
+                  attachDisabled={!activeThreadId}
+                  disabled={
+                    isConnecting ||
+                    isComposerApprovalState ||
+                    pendingUserInputs.length > 0 ||
+                    projectSelectionRequired
+                  }
+                  onAttachImages={openComposerImagePicker}
+                  onInsertCommand={() => insertQuickActionTrigger("command")}
+                  onInsertFileReference={() => insertQuickActionTrigger("path")}
+                  onInsertSkill={() => insertQuickActionTrigger("skill")}
+                />
                 {noProviderAvailable ? (
                   <Button
                     type="button"

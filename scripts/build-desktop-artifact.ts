@@ -8,6 +8,7 @@ import { clerkFrontendApiHostnameFromPublishableKey } from "@t3tools/shared/rela
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import rootPackageJson from "../package.json" with { type: "json" };
 import desktopPackageJson from "../apps/desktop/package.json" with { type: "json" };
+import { THREADSPACE_DESKTOP, type DesktopBrand } from "./lib/desktop-brand.ts";
 import serverPackageJson from "../apps/server/package.json" with { type: "json" };
 
 import { applyWebBrandAssets } from "./apply-web-brand-assets.ts";
@@ -36,6 +37,9 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
 const DESKTOP_APP_ID = "com.t3tools.t3code";
+const DesktopBrandConfig = Config.literals(["t3code", "threadspace"], "T3CODE_DESKTOP_BRAND").pipe(
+  Config.withDefault("t3code"),
+);
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -818,11 +822,23 @@ export function resolveMacPasskeySigningConfiguration(
   }
 
   return {
-    appId: DESKTOP_APP_ID,
+    appId: env.T3CODE_DESKTOP_BRAND === "threadspace" ? THREADSPACE_DESKTOP.appId : DESKTOP_APP_ID,
     teamId,
     rpDomains: uniqueRpDomains,
     provisioningProfilePath,
   };
+}
+
+export function resolveConfiguredMacPasskeySigningConfiguration(
+  env: Readonly<Record<string, string | undefined>>,
+): MacPasskeySigningConfiguration | undefined {
+  const hasPasskeySigningConfiguration = [
+    env.T3CODE_APPLE_TEAM_ID,
+    env.T3CODE_MACOS_PROVISIONING_PROFILE,
+    env.T3CODE_CLERK_PASSKEY_RP_DOMAINS,
+  ].some((value) => (value?.trim().length ?? 0) > 0);
+
+  return hasPasskeySigningConfiguration ? resolveMacPasskeySigningConfiguration(env) : undefined;
 }
 
 function escapeXml(value: string): string {
@@ -1448,6 +1464,19 @@ export function resolveDesktopRuntimeDependencies(
   return resolveCatalogDependencies(runtimeDependencies, catalog, "apps/desktop");
 }
 
+export function resolveServerRuntimeDependencies(
+  dependencies: Record<string, string>,
+  catalog: Record<string, string>,
+): Record<string, string> {
+  const runtimeDependencies = Object.fromEntries(
+    Object.entries(dependencies).filter(
+      ([, dependencySpec]) => !dependencySpec.startsWith("workspace:"),
+    ),
+  );
+
+  return resolveCatalogDependencies(runtimeDependencies, catalog, "apps/server");
+}
+
 export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig")(function* (
   updateChannel: "latest" | "nightly",
 ) {
@@ -1482,7 +1511,17 @@ export function resolveDesktopWebAssetBrand(version: string): WebAssetBrand {
   return resolveWebAssetBrandForChannel(resolveDesktopUpdateChannel(version));
 }
 
-export function resolveDesktopBuildIconAssets(version: string): DesktopBuildIconAssets {
+export function resolveDesktopBuildIconAssets(
+  version: string,
+  brand: DesktopBrand = "t3code",
+): DesktopBuildIconAssets {
+  if (brand === "threadspace") {
+    return {
+      macIconPng: THREADSPACE_DESKTOP.macIconPng,
+      linuxIconPng: THREADSPACE_DESKTOP.macIconPng,
+      windowsIconIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
+    };
+  }
   if (resolveDesktopUpdateChannel(version) === "nightly") {
     return {
       macIconPng: BRAND_ASSET_PATHS.nightlyMacIconPng,
@@ -1515,7 +1554,10 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
   return `${trimmed.slice(0, versionSeparator)}/${trimmed.slice(versionSeparator + 1)}`;
 }
 
-export function resolveDesktopProductName(version: string): string {
+export function resolveDesktopProductName(version: string, brand: DesktopBrand = "t3code"): string {
+  if (brand === "threadspace") {
+    return `${THREADSPACE_DESKTOP.baseName} (${resolveDesktopUpdateChannel(version) === "nightly" ? "Nightly" : "Alpha"})`;
+  }
   return resolveDesktopUpdateChannel(version) === "nightly"
     ? "T3 Code (Nightly)"
     : (desktopPackageJson.productName ?? "T3 Code");
@@ -1535,10 +1577,14 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       }
     | undefined,
 ) {
+  const brand = yield* DesktopBrandConfig;
+  const isThreadSpace = brand === "threadspace";
   const buildConfig: Record<string, unknown> = {
-    appId: DESKTOP_APP_ID,
-    productName: resolveDesktopProductName(version),
-    artifactName: "T3-Code-${version}-${arch}.${ext}",
+    appId: isThreadSpace ? THREADSPACE_DESKTOP.appId : DESKTOP_APP_ID,
+    productName: resolveDesktopProductName(version, brand),
+    artifactName: isThreadSpace
+      ? "ThreadSpace-${version}-${arch}.${ext}"
+      : "T3-Code-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [...DESKTOP_FILE_EXCLUSIONS],
     directories: {
@@ -1551,7 +1597,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     extraResources: DESKTOP_EXTRA_RESOURCES,
   };
   const updateChannel = resolveDesktopUpdateChannel(version);
-  const publishConfig = yield* resolveGitHubPublishConfig(updateChannel);
+  const publishConfig = isThreadSpace
+    ? undefined
+    : yield* resolveGitHubPublishConfig(updateChannel);
   if (publishConfig) {
     buildConfig.publish = [publishConfig];
   } else if (mockUpdates) {
@@ -1570,8 +1618,10 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       category: "public.app-category.developer-tools",
       protocols: [
         {
-          name: "T3 Code",
-          schemes: ["t3code", "t3code-dev"],
+          name: isThreadSpace ? THREADSPACE_DESKTOP.baseName : "T3 Code",
+          schemes: isThreadSpace
+            ? [THREADSPACE_DESKTOP.scheme, THREADSPACE_DESKTOP.developmentScheme]
+            : ["t3code", "t3code-dev"],
         },
       ],
       ...(macPasskeySigning
@@ -1586,12 +1636,12 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (platform === "linux") {
     buildConfig.linux = {
       target: [target],
-      executableName: "t3code",
+      executableName: isThreadSpace ? THREADSPACE_DESKTOP.dataDirName : "t3code",
       icon: "icons",
       category: "Development",
       desktop: {
         entry: {
-          StartupWMClass: "t3code",
+          StartupWMClass: isThreadSpace ? THREADSPACE_DESKTOP.dataDirName : "t3code",
         },
       },
     };
@@ -1747,7 +1797,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   });
 
   const resolvedServerDependencies = yield* Effect.try({
-    try: () => resolveCatalogDependencies(serverDependencies, workspaceCatalog, "apps/server"),
+    try: () => resolveServerRuntimeDependencies(serverDependencies, workspaceCatalog),
     catch: (cause) =>
       new DesktopBuildDependencyResolutionError({
         kind: "server-production",
@@ -1766,7 +1816,8 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   });
 
   const appVersion = options.version ?? serverPackageJson.version;
-  const iconAssets = resolveDesktopBuildIconAssets(appVersion);
+  const brand = yield* DesktopBrandConfig;
+  const iconAssets = resolveDesktopBuildIconAssets(appVersion, brand);
   const commitHash = yield* resolveGitCommitHash(repoRoot);
   const mkdir = options.keepStage ? fs.makeTempDirectory : fs.makeTempDirectoryScoped;
   const stageRoot = yield* mkdir({
@@ -1853,7 +1904,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   const configuredMacPasskeySigning =
     options.platform === "mac" && options.signed
       ? yield* Effect.try({
-          try: () => resolveMacPasskeySigningConfiguration(loadRepoEnv({ repoRoot })),
+          try: () => resolveConfiguredMacPasskeySigningConfiguration(loadRepoEnv({ repoRoot })),
           catch: MacPasskeySigningConfigurationResolutionError.fromCause,
         })
       : undefined;
@@ -1903,13 +1954,13 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     stageDependencies,
   );
   const stagePackageJson: StagePackageJson = {
-    name: "t3code",
+    name: brand === "threadspace" ? THREADSPACE_DESKTOP.dataDirName : "t3code",
     version: appVersion,
     buildVersion: appVersion,
     t3codeCommitHash: commitHash,
     private: true,
     packageManager: rootPackageJson.packageManager,
-    description: "T3 Code desktop build",
+    description: brand === "threadspace" ? "ThreadSpace desktop build" : "T3 Code desktop build",
     author: "T3 Tools",
     main: "apps/desktop/dist-electron/main.cjs",
     build: yield* createBuildConfig(

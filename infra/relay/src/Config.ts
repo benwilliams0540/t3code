@@ -19,6 +19,7 @@ export class RelayConfiguration extends Context.Service<
   {
     readonly relayIssuer: string;
     readonly apns: ApnsCredentials;
+    readonly roomsApns?: ApnsCredentials;
     readonly clerkSecretKey: Redacted.Redacted<string>;
     readonly clerkPublishableKey: string;
     readonly clerkJwtAudience: string;
@@ -27,6 +28,7 @@ export class RelayConfiguration extends Context.Service<
     readonly cloudMintPublicKey: string;
     readonly managedEndpointBaseDomain: string | undefined;
     readonly managedEndpointNamespace: string | undefined;
+    readonly roomsPublishToken?: Redacted.Redacted<string>;
   }
 >()("t3code-relay/Config/RelayConfiguration") {}
 

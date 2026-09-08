@@ -2,6 +2,11 @@ import { expect, it } from "@effect/vitest";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { EnvironmentId, PreviewTabId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import {
+  RoomsAgentClient,
+  roomsAgentToolNames,
+  type RoomsAgentClientShape,
+} from "@t3tools/rooms-agent-api";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
@@ -36,6 +41,23 @@ const client = McpSchema.McpServerClient.of({
 const TestLayer = McpHttpServer.PreviewToolkitRegistrationLive.pipe(
   Layer.provideMerge(McpServer.McpServer.layer),
   Layer.provideMerge(PreviewAutomationBroker.layer.pipe(Layer.provide(NodeServices.layer))),
+);
+
+const roomsClient: RoomsAgentClientShape = {
+  profile: "read_only",
+  invoke: () => Effect.die("unused"),
+};
+
+const RoomsTestLayer = McpHttpServer.RoomsAgentToolkitRegistrationLive.pipe(
+  Layer.provideMerge(McpServer.McpServer.layer),
+  Layer.provide(Layer.succeed(RoomsAgentClient, roomsClient)),
+);
+
+it.effect("registers the exact shared Rooms catalog on the internal T3 surface", () =>
+  Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    expect(server.tools.map(({ tool }) => tool.name)).toEqual(roomsAgentToolNames);
+  }).pipe(Effect.provide(RoomsTestLayer)),
 );
 
 it("normalizes empty successful notification responses to accepted", () => {

@@ -1,0 +1,153 @@
+[data-threadspace-app] {
+  color-scheme: light;
+  --threadspace-cyan: #177b82;
+  --threadspace-cyan-soft: rgb(23 123 130 / 10%);
+  --threadspace-cyan-edge: rgb(23 123 130 / 42%);
+  --threadspace-grid: rgb(64 79 86 / 4%);
+  --threadspace-amber: #976417;
+  --radius: 0.25rem;
+  --background: #f2efe7;
+  --app-chrome-background: #e9e5dc;
+  --surface-raised: #f8f6f0;
+  --foreground: #22292d;
+  --card: #f8f6f0;
+  --card-foreground: #22292d;
+  --popover: #faf8f2;
+  --popover-foreground: #22292d;
+  --primary: #0f6f77;
+  --primary-foreground: #f8fbfa;
+  --secondary: #e8e4da;
+  --secondary-foreground: #293237;
+  --muted: #e9e5dc;
+  --muted-foreground: #687076;
+  --accent: #e2e1da;
+  --accent-foreground: #1f292d;
+  --border: #c5c0b4;
+  --input: #aaa397;
+  --ring: #177b82;
+  --sidebar: #e7e3da;
+  --sidebar-foreground: #283034;
+  --sidebar-muted-foreground: #687076;
+  --sidebar-control-surface: #ddd9cf;
+  --sidebar-row-hover: #dedfd9;
+  --sidebar-row-active: #d8dcda;
+  --sidebar-row-selected: #d7dedb;
+  --sidebar-border: #c2bdb1;
+  --sidebar-stage-fade: var(--sidebar);
+  --app-scrollbar-thumb: rgb(84 91 92 / 28%);
+  background: var(--background);
+}
+
+.dark [data-threadspace-app] {
+  color-scheme: dark;
+  --threadspace-cyan: #68cbd0;
+  --threadspace-cyan-soft: rgb(104 203 208 / 8%);
+  --threadspace-cyan-edge: rgb(104 203 208 / 36%);
+  --threadspace-grid: rgb(104 203 208 / 5%);
+  --threadspace-amber: #d3a04e;
+  --background: #0b0e11;
+  --app-chrome-background: #101419;
+  --surface-raised: #14191f;
+  --foreground: #edf0ee;
+  --card: #13181e;
+  --card-foreground: #edf0ee;
+  --popover: #171c22;
+  --popover-foreground: #edf0ee;
+  --primary: #68cbd0;
+  --primary-foreground: #071012;
+  --secondary: #171c22;
+  --secondary-foreground: #e4e8e6;
+  --muted: #171c22;
+  --muted-foreground: #939da2;
+  --accent: #1b2229;
+  --accent-foreground: #f2f5f3;
+  --border: #303841;
+  --input: #46505a;
+  --ring: #68cbd0;
+  --sidebar: #101419;
+  --sidebar-foreground: #e6ebe8;
+  --sidebar-muted-foreground: #8e989e;
+  --sidebar-control-surface: #171c22;
+  --sidebar-row-hover: #171d23;
+  --sidebar-row-active: #1b242a;
+  --sidebar-row-selected: #1a282c;
+  --sidebar-border: #2b333c;
+  --sidebar-stage-fade: var(--sidebar);
+  --app-scrollbar-thumb: rgb(174 191 195 / 22%);
+}
+
+[data-threadspace-app] .threadspace-topbar {
+  min-height: 48px;
+  background: var(--app-chrome-background);
+}
+
+[data-threadspace-app] .threadspace-wordmark,
+[data-threadspace-app] .threadspace-technical,
+[data-threadspace-app] [data-threadspace-plate] {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+}
+
+[data-threadspace-app] [data-threadspace-plate] {
+  letter-spacing: 0.12em;
+}
+
+[data-threadspace-app] [data-threadspace-canvas="drafting"] {
+  background-color: var(--background);
+  background-image:
+    linear-gradient(var(--threadspace-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--threadspace-grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.dark [data-threadspace-app] [data-threadspace-canvas="drafting"] {
+  background-image: none;
+}
+
+[data-threadspace-app]
+  [data-threadspace-surface]:not([data-threadspace-surface^="native"])
+  :is(.rounded-2xl, .rounded-xl, .rounded-lg, .rounded-md) {
+  border-radius: 2px;
+}
+
+[data-threadspace-app] .threadspace-panel {
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 2px;
+}
+
+[data-threadspace-app] .threadspace-module-header {
+  min-height: 2.25rem;
+  border-bottom: 1px solid var(--border);
+  padding: 0.65rem 0.85rem;
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+}
+
+[data-threadspace-app] [data-rooms-sidebar] {
+  background: var(--sidebar);
+}
+
+[data-threadspace-app] [data-rooms-thread-context="open"] {
+  background: var(--card);
+  box-shadow: none;
+}
+
+[data-threadspace-app] [data-rooms-channel-composer] {
+  background: color-mix(in srgb, var(--background) 96%, transparent);
+}
+
+[data-threadspace-app] button:focus-visible,
+[data-threadspace-app] a:focus-visible {
+  outline-color: var(--threadspace-cyan);
+}
+
+@media (max-width: 920px) {
+  [data-threadspace-app] .threadspace-wordmark {
+    display: none;
+  }
+}

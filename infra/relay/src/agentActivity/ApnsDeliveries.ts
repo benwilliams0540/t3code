@@ -583,10 +583,14 @@ interface LiveActivityDeliveryTarget {
 // builds get sandbox tokens). Sending with mismatched routing yields
 // DeviceTokenNotForTopic/BadDeviceToken, so per-device values override the
 // relay-wide defaults when present.
-function credentialsForTarget(
-  credentials: RelayConfiguration.RelayConfiguration["Service"]["apns"],
+export function credentialsForTarget(
+  configuration: Pick<RelayConfiguration.RelayConfiguration["Service"], "apns" | "roomsApns">,
   target: LiveActivityDeliveryTarget,
 ): RelayConfiguration.RelayConfiguration["Service"]["apns"] {
+  const credentials =
+    configuration.roomsApns && configuration.roomsApns.bundleId === target.bundle_id
+      ? configuration.roomsApns
+      : configuration.apns;
   return {
     ...credentials,
     ...(target.bundle_id ? { bundleId: target.bundle_id } : {}),
@@ -907,7 +911,7 @@ export const make = Effect.gen(function* () {
     }
     const result = yield* apns
       .sendLiveActivityRequest({
-        credentials: credentialsForTarget(config.apns, input.target),
+        credentials: credentialsForTarget(config, input.target),
         request,
         issuedAtUnixSeconds: epochSeconds,
       })
@@ -1045,7 +1049,7 @@ export const make = Effect.gen(function* () {
     }
     const result = yield* apns
       .sendPushNotificationRequest({
-        credentials: credentialsForTarget(config.apns, input.target),
+        credentials: credentialsForTarget(config, input.target),
         request,
         issuedAtUnixSeconds: epochSeconds,
       })

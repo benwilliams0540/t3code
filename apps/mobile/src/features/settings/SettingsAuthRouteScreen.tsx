@@ -5,18 +5,18 @@ import { NativeStackScreenOptions } from "../../native/StackHeader";
 import { useEffect } from "react";
 import { View } from "react-native";
 
-import { hasCloudPublicConfig } from "../cloud/publicConfig";
+import { shouldMountCloudAuthProvider } from "../cloud/publicConfig";
 
 export function SettingsAuthRouteScreen() {
   const navigation = useNavigation();
 
   useEffect(() => {
-    if (!hasCloudPublicConfig()) {
+    if (!shouldMountCloudAuthProvider()) {
       navigation.dispatch(StackActions.replace("Settings"));
     }
   }, [navigation]);
 
-  return hasCloudPublicConfig() ? <ConfiguredSettingsAuthRouteScreen /> : null;
+  return shouldMountCloudAuthProvider() ? <ConfiguredSettingsAuthRouteScreen /> : null;
 }
 
 function ConfiguredSettingsAuthRouteScreen() {

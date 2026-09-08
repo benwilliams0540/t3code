@@ -1,6 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import * as Schema from "effect/Schema";
 import {
+  useCallback,
   useEffect,
   useState,
   useSyncExternalStore,
@@ -10,13 +11,14 @@ import {
 import { useLocation, useNavigate } from "@tanstack/react-router";
 
 import { isElectron } from "../env";
-import { getLocalStorageItem } from "../hooks/useLocalStorage";
+import { getLocalStorageItem, useLocalStorage } from "../hooks/useLocalStorage";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import { cn, isMacPlatform } from "../lib/utils";
 import { primaryServerKeybindingsAtom } from "../state/server";
-import { useEnvironmentIdentificationMode, useSidebarV2Enabled } from "../hooks/useSettings";
+import { useEnvironmentIdentificationMode } from "../hooks/useSettings";
 import ThreadSidebar from "./Sidebar";
 import ThreadSidebarV2 from "./SidebarV2";
+import { type AppSidebarVariant, useAppSidebarVariantSelection } from "./appSidebarVariant";
 import { useSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
 import {
   resolveInitialThreadSidebarWidth,
@@ -27,6 +29,7 @@ import {
 } from "./threadSidebarWidth";
 import {
   Sidebar,
+  SidebarInset,
   SidebarProvider,
   SidebarRail,
   SidebarTrigger,
@@ -34,8 +37,35 @@ import {
   useSidebarVisibility,
 } from "./ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { RoomsWorkspaceRail } from "../features/rooms/shell/RoomsWorkspaceRail";
+import { ROOMS_SIDEBAR_OPEN_STORAGE_KEY } from "../features/rooms/shell/navigation";
+import { RoomsDataSourceProvider } from "../features/rooms/dataSource";
+import "../features/rooms/threadspace.css";
 
 const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "90px";
+const ROOMS_WORKSPACE_RAIL_WIDTH = "3.5rem";
+const ROOMS_MACOS_TRAFFIC_LIGHTS_SAFE_INSET = "112px";
+const ROOMS_MACOS_TITLEBAR_CONTROL_GAP = "0.75rem";
+
+export function resolveRoomsTitlebarPresentation(input: {
+  readonly isMacosDesktop: boolean;
+  readonly isWindowFullscreen: boolean;
+  readonly showRoomsSidebar: boolean;
+}): {
+  readonly leadingInset: string;
+  readonly reserveMacosWindowControls: boolean;
+  readonly windowControlsWidth: string;
+} {
+  const reserveMacosWindowControls =
+    input.showRoomsSidebar && input.isMacosDesktop && !input.isWindowFullscreen;
+  return {
+    leadingInset: reserveMacosWindowControls ? ROOMS_MACOS_TITLEBAR_CONTROL_GAP : "0px",
+    reserveMacosWindowControls,
+    windowControlsWidth: reserveMacosWindowControls
+      ? ROOMS_MACOS_TRAFFIC_LIGHTS_SAFE_INSET
+      : ROOMS_WORKSPACE_RAIL_WIDTH,
+  };
+}
 
 function subscribeToViewportWidth(onChange: () => void): () => void {
   window.addEventListener("resize", onChange);
@@ -116,17 +146,54 @@ function SidebarControl() {
   );
 }
 
+function RoomsSidebarShortcut({ toggleSidebar }: { readonly toggleSidebar: () => void }) {
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.closest("[data-keybinding-capture]")
+      ) {
+        return;
+      }
+      if (resolveShortcutCommand(event, keybindings) !== "sidebar.toggle") return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      toggleSidebar();
+    };
+
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [keybindings, toggleSidebar]);
+
+  return null;
+}
+
 export function AppSidebarLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
-  const sidebarV2Enabled = useSidebarV2Enabled();
+  const [sidebarVariant] = useAppSidebarVariantSelection();
   // Settings routes render the settings nav, which lives in the v1 component
   // and is identical for both sidebars — so v1 stays mounted there.
   const pathname = useLocation({ select: (location) => location.pathname });
   const isOnSettings = pathname === "/settings" || pathname.startsWith("/settings/");
-  const useSidebarV2 = sidebarV2Enabled && !isOnSettings;
-  const useSidebarV2Theme = useSidebarV2 || isOnSettings;
+  const shouldEnterRoomsWorkspace = shouldRouteIntoRoomsWorkspace({ pathname, sidebarVariant });
+  const { showRoomsSidebar, useSidebarV2, useSidebarV2Theme } = resolveAppSidebarPresentation({
+    isOnSettings,
+    sidebarVariant,
+  });
   const isMacosDesktop = isElectron && isMacPlatform(navigator.platform);
   const [sidebarWidth, setSidebarWidth] = useState(readInitialThreadSidebarWidth);
+  const [, setRoomsSidebarOpen] = useLocalStorage(
+    ROOMS_SIDEBAR_OPEN_STORAGE_KEY,
+    true,
+    Schema.Boolean,
+  );
+  const toggleRoomsSidebar = useCallback(() => {
+    setRoomsSidebarOpen((open) => !open);
+  }, [setRoomsSidebarOpen]);
   // Subscribed rather than read once: the clamp must track live window size,
   // and a clamped drag ends with an unchanged width, which skips the re-render
   // that would otherwise refresh a render-time snapshot.
@@ -138,11 +205,21 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
       ? getWindowFullscreenState()
       : false;
   });
+  const workspaceControlsLeft =
+    isMacosDesktop && !isWindowFullscreen
+      ? MACOS_TRAFFIC_LIGHTS_LEFT_INSET
+      : "calc(env(safe-area-inset-left) + var(--rooms-workspace-rail-width) + 0.75rem)";
+  const roomsTitlebarPresentation = resolveRoomsTitlebarPresentation({
+    isMacosDesktop,
+    isWindowFullscreen,
+    showRoomsSidebar,
+  });
   const sidebarProviderStyle = {
-    "--sidebar-width": `${sidebarWidth}px`,
-    ...(isMacosDesktop && !isWindowFullscreen
-      ? { "--workspace-controls-left": MACOS_TRAFFIC_LIGHTS_LEFT_INSET }
-      : {}),
+    "--rooms-workspace-rail-width": showRoomsSidebar ? ROOMS_WORKSPACE_RAIL_WIDTH : "0rem",
+    "--rooms-titlebar-leading-inset": roomsTitlebarPresentation.leadingInset,
+    "--rooms-window-controls-width": roomsTitlebarPresentation.windowControlsWidth,
+    "--sidebar-width": sidebarWidth + "px",
+    "--workspace-controls-left": workspaceControlsLeft,
   } as CSSProperties;
 
   useEffect(() => {
@@ -182,29 +259,90 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
     };
   }, [navigate, pathname]);
 
+  useEffect(() => {
+    if (!shouldEnterRoomsWorkspace) return;
+    void navigate({ to: "/rooms", replace: true });
+  }, [navigate, shouldEnterRoomsWorkspace]);
+
   return (
-    <SidebarProvider className="h-dvh! min-h-0!" defaultOpen style={sidebarProviderStyle}>
-      <Sidebar
-        side="left"
-        collapsible="offcanvas"
-        data-app-sidebar=""
-        data-sidebar-version={useSidebarV2Theme ? "v2" : "v1"}
-        className="border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
-        resizable={{
-          maxWidth: sidebarMaximumWidth,
-          minWidth: THREAD_SIDEBAR_MIN_WIDTH,
-          shouldAcceptWidth: ({ currentWidth, nextWidth, wrapper }) =>
-            nextWidth <= currentWidth ||
-            wrapper.clientWidth - nextWidth >= THREAD_MAIN_CONTENT_MIN_WIDTH,
-          storageKey: THREAD_SIDEBAR_WIDTH_STORAGE_KEY,
-          onResize: setSidebarWidth,
-        }}
+    <RoomsDataSourceProvider>
+      <SidebarProvider
+        className="h-dvh! min-h-0!"
+        data-threadspace-app={showRoomsSidebar ? "" : undefined}
+        defaultOpen
+        style={sidebarProviderStyle}
       >
-        {useSidebarV2 ? <ThreadSidebarV2 /> : <ThreadSidebar />}
-        <SidebarRail />
-      </Sidebar>
-      {children}
-      <SidebarControl />
-    </SidebarProvider>
+        {showRoomsSidebar ? (
+          <RoomsWorkspaceRail
+            reserveMacosWindowControls={roomsTitlebarPresentation.reserveMacosWindowControls}
+          />
+        ) : null}
+        {showRoomsSidebar ? null : (
+          <Sidebar
+            side="left"
+            collapsible="offcanvas"
+            data-app-sidebar=""
+            data-sidebar-version={useSidebarV2Theme ? "v2" : "v1"}
+            className="left-[var(--rooms-workspace-rail-width)] border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
+            resizable={{
+              maxWidth: sidebarMaximumWidth,
+              minWidth: THREAD_SIDEBAR_MIN_WIDTH,
+              shouldAcceptWidth: ({ currentWidth, nextWidth, wrapper }) =>
+                nextWidth <= currentWidth ||
+                wrapper.clientWidth - nextWidth >= THREAD_MAIN_CONTENT_MIN_WIDTH,
+              storageKey: THREAD_SIDEBAR_WIDTH_STORAGE_KEY,
+              onResize: setSidebarWidth,
+            }}
+          >
+            {useSidebarV2 ? <ThreadSidebarV2 /> : <ThreadSidebar />}
+            <SidebarRail />
+          </Sidebar>
+        )}
+        {shouldEnterRoomsWorkspace ? (
+          <SidebarInset className="h-dvh min-h-0 bg-background" />
+        ) : (
+          children
+        )}
+        {showRoomsSidebar ? (
+          <RoomsSidebarShortcut toggleSidebar={toggleRoomsSidebar} />
+        ) : (
+          <SidebarControl />
+        )}
+      </SidebarProvider>
+    </RoomsDataSourceProvider>
   );
+}
+
+export function shouldRouteIntoRoomsWorkspace(input: {
+  readonly pathname: string;
+  readonly sidebarVariant: AppSidebarVariant;
+}): boolean {
+  if (input.sidebarVariant !== "v3") return false;
+  if (/^\/settings(\/|$)/.test(input.pathname)) return false;
+  return !/^\/rooms(\/|$)/.test(input.pathname);
+}
+
+export function resolveAppSidebarPresentation(input: {
+  readonly isOnSettings: boolean;
+  readonly sidebarVariant: AppSidebarVariant;
+}): {
+  readonly showRoomsSidebar: boolean;
+  readonly useSidebarV2: boolean;
+  readonly useSidebarV2Theme: boolean;
+} {
+  // Settings navigation currently belongs to v1. It replaces the selected
+  // sidebar while Settings is open; it is never mounted beside v2 or v3.
+  if (input.isOnSettings) {
+    return {
+      showRoomsSidebar: false,
+      useSidebarV2: false,
+      useSidebarV2Theme: input.sidebarVariant !== "v1",
+    };
+  }
+
+  return {
+    showRoomsSidebar: input.sidebarVariant === "v3",
+    useSidebarV2: input.sidebarVariant === "v2",
+    useSidebarV2Theme: input.sidebarVariant === "v2",
+  };
 }

@@ -1,0 +1,51 @@
+name: Rooms Focused
+
+# Manual only. The main CI workflow targets Blacksmith runners that this fork
+# cannot use, so this workflow exists as a runnable recipe for the Rooms test
+# and typecheck scope on GitHub-hosted runners. It does not run on its own:
+# trigger it from the Actions tab when a run is worth the runner time.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rooms:
+    name: Rooms tests and typechecks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: true
+
+      - name: Rooms tests
+        run: >-
+          vp test run
+          packages/shared/src/roomsTransport.test.ts
+          packages/rooms-agent-api
+          packages/rooms-agent-connector
+          packages/rooms-agent-connector-host
+          apps/web/src/features/rooms
+          apps/web/src/cloud/roomsAuth.test.ts
+          apps/web/src/cloud/publicConfig.test.ts
+          apps/web/src/localApi.test.ts
+          apps/desktop/src/ipc/methods/roomsHuman.test.ts
+          apps/mobile/src/features/rooms
+
+      - name: Rooms typechecks
+        run: >-
+          vp run
+          --filter @t3tools/shared
+          --filter @t3tools/rooms-agent-api
+          --filter @t3tools/rooms-agent-connector
+          --filter @t3tools/rooms-agent-connector-host
+          --filter @t3tools/desktop
+          --filter @t3tools/web
+          --filter @t3tools/mobile
+          typecheck

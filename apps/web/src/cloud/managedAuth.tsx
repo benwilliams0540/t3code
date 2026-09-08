@@ -6,13 +6,23 @@ import {
   settlePromise,
 } from "@t3tools/client-runtime/state/runtime";
 import * as Effect from "effect/Effect";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 
 import { environmentCatalog } from "../connection/catalog";
 import { runtime } from "../lib/runtime";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { useAtomCommand } from "../state/use-atom-command";
-import { resolveRelayClerkTokenOptions } from "./publicConfig";
+import {
+  hasCloudPublicConfig,
+  hasRoomsPublicConfig,
+  resolveRelayClerkTokenOptions,
+  resolveRoomsClerkTokenOptions,
+} from "./publicConfig";
+import {
+  activateRoomsAuthentication,
+  deactivateRoomsAuthentication,
+  markRoomsAuthenticationLoading,
+} from "./roomsAuth";
 
 let relayTokenProvider: (() => Promise<string | null>) | null = null;
 
@@ -47,8 +57,9 @@ export function ManagedRelayAuthProvider({ children }: { readonly children: Reac
   const observedAccountRef = useRef<string | null | undefined>(undefined);
   const accountTransitionRef = useRef<Promise<void> | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isLoaded) {
+      markRoomsAuthenticationLoading();
       return;
     }
 
@@ -79,13 +90,18 @@ export function ManagedRelayAuthProvider({ children }: { readonly children: Reac
 
     if (!isSignedIn || !userId) {
       deactivateManagedRelayAuthentication();
+      deactivateRoomsAuthentication();
       if (previousAccount !== null) {
         void queueAccountCleanup();
       }
     } else {
+      deactivateRoomsAuthentication();
+      if (hasRoomsPublicConfig()) {
+        activateRoomsAuthentication(userId, () => getToken(resolveRoomsClerkTokenOptions()));
+      }
       const tokenProvider = () => getToken(resolveRelayClerkTokenOptions());
       const activateSession = () => {
-        if (!cancelled) {
+        if (!cancelled && hasCloudPublicConfig()) {
           activateManagedRelayAuthentication(userId, tokenProvider);
         }
       };
@@ -110,7 +126,13 @@ export function ManagedRelayAuthProvider({ children }: { readonly children: Reac
     };
   }, [getToken, isLoaded, isSignedIn, removeRelayEnvironments, userId]);
 
-  useEffect(() => () => deactivateManagedRelayAuthentication(), []);
+  useEffect(
+    () => () => {
+      deactivateManagedRelayAuthentication();
+      deactivateRoomsAuthentication();
+    },
+    [],
+  );
 
   return children;
 }

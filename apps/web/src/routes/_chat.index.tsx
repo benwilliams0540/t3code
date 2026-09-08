@@ -19,13 +19,21 @@ import { APP_DISPLAY_NAME } from "~/branding";
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 import { cn } from "~/lib/utils";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
+import { useAppSidebarVariantSelection } from "~/components/appSidebarVariant";
+import { RoomsWorkspaceLanding } from "~/features/rooms/shell";
+import { shouldUseRoomsWorkspaceLanding } from "~/features/rooms/shell/navigation";
 
 function ChatIndexRouteView() {
   const { authGateState } = Route.useRouteContext();
   const { environments } = useEnvironments();
+  const [sidebarVariant] = useAppSidebarVariantSelection();
 
   if (authGateState.status === "hosted-static" && environments.length === 0) {
     return <HostedStaticOnboardingState />;
+  }
+
+  if (shouldUseRoomsWorkspaceLanding(sidebarVariant)) {
+    return <RoomsWorkspaceLanding />;
   }
 
   return <IndexDraftLanding />;

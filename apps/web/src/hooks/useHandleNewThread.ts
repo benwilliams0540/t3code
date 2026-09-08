@@ -9,6 +9,7 @@ import { useParams, useRouter } from "@tanstack/react-router";
 import { useCallback, useMemo } from "react";
 import {
   markPromotedDraftThreadByRef,
+  type DraftId,
   type DraftThreadEnvMode,
   type DraftThreadState,
   useComposerDraftStore,
@@ -23,11 +24,15 @@ import {
 import { readThreadShell, useProjects, useThread } from "../state/entities";
 import { resolveNewDraftStartFromOrigin } from "../lib/chatThreadActions";
 import { primaryServerSettingsAtom } from "../state/server";
-import { resolveThreadRouteTarget } from "../threadRoutes";
+import {
+  buildDraftThreadRouteDestination,
+  resolveNewThreadDraftRouteScope,
+  resolveThreadRouteTarget,
+} from "../threadRoutes";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import { useClientSettings } from "./useSettings";
 
-export function useNewThreadHandler() {
+export function useNewThreadHandler(routeContext?: { readonly roomsRoomSlug?: string }) {
   const projects = useProjects();
   // New-thread defaults are a user preference, and the settings UI only ever
   // edits the primary environment's settings.json. Reading the target
@@ -37,10 +42,15 @@ export function useNewThreadHandler() {
   const primaryServerSettings = useAtomValue(primaryServerSettingsAtom);
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const router = useRouter();
-  const getCurrentRouteTarget = useCallback(() => {
-    const currentRouteParams = router.state.matches[router.state.matches.length - 1]?.params ?? {};
-    return resolveThreadRouteTarget(currentRouteParams);
-  }, [router]);
+  const explicitRoomsRoomSlug = routeContext?.roomsRoomSlug;
+  const currentRouteTarget = useParams({
+    strict: false,
+    select: (params) => resolveThreadRouteTarget(params),
+  });
+  const draftRouteScope = useParams({
+    strict: false,
+    select: (params) => resolveNewThreadDraftRouteScope(params, explicitRoomsRoomSlug),
+  });
 
   return useCallback(
     (
@@ -63,7 +73,21 @@ export function useNewThreadHandler() {
         setLogicalProjectDraftThreadId,
         setModelSelection,
       } = useComposerDraftStore.getState();
-      const currentRouteTarget = getCurrentRouteTarget();
+      const navigateToDraft = (draftId: DraftId): Promise<void> => {
+        const destination = buildDraftThreadRouteDestination(draftRouteScope, draftId);
+        if (destination.kind === "rooms") {
+          return router.navigate({
+            to: destination.to,
+            params: destination.params,
+            replace: options?.replace ?? false,
+          });
+        }
+        return router.navigate({
+          to: destination.to,
+          params: destination.params,
+          replace: options?.replace ?? false,
+        });
+      };
       // A new thread carries the user's *working mode* from the thread being
       // viewed: model (including options like reasoning effort and context
       // window), permission mode, and interaction mode. Branch, worktree, and
@@ -191,7 +215,7 @@ export function useNewThreadHandler() {
             reusableStoredDraftThread.draftId,
             {
               threadId: reusableStoredDraftThread.threadId,
-              ...(workspaceContext ?? {}),
+              ...workspaceContext,
               ...(carryRuntimeMode ? { runtimeMode: carryRuntimeMode } : {}),
               ...(carryInteractionMode ? { interactionMode: carryInteractionMode } : {}),
             },
@@ -202,11 +226,7 @@ export function useNewThreadHandler() {
           ) {
             return;
           }
-          await router.navigate({
-            to: "/draft/$draftId",
-            params: { draftId: reusableStoredDraftThread.draftId },
-            replace: options?.replace ?? false,
-          });
+          await navigateToDraft(reusableStoredDraftThread.draftId);
         })();
       }
 
@@ -272,14 +292,17 @@ export function useNewThreadHandler() {
           setModelSelection(draftId, carryModelSelection, { replaceOptions: true });
         }
 
-        await router.navigate({
-          to: "/draft/$draftId",
-          params: { draftId },
-          replace: options?.replace ?? false,
-        });
+        await navigateToDraft(draftId);
       })();
     },
-    [getCurrentRouteTarget, primaryServerSettings, projectGroupingSettings, projects, router],
+    [
+      currentRouteTarget,
+      draftRouteScope,
+      primaryServerSettings,
+      projectGroupingSettings,
+      projects,
+      router,
+    ],
   );
 }
 
