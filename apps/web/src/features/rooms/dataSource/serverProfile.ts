@@ -1,3 +1,4 @@
+import { normalizeRoomsOrigin } from "@t3tools/shared/roomsTransport";
 import * as Schema from "effect/Schema";
 
 import {
@@ -80,16 +81,24 @@ export function roomsDeviceLabel(): string {
     : "ThreadSpace web";
 }
 
-// Connecting records what the server told us. A session is kept only when the
-// server ID is unchanged, so repointing the URL at a different server drops it.
+// Connecting records what the server told us. A matching server ID alone cannot
+// authorize sending a stored session to a different origin.
 export function roomsProfileAfterDiscovery(
   current: RoomsSharedServerProfile | null,
   baseUrl: string,
   discovered: RoomsLocalAuthProvider,
 ): RoomsSharedServerProfile {
   const serverId = discovered.server?.id ?? null;
+  const origin = normalizeRoomsOrigin("shared", baseUrl);
   const session =
-    current?.session && serverId !== null && current.session.serverId === serverId
+    current?.session &&
+    current.provider === "local" &&
+    discovered.provider === "local" &&
+    origin !== null &&
+    normalizeRoomsOrigin("shared", current.baseUrl) === origin &&
+    serverId !== null &&
+    current.serverId === serverId &&
+    current.session.serverId === serverId
       ? current.session
       : null;
   return {

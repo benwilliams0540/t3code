@@ -1,8 +1,17 @@
 import type { RoomsHumanHttpRequest } from "@t3tools/contracts";
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
+import { __resetRoomsAuthenticationForTests } from "~/cloud/roomsAuth";
+
+import { createRoomsHumanClient, type RoomsHumanTransport } from "./humanSharedClient";
 import { createRoomsLocalAuthClient } from "./localAuthClient";
 import { RoomsLocalClientError } from "./localChannelsClient";
+import { publishRoomsServerAuthentication } from "./publishServerAuthentication";
+import {
+  roomsProfileAfterDiscovery,
+  roomsProfileAfterSignIn,
+  usableRoomsSharedSession,
+} from "./serverProfile";
 
 const contract = {
   id: "rooms.local-auth",
@@ -44,6 +53,76 @@ function transportRecording(body: unknown, status = 201) {
 }
 
 describe("local auth client", () => {
+  afterEach(__resetRoomsAuthenticationForTests);
+
+  it("does not send the old bearer after selecting another origin with the same server ID", async () => {
+    const requests: RoomsHumanHttpRequest[] = [];
+    const responses: Record<string, unknown> = {
+      "/rooms/human/v1/local/sessions": signedIn,
+      "/rooms/human/v1/auth-provider": {
+        contract,
+        provider: "local",
+        server: signedIn.server,
+        setup_required: false,
+      },
+      "/rooms/human/v1/session": {
+        contract: {
+          id: "rooms.human-shared",
+          version: 1,
+          schema_uri: "contracts/rooms/human-shared/v1/schema.json",
+        },
+        status: "ready",
+        principal: null,
+        rooms: [],
+      },
+    };
+    const transport: RoomsHumanTransport = {
+      request: async (request) => {
+        requests.push(request);
+        return { status: 200, headers: {}, body: JSON.stringify(responses[request.path]) };
+      },
+    };
+    const originalOrigin = "https://rooms.tailnet.example";
+    const originalAuth = createRoomsLocalAuthClient(originalOrigin, () => transport);
+    const original = roomsProfileAfterSignIn(
+      originalOrigin,
+      await originalAuth.signIn({ username: "ben", password: "synthetic passphrase" }),
+    );
+    const now = Date.parse("2026-09-05T12:00:00.000Z");
+    const originalSession = usableRoomsSharedSession(original, now);
+    publishRoomsServerAuthentication(
+      original.provider,
+      originalSession?.accountId ?? null,
+      originalSession?.token ?? null,
+    );
+    await createRoomsHumanClient(original.baseUrl, undefined, () => transport).getSession();
+    expect(requests.at(-1)).toMatchObject({ baseUrl: originalOrigin, bearer: "rhs1_x" });
+
+    const otherOrigin = "https://other.example";
+    const otherAuth = createRoomsLocalAuthClient(otherOrigin, () => transport);
+    const selected = roomsProfileAfterDiscovery(
+      original,
+      otherOrigin,
+      await otherAuth.getAuthProvider(),
+    );
+    const selectedSession = usableRoomsSharedSession(selected, now);
+    publishRoomsServerAuthentication(
+      selected.provider,
+      selectedSession?.accountId ?? null,
+      selectedSession?.token ?? null,
+    );
+    await expect(
+      createRoomsHumanClient(selected.baseUrl, undefined, () => transport).getSession(),
+    ).rejects.toMatchObject({ code: "rooms_auth_unavailable", status: 401 });
+    expect(requests.filter((request) => request.baseUrl === otherOrigin)).toEqual([
+      {
+        baseUrl: otherOrigin,
+        path: "/rooms/human/v1/auth-provider",
+        method: "GET",
+      },
+    ]);
+  });
+
   it("discovers the provider without a bearer", async () => {
     const { client, requests } = transportRecording(
       { contract, provider: "local", server: null, setup_required: true },
