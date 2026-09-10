@@ -16,6 +16,9 @@
 - [Shared Rooms human identity](./rooms/shared-human-identity.md)
 - [Integrations](./integrations/source-control-providers.md)
 - [Mobile](./mobile/app.md)
-- [Operations](./operations/ci.md)
+- Operations
+  - [CI](./operations/ci.md)
+  - [Release](./operations/release.md)
+  - [ThreadSpace desktop delivery](./operations/threadspace-delivery.md)
 - [Providers](./providers/codex.md)
 - [Reference](./reference/encyclopedia.md)

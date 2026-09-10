@@ -156,35 +156,17 @@ Evidence:
 | Apple developer team access        | Signing, provisioning and release services                            | Clerk configuration or room ownership                            |
 | Local project sharing grant        | Selected project context available to room participants/agents        | Arbitrary machine access or permission to overwrite others' work |
 
-## Current sign-in blocker
+## Desktop Clerk boundary
 
-The renamed desktop app uses `threadspace://app`. The earlier diagnostic against the
-configured Clerk instance returned `origin_authorization_headers_conflict` for that origin,
-while the old `t3code://app` origin was accepted. This is provider configuration, not a need
-for each user to become a room operator.
+The renamed desktop app uses `threadspace://app`. Installed-app acceptance established that the
+Clerk failure was caused by Electron adding browser `Origin` semantics to a native Clerk request
+that already carried authorization. The desktop now handles that request and its response through
+a narrowly scoped compatibility boundary; it does not require every participant to become a Clerk
+or room operator.
 
-An authorized maintainer can preserve existing entries and add:
-
-- `threadspace://app` to the instance's allowed origins through Clerk's Backend API.
-- `threadspace://app/` to its native OAuth redirect allowlist.
-
-Monroe needs his own configuration-capable membership in the current Clerk workspace to
-perform this independently. An existing authorized workspace administrator must grant access;
-ordinary application sign-in cannot grant it. No such access was established in this session.
-Do not share Ben's login or put a Clerk secret in the client. A separate Clerk application is
-possible, but changing the client and server issuer would create a separate identity setup,
-not repair the existing instance or transfer its room memberships.
-
-Clerk's current documentation lists Owner and Viewer on Hobby/Pro, with Admin and Developer
-available on Business. Viewer cannot change configuration; Developer configuration access is
-development-only. The current workspace plan and actual available roles have not been inspected.
-Use the available role that covers the required environment; Owner carries broader authority.
-Sources: [team access](https://clerk.com/docs/guides/dashboard/manage-team-access),
-[workspace invitations](https://clerk.com/docs/guides/dashboard/overview),
-[allowed origins](https://clerk.com/docs/reference/backend/instance/update).
-
-Changing these Clerk entries does not require changing the Apple signing certificate.
-Passkey provisioning and TestFlight remain separate work.
+See [ThreadSpace desktop delivery](../operations/threadspace-delivery.md) for the durable transport
+rules and the verification sequence. Clerk secrets remain server-side, and changing identity
+provider configuration remains separate from Apple signing, room membership, and host access.
 
 ## Work order and acceptance
 
