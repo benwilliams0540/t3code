@@ -158,7 +158,9 @@ request ID. Message submission preserves its stable request ID across retry.
 
 ## Acceptance boundary
 
-Automated tests use no real Clerk tenant, account, JWT, bootstrap, invite, or deployed service. The
-live two-human desktop gate remains mandatory. Follow the copy-ready runbook in
-`reports/app-m6b-human-identity-handoff.md`; do not treat a build, generated-key server proof, or
-single-account walkthrough as live acceptance.
+Automated tests use no real Clerk tenant, account, JWT, bootstrap, invite, or deployed service.
+Installed desktop sign-in, callback, room load, and restart persistence have been proven for one
+account; that does not establish the separate two-human room acceptance or fresh-download
+onboarding gates. Follow [ThreadSpace desktop delivery](../operations/threadspace-delivery.md) and
+keep the current outcome and evidence on the tracking issue rather than creating another handoff
+report.
