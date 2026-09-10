@@ -54,6 +54,122 @@ describe("DesktopClerk", () => {
     assert.equal(DesktopClerk.resolveDesktopClerkFrontendApiHostname("invalid"), undefined);
   });
 
+  it("removes the renderer Origin from native Clerk requests that carry authorization", () => {
+    const handle = DesktopClerk.createDesktopClerkBeforeSendHeadersHandler("clerk.t3.codes");
+    const callback = vi.fn();
+
+    handle(
+      {
+        url: "https://clerk.t3.codes/v1/client?_is_native=1",
+        requestHeaders: {
+          Authorization: "Bearer test-client-token",
+          Origin: "threadspace://app",
+          "User-Agent": "ThreadSpace",
+        },
+      },
+      callback,
+    );
+
+    assert.deepEqual(callback.mock.calls, [
+      [
+        {
+          requestHeaders: {
+            Authorization: "Bearer test-client-token",
+            "User-Agent": "ThreadSpace",
+          },
+        },
+      ],
+    ]);
+  });
+
+  it("matches Clerk request headers without relying on their casing", () => {
+    const handle = DesktopClerk.createDesktopClerkBeforeSendHeadersHandler("clerk.t3.codes");
+    const callback = vi.fn();
+
+    handle(
+      {
+        url: "https://clerk.t3.codes/v1/client?_is_native=1",
+        requestHeaders: {
+          authorization: "Bearer test-client-token",
+          origin: "null",
+        },
+      },
+      callback,
+    );
+
+    assert.deepEqual(callback.mock.calls, [
+      [{ requestHeaders: { authorization: "Bearer test-client-token" } }],
+    ]);
+  });
+
+  it.each([
+    {
+      name: "browser-style request without authorization",
+      url: "https://clerk.t3.codes/v1/client?_is_native=1",
+      requestHeaders: { Origin: "threadspace://app" },
+    },
+    {
+      name: "request with an empty bearer credential",
+      url: "https://clerk.t3.codes/v1/client?_is_native=1",
+      requestHeaders: {
+        Authorization: "Bearer   ",
+        Origin: "threadspace://app",
+      },
+    },
+    {
+      name: "non-native Clerk request",
+      url: "https://clerk.t3.codes/v1/client",
+      requestHeaders: {
+        Authorization: "Bearer test-client-token",
+        Origin: "threadspace://app",
+      },
+    },
+    {
+      name: "request to another host",
+      url: "https://example.com/v1/client?_is_native=1",
+      requestHeaders: {
+        Authorization: "Bearer test-client-token",
+        Origin: "threadspace://app",
+      },
+    },
+    {
+      name: "malformed request URL",
+      url: "not a URL",
+      requestHeaders: {
+        Authorization: "Bearer test-client-token",
+        Origin: "threadspace://app",
+      },
+    },
+  ])("preserves headers for a $name", ({ url, requestHeaders }) => {
+    const handle = DesktopClerk.createDesktopClerkBeforeSendHeadersHandler("clerk.t3.codes");
+    const callback = vi.fn();
+
+    handle({ url, requestHeaders }, callback);
+
+    assert.deepEqual(callback.mock.calls, [[{ requestHeaders }]]);
+  });
+
+  it("registers and removes the narrowly scoped Clerk request hook", () => {
+    const onBeforeSendHeaders = vi.fn();
+
+    const cleanup = DesktopClerk.installDesktopClerkNativeRequestHeaders(
+      { onBeforeSendHeaders } as never,
+      "clerk.t3.codes",
+    );
+
+    assert.equal(onBeforeSendHeaders.mock.calls.length, 1);
+    assert.deepEqual(onBeforeSendHeaders.mock.calls[0]?.[0], {
+      urls: ["https://clerk.t3.codes/*"],
+    });
+    assert.equal(typeof onBeforeSendHeaders.mock.calls[0]?.[1], "function");
+
+    cleanup();
+    assert.deepEqual(onBeforeSendHeaders.mock.calls[1], [
+      { urls: ["https://clerk.t3.codes/*"] },
+      null,
+    ]);
+  });
+
   it.effect("acquires and releases the SDK bridge with the layer", () => {
     const cleanup = vi.fn();
     storageMock.mockReturnValue(storageAdapter);

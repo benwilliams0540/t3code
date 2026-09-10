@@ -7,6 +7,8 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 
+import * as Electron from "electron";
+
 import { clerkFrontendApiHostnameFromPublishableKey } from "@t3tools/shared/relayAuth";
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
@@ -49,8 +51,78 @@ export class DesktopClerk extends Context.Service<
       never,
       ElectronApp.ElectronApp | ElectronWindow.ElectronWindow | Scope.Scope
     >;
+    readonly installNativeRequestHeaders: Effect.Effect<void, never, Scope.Scope>;
   }
 >()("@t3tools/desktop/app/DesktopClerk") {}
+
+export interface DesktopClerkBeforeSendHeadersDetails {
+  readonly url: string;
+  readonly requestHeaders: Record<string, string>;
+}
+
+export type DesktopClerkBeforeSendHeadersCallback = (response: {
+  readonly requestHeaders: Record<string, string>;
+}) => void;
+
+const findHeaderName = (headers: Record<string, string>, name: string): string | undefined =>
+  Object.keys(headers).find((headerName) => headerName.toLowerCase() === name);
+
+const hasBearerCredential = (value: string | undefined): boolean =>
+  /^Bearer\s+\S/i.test(value?.trim() ?? "");
+
+export function createDesktopClerkBeforeSendHeadersHandler(frontendApiHostname: string) {
+  const normalizedHostname = frontendApiHostname.toLowerCase();
+
+  return (
+    details: DesktopClerkBeforeSendHeadersDetails,
+    callback: DesktopClerkBeforeSendHeadersCallback,
+  ): void => {
+    let requestUrl: URL;
+    try {
+      requestUrl = new URL(details.url);
+    } catch {
+      callback({ requestHeaders: details.requestHeaders });
+      return;
+    }
+
+    const authorizationHeader = findHeaderName(details.requestHeaders, "authorization");
+    const originHeader = findHeaderName(details.requestHeaders, "origin");
+    const isAuthenticatedNativeClerkRequest =
+      requestUrl.protocol === "https:" &&
+      requestUrl.hostname.toLowerCase() === normalizedHostname &&
+      requestUrl.searchParams.get("_is_native") === "1" &&
+      hasBearerCredential(
+        authorizationHeader === undefined ? undefined : details.requestHeaders[authorizationHeader],
+      ) &&
+      originHeader !== undefined;
+
+    if (!isAuthenticatedNativeClerkRequest) {
+      callback({ requestHeaders: details.requestHeaders });
+      return;
+    }
+
+    const requestHeaders = { ...details.requestHeaders };
+    for (const headerName of Object.keys(requestHeaders)) {
+      if (headerName.toLowerCase() === "origin") delete requestHeaders[headerName];
+    }
+    callback({ requestHeaders });
+  };
+}
+
+export function installDesktopClerkNativeRequestHeaders(
+  webRequest: Pick<Electron.WebRequest, "onBeforeSendHeaders">,
+  frontendApiHostname: string | undefined,
+): () => void {
+  if (!frontendApiHostname) return () => undefined;
+
+  const filter = { urls: [`https://${frontendApiHostname}/*`] };
+  webRequest.onBeforeSendHeaders(
+    filter,
+    createDesktopClerkBeforeSendHeadersHandler(frontendApiHostname),
+  );
+
+  return () => webRequest.onBeforeSendHeaders(filter, null);
+}
 
 export function resolveDesktopClerkFrontendApiHostname(
   publishableKey: string | undefined,
@@ -138,6 +210,15 @@ export const make = Effect.gen(function* () {
         );
       });
     }).pipe(Effect.withSpan("desktop.clerk.configure")),
+    installNativeRequestHeaders: Effect.acquireRelease(
+      Effect.sync(() =>
+        installDesktopClerkNativeRequestHeaders(
+          Electron.session.defaultSession.webRequest,
+          desktopClerkFrontendApiHostname,
+        ),
+      ),
+      (cleanup) => Effect.sync(cleanup),
+    ).pipe(Effect.asVoid, Effect.withSpan("desktop.clerk.installNativeRequestHeaders")),
   });
 });
 
