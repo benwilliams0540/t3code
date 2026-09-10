@@ -51,7 +51,7 @@ export class DesktopClerk extends Context.Service<
       never,
       ElectronApp.ElectronApp | ElectronWindow.ElectronWindow | Scope.Scope
     >;
-    readonly installNativeRequestHeaders: Effect.Effect<void, never, Scope.Scope>;
+    readonly installNativeTransportHeaders: Effect.Effect<void, never, Scope.Scope>;
   }
 >()("@t3tools/desktop/app/DesktopClerk") {}
 
@@ -64,11 +64,33 @@ export type DesktopClerkBeforeSendHeadersCallback = (response: {
   readonly requestHeaders: Record<string, string>;
 }) => void;
 
+export interface DesktopClerkHeadersReceivedDetails {
+  readonly url: string;
+  readonly responseHeaders?: Record<string, string[]>;
+}
+
+export type DesktopClerkHeadersReceivedCallback = (response: {
+  readonly responseHeaders?: Record<string, string[]>;
+}) => void;
+
 const findHeaderName = (headers: Record<string, string>, name: string): string | undefined =>
   Object.keys(headers).find((headerName) => headerName.toLowerCase() === name);
 
 const hasBearerCredential = (value: string | undefined): boolean =>
   /^Bearer\s+\S/i.test(value?.trim() ?? "");
+
+const isNativeClerkUrl = (rawUrl: string, frontendApiHostname: string): boolean => {
+  try {
+    const url = new URL(rawUrl);
+    return (
+      url.protocol === "https:" &&
+      url.hostname.toLowerCase() === frontendApiHostname.toLowerCase() &&
+      url.searchParams.get("_is_native") === "1"
+    );
+  } catch {
+    return false;
+  }
+};
 
 export function createDesktopClerkBeforeSendHeadersHandler(frontendApiHostname: string) {
   const normalizedHostname = frontendApiHostname.toLowerCase();
@@ -77,20 +99,10 @@ export function createDesktopClerkBeforeSendHeadersHandler(frontendApiHostname: 
     details: DesktopClerkBeforeSendHeadersDetails,
     callback: DesktopClerkBeforeSendHeadersCallback,
   ): void => {
-    let requestUrl: URL;
-    try {
-      requestUrl = new URL(details.url);
-    } catch {
-      callback({ requestHeaders: details.requestHeaders });
-      return;
-    }
-
     const authorizationHeader = findHeaderName(details.requestHeaders, "authorization");
     const originHeader = findHeaderName(details.requestHeaders, "origin");
     const isAuthenticatedNativeClerkRequest =
-      requestUrl.protocol === "https:" &&
-      requestUrl.hostname.toLowerCase() === normalizedHostname &&
-      requestUrl.searchParams.get("_is_native") === "1" &&
+      isNativeClerkUrl(details.url, normalizedHostname) &&
       hasBearerCredential(
         authorizationHeader === undefined ? undefined : details.requestHeaders[authorizationHeader],
       ) &&
@@ -109,9 +121,36 @@ export function createDesktopClerkBeforeSendHeadersHandler(frontendApiHostname: 
   };
 }
 
-export function installDesktopClerkNativeRequestHeaders(
-  webRequest: Pick<Electron.WebRequest, "onBeforeSendHeaders">,
+export function createDesktopClerkHeadersReceivedHandler(
+  frontendApiHostname: string,
+  rendererOrigin: string,
+) {
+  return (
+    details: DesktopClerkHeadersReceivedDetails,
+    callback: DesktopClerkHeadersReceivedCallback,
+  ): void => {
+    if (!isNativeClerkUrl(details.url, frontendApiHostname)) {
+      callback(
+        details.responseHeaders === undefined ? {} : { responseHeaders: details.responseHeaders },
+      );
+      return;
+    }
+
+    const responseHeaders = { ...details.responseHeaders };
+    for (const headerName of Object.keys(responseHeaders)) {
+      if (headerName.toLowerCase() === "access-control-allow-origin") {
+        delete responseHeaders[headerName];
+      }
+    }
+    responseHeaders["Access-Control-Allow-Origin"] = [rendererOrigin];
+    callback({ responseHeaders });
+  };
+}
+
+export function installDesktopClerkNativeTransportHeaders(
+  webRequest: Pick<Electron.WebRequest, "onBeforeSendHeaders" | "onHeadersReceived">,
   frontendApiHostname: string | undefined,
+  rendererOrigin: string,
 ): () => void {
   if (!frontendApiHostname) return () => undefined;
 
@@ -120,8 +159,15 @@ export function installDesktopClerkNativeRequestHeaders(
     filter,
     createDesktopClerkBeforeSendHeadersHandler(frontendApiHostname),
   );
+  webRequest.onHeadersReceived(
+    filter,
+    createDesktopClerkHeadersReceivedHandler(frontendApiHostname, rendererOrigin),
+  );
 
-  return () => webRequest.onBeforeSendHeaders(filter, null);
+  return () => {
+    webRequest.onBeforeSendHeaders(filter, null);
+    webRequest.onHeadersReceived(filter, null);
+  };
 }
 
 export function resolveDesktopClerkFrontendApiHostname(
@@ -210,15 +256,16 @@ export const make = Effect.gen(function* () {
         );
       });
     }).pipe(Effect.withSpan("desktop.clerk.configure")),
-    installNativeRequestHeaders: Effect.acquireRelease(
+    installNativeTransportHeaders: Effect.acquireRelease(
       Effect.sync(() =>
-        installDesktopClerkNativeRequestHeaders(
+        installDesktopClerkNativeTransportHeaders(
           Electron.session.defaultSession.webRequest,
           desktopClerkFrontendApiHostname,
+          `${ElectronProtocol.getDesktopScheme(environment.isDevelopment)}://${ElectronProtocol.DESKTOP_HOST}`,
         ),
       ),
       (cleanup) => Effect.sync(cleanup),
-    ).pipe(Effect.asVoid, Effect.withSpan("desktop.clerk.installNativeRequestHeaders")),
+    ).pipe(Effect.asVoid, Effect.withSpan("desktop.clerk.installNativeTransportHeaders")),
   });
 });
 
