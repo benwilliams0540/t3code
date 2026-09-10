@@ -151,10 +151,12 @@ describe("DesktopClerk", () => {
 
   it("registers and removes the narrowly scoped Clerk request hook", () => {
     const onBeforeSendHeaders = vi.fn();
+    const onHeadersReceived = vi.fn();
 
-    const cleanup = DesktopClerk.installDesktopClerkNativeRequestHeaders(
-      { onBeforeSendHeaders } as never,
+    const cleanup = DesktopClerk.installDesktopClerkNativeTransportHeaders(
+      { onBeforeSendHeaders, onHeadersReceived } as never,
       "clerk.t3.codes",
+      "threadspace://app",
     );
 
     assert.equal(onBeforeSendHeaders.mock.calls.length, 1);
@@ -162,12 +164,67 @@ describe("DesktopClerk", () => {
       urls: ["https://clerk.t3.codes/*"],
     });
     assert.equal(typeof onBeforeSendHeaders.mock.calls[0]?.[1], "function");
+    assert.equal(onHeadersReceived.mock.calls.length, 1);
+    assert.deepEqual(onHeadersReceived.mock.calls[0]?.[0], {
+      urls: ["https://clerk.t3.codes/*"],
+    });
+    assert.equal(typeof onHeadersReceived.mock.calls[0]?.[1], "function");
 
     cleanup();
     assert.deepEqual(onBeforeSendHeaders.mock.calls[1], [
       { urls: ["https://clerk.t3.codes/*"] },
       null,
     ]);
+    assert.deepEqual(onHeadersReceived.mock.calls[1], [
+      { urls: ["https://clerk.t3.codes/*"] },
+      null,
+    ]);
+  });
+
+  it("allows the native Clerk response back to the desktop renderer", () => {
+    const handle = DesktopClerk.createDesktopClerkHeadersReceivedHandler(
+      "clerk.t3.codes",
+      "threadspace://app",
+    );
+    const callback = vi.fn();
+
+    handle(
+      {
+        url: "https://clerk.t3.codes/v1/client?_is_native=1",
+        responseHeaders: {
+          "Content-Type": ["application/json"],
+        },
+      },
+      callback,
+    );
+
+    assert.deepEqual(callback.mock.calls, [
+      [
+        {
+          responseHeaders: {
+            "Access-Control-Allow-Origin": ["threadspace://app"],
+            "Content-Type": ["application/json"],
+          },
+        },
+      ],
+    ]);
+  });
+
+  it.each([
+    "https://clerk.t3.codes/v1/client",
+    "https://example.com/v1/client?_is_native=1",
+    "not a URL",
+  ])("preserves response headers outside the native Clerk boundary: %s", (url) => {
+    const handle = DesktopClerk.createDesktopClerkHeadersReceivedHandler(
+      "clerk.t3.codes",
+      "threadspace://app",
+    );
+    const callback = vi.fn();
+    const responseHeaders = { "Content-Type": ["application/json"] };
+
+    handle({ url, responseHeaders }, callback);
+
+    assert.deepEqual(callback.mock.calls, [[{ responseHeaders }]]);
   });
 
   it.effect("acquires and releases the SDK bridge with the layer", () => {
