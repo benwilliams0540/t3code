@@ -5,17 +5,48 @@ targets, not implemented features. Product scope lives in the
 [Rooms direction](../rooms/README.md); issue status lives in
 [#26](https://github.com/benwilliams0540/t3code/issues/26).
 
-## How it works today
+## Target setup
 
 ```mermaid
-flowchart LR
-  UI[Web / desktop / mobile] --> State[Rooms connection and feed state]
-  State --> Service[Separate room service]
-  Service --> Connector[Delivery consumer and invocation connector]
-  Connector --> Claw[OpenClaw Gateway]
-  Connector --> Service
-  UI --> Native[Native T3 environment and thread views]
+flowchart TB
+  subgraph Clients["Clients"]
+    UX["UX<br/>Web, desktop and native mobile"]
+    State["Shared client state<br/>Connection, feed and conversations"]
+    UX <-->|"Commands and snapshots"| State
+  end
+
+  subgraph Host["Designated room host"]
+    Room["Room service<br/>Membership and conversation commands"]
+    Store[("Durable room state<br/>History, bindings and turn records")]
+    Connector["Agent connector<br/>Ordering, retries and runtime adapter"]
+    Claw["OpenClaw<br/>Sessions, tools and approvals"]
+    Access["Project access<br/>Read grants and content provenance"]
+    Project[("Project checkout<br/>Current files and diffs")]
+    Room <--> Store
+    Room <-->|"Turn requests and execution events"| Connector
+    Connector <-->|"Runtime protocol"| Claw
+    Room <-->|"Authorized observations"| Access
+    Access -->|"Bounded reads"| Project
+    Claw <-->|"Tools under host policy"| Project
+  end
+
+  State <-->|"Versioned room contract"| Room
+
+  classDef surface fill:#e8f0fe,stroke:#356ac3,color:#172b4d
+  classDef domain fill:#e7f5eb,stroke:#31834a,color:#173d24
+  classDef execution fill:#fff1dc,stroke:#b97914,color:#573700
+  class UX,State surface
+  class Room,Store,Access,Project domain
+  class Connector,Claw execution
 ```
+
+This is the intended ownership boundary. UI changes stay in the clients;
+connection behavior stays in shared client state; room rules stay in the service;
+OpenClaw protocol stays in the adapter. Shared read access and agent execution
+permissions remain separate. Each edge is an interface that can be tested without
+starting the entire application. The first milestone uses one existing host.
+
+## Source findings for the migration
 
 The room service owns shared membership and room history. The connector consumes
 deliveries, records invocation progress, runs an adapter and returns an
@@ -73,6 +104,46 @@ features keep their own runtime. Reuse its views where the contracts fit; add an
 OpenClaw view adapter instead of inventing T3 identities for OpenClaw work.
 
 ## Identity and behavior contract
+
+### A follow-up continues the same work
+
+```mermaid
+sequenceDiagram
+  actor Person as Room participant
+  participant UI as ThreadSpace
+  participant Room as Room service
+  participant Adapter as Agent connector
+  participant Claw as OpenClaw
+
+  Person->>UI: Start conversation A
+  UI->>Room: Create A and request a turn
+  Room->>Room: Persist A and its execution binding
+  Room->>Adapter: Initialize or resolve A's runtime session
+  Adapter->>Claw: Resolve session A idempotently
+  Claw-->>Adapter: Session A reference
+  Adapter-->>Room: Confirm binding ready
+  Room->>Adapter: Execute turn 1 on A
+  Adapter->>Claw: Run turn 1 in session A
+  Claw-->>Adapter: Activity and result
+  Adapter-->>Room: Persist correlated outcome
+  Room-->>UI: Shared progress and result
+
+  Person->>UI: Follow up in A, from either client
+  UI->>Room: Submit turn 2 for A
+  Room->>Room: Reuse A's binding and order the turn
+  Room->>Adapter: Execute turn 2 on A
+  Adapter->>Claw: Continue session A
+  Claw-->>Adapter: Activity and result
+  Adapter-->>Room: Persist correlated outcome
+  Room-->>UI: Update every connected participant
+
+  Note over Room,Claw: Conversation B gets a separate binding and session.<br/>Retries retain their turn identity; cancellation retains A.
+```
+
+The arrows describe the target contract, not new API method names. Persist the
+binding identity before initialization; confirm its runtime reference before
+execution. A restart reconciles that handshake instead of creating duplicate
+work. Each turn is distinct, while the conversation and session continue.
 
 Use the [Rooms glossary](../reference/encyclopedia.md#rooms-workspace) when
 changing contracts. A stable room conversation has multiple turns. Its execution

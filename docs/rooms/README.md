@@ -8,6 +8,42 @@ evidence; their hosting/recovery-first assignments are superseded.
 
 ## The next useful room
 
+### The intended experience
+
+```mermaid
+flowchart TB
+  You["Your computer"] --> Workspace
+  Team["Teammate's computer or phone"] --> Workspace
+
+  subgraph Workspace["ThreadSpace: one shared workspace"]
+    Conversations["Choose a conversation<br/>Start work and follow up"]
+    Progress["See agent activity<br/>Review results and approvals"]
+    Files["Inspect project files<br/>and current diffs"]
+  end
+
+  Workspace <-->|"Join, work, leave and return"| Host
+
+  subgraph Host["One designated room host"]
+    Room["Durable room history<br/>Membership and conversations"]
+    Agent["Resident OpenClaw agent<br/>Continuing work sessions"]
+    Project["Authorized project<br/>Actual files and changes"]
+    Room <-->|"Requests, progress and results"| Agent
+    Agent <-->|"Host-approved tools"| Project
+  end
+
+  classDef surface fill:#e8f0fe,stroke:#356ac3,color:#172b4d
+  classDef durable fill:#e7f5eb,stroke:#31834a,color:#173d24
+  classDef execution fill:#fff1dc,stroke:#b97914,color:#573700
+  class Conversations,Progress,Files surface
+  class Room,Project durable
+  class Agent execution
+```
+
+Target design: each person opens a view of the same room. The host keeps the
+shared work; OpenClaw keeps its execution sessions. Returning to a conversation
+continues that work. Files and diffs are visible only through authorized project
+access. This diagram describes the milestone being built, not shipped behavior.
+
 People open ThreadSpace, join a room on an existing designated computer, and work
 with a resident agent. They can create and return to distinct conversations,
 follow up with the same agent context, see work in progress, and inspect the
