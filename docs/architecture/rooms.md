@@ -101,6 +101,11 @@ invocation results.
 
 ## Three implementation slices
 
+Issue owners: shared client state [#39](https://github.com/benwilliams0540/t3code/issues/39),
+agent continuation [#11](https://github.com/benwilliams0540/t3code/issues/11),
+conversation views [#40](https://github.com/benwilliams0540/t3code/issues/40).
+The roadmap links the private service contract issue and cross-repository dependencies.
+
 1. **Durable contracts and shared state.** Add conversation/binding persistence
    in the service with versioned compatibility fixtures. Separately extract the
    connection/feed state from UI and mobile coordinators into client-runtime.
