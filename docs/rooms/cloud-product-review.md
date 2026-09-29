@@ -1,5 +1,10 @@
 # ThreadSpace product and architecture review
 
+Historical review: its source findings remain useful, but the 2026-09-29
+[current direction](README.md) and [architecture decision](../architecture/rooms.md)
+supersede its recovery-first sequencing. Use [next-task guidance](cloud-next-task.md)
+for new assignments. Implementation claims below are dated to this review.
+
 Status: reviewed cloud design for [#26](https://github.com/benwilliams0540/t3code/issues/26), written 2026-09-25. It is not an implementation, deployment, or change to branch defaults.
 
 - **Source:** client `main` at `bdd40b607e4b715f0478b4fd9522dc27255b4a1e`, read from source only. No install, build, test or server run.
@@ -24,44 +29,44 @@ Evidence labels: **[src]** implemented in source · **[test]** fixture or fake t
 
 The smallest replacement for "copying input between chat services" is one room where people talk, share what they see, and ask agents that work in a member's real project:
 
-1. Monroe, Ben and a third teammate, each on their own installed app and account, open room *Splats* on its host. For now that is the existing server; later, a laptop.
+1. Monroe, Ben and a third teammate, each on their own installed app and account, open room _Splats_ on its host. For now that is the existing server; later, a laptop.
 2. Ben pastes a screenshot of a broken layout into `#general` and writes "@Monroe's agents why does this wrap?"
-3. Monroe's own T3 environment, where *splats-web* is bound to the room, receives the mention. It starts a normal T3 turn in that project under Monroe's approval mode, with the recent channel text and the screenshot as input.
+3. Monroe's own T3 environment, where _splats-web_ is bound to the room, receives the mention. It starts a normal T3 turn in that project under Monroe's approval mode, with the recent channel text and the screenshot as input.
 4. The reply appears in the channel attributed to **Monroe's agents · Codex in splats-web**. It shows working / replied / failed states and links to the T3 thread. Any edits stay uncommitted in Monroe's checkout, and nothing is pushed.
 5. Ben writes "@Monroe's agents show the diff". The room shows the current uncommitted diff from Monroe's environment, stamped with environment, checkout, base revision and capture time, under a read-only grant Monroe gave the room.
 6. A nontechnical teammate reads the thread and asks the persistent agent (Claw) to summarize the decision.
-7. When Monroe's laptop sleeps, "Monroe's agents" show *environment offline*. The conversation continues on the room host.
+7. When Monroe's laptop sleeps, "Monroe's agents" show _environment offline_. The conversation continues on the room host.
 
 Screen sharing, boards, federation and parity lists are not needed for this.
 
 ## 2. What exists: gap map
 
-| Capability | Status | Anchors |
-| --- | --- | --- |
-| Signed-in shared conversation over HTTP JSON (v1 routes, v2 feed); long-poll change loop with 0.5–5 s backoff | [src][test] | `apps/web/src/features/rooms/dataSource/humanSharedClient.ts:315-519`, `localChangesLoop.ts:47-175`; tests `humanSharedClient.test.ts`, `localChangesLoop.test.ts` |
-| Electron main process as the only network hop; route, method and query allow-list | [src][test] | `apps/desktop/src/ipc/methods/roomsHuman.ts:71-122`, `packages/shared/src/roomsTransport.ts:65-121` |
-| Runtime server profile and local sessions scoped per server ID (one profile, token in localStorage) | [src][test] | `dataSource/serverProfile.ts:10-112` |
-| Room creation, invite enrollment, reconnect banner | [src]; live proof [hist] | `shell/RoomsCreateRoomButton.tsx:28-75`, `shell/RoomsHumanAccessPanel.tsx`, `reports/app-local-sign-in-live-proof.md` |
-| Idempotent send (stable request ID until the draft changes) | [src][test] | `channel/stableCommand.ts:14-30`, `channel/RoomsLocalChannelFeed.tsx:149-183` |
-| Agent turn lifecycle in the feed (running / delayed / replied / failed) | [src][test] | `packages/client-runtime/src/rooms/agentTurns.ts:96-196`, `channel/RoomsLocalChannelFeed.tsx:78-92` |
-| Persistent agent (Claw) via the OpenClaw connector: lease, restart resume, duplicate suppression | [src][test]; one live reply [hist] | `packages/rooms-agent-connector/src/connector.ts:25-26,211-329`, `reports/app-m5-claw-live-activation-handoff.md` |
-| Claw doing work | **no**: `promptMode: "none"`, no message tool, channel text plus host health only | `packages/rooms-agent-connector/src/openClawGatewayTransport.ts:851-858` |
-| Rooms MCP toolkit on T3's `/mcp` | [src][test]; work tools refuse without an invocation envelope, and it has no message tool | `apps/server/src/mcp/McpHttpServer.ts:222-235`, `packages/rooms-agent-api/src/client.ts:302-312`, `contracts.ts:177-189` |
-| "Monroe's agents" owner attribution | [none]: the principal has no owner field, and a delegate only appears in the Sample fixture | `dataSource/humanSharedContract.ts:35-40`, `fixtures/workspace-read-v2.json` |
-| A T3 turn posting to a room, or a room message starting a T3 turn | [none] | `threads/RoomsNativeThreadSurface.tsx:126`; `docs/rooms/cleanup-ledger.md` (mirroring never run) |
-| Channel attachments | [none]: text-only composer; payload is `{ body_markdown }`; connector host requires empty `attachments` | `channel/RoomsLocalChannelFeed.tsx:191`, `dataSource/localChannelsContract.ts:37`, `packages/rooms-agent-connector-host/src/deliveryClient.ts:122-125` |
-| Room file store | [src][test] for story evidence: CAS upload ≤ 5 MiB | `packages/shared/src/roomsTransport.ts:107`, `apps/desktop/src/ipc/methods/roomsLocal.ts:16,81-89` |
-| T3 image attachments (reusable UI and validation) | [src][test] | `packages/contracts/src/orchestration.ts:142-180`, `apps/web/src/components/chat/ChatComposer.tsx` |
-| Room ↔ project binding | [src][test], **device-local only** (localStorage); it filters your own threads | `threads/roomProjectBindings.ts:17-48` |
-| Read-only project/diff access for others | [none]: T3 reads exist but are environment-scoped (`orchestration:read` covers files, diffs and `filesystem.browse`), and file APIs take a caller `cwd` | `apps/server/src/auth/RpcAuthorization.ts:25-60`, `apps/server/src/ws.ts:1077-1094,1603-1640` |
-| Desktop hosting the T3 server on LAN, Tailscale or relay | [src][test] | `apps/desktop/src/backend/DesktopServerExposure.ts:30-133`, `docs/user/remote-access.md` |
-| Desktop hosting a room | [none]: forwards requests only; no Rails or Postgres packaging in this repo | `apps/desktop/src/ipc/methods/roomsLocal.ts:34-66` |
+| Capability                                                                                                    | Status                                                                                                                                                  | Anchors                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Signed-in shared conversation over HTTP JSON (v1 routes, v2 feed); long-poll change loop with 0.5–5 s backoff | [src][test]                                                                                                                                             | `apps/web/src/features/rooms/dataSource/humanSharedClient.ts:315-519`, `localChangesLoop.ts:47-175`; tests `humanSharedClient.test.ts`, `localChangesLoop.test.ts` |
+| Electron main process as the only network hop; route, method and query allow-list                             | [src][test]                                                                                                                                             | `apps/desktop/src/ipc/methods/roomsHuman.ts:71-122`, `packages/shared/src/roomsTransport.ts:65-121`                                                                |
+| Runtime server profile and local sessions scoped per server ID (one profile, token in localStorage)           | [src][test]                                                                                                                                             | `dataSource/serverProfile.ts:10-112`                                                                                                                               |
+| Room creation, invite enrollment, reconnect banner                                                            | [src]; live proof [hist]                                                                                                                                | `shell/RoomsCreateRoomButton.tsx:28-75`, `shell/RoomsHumanAccessPanel.tsx`, `reports/app-local-sign-in-live-proof.md`                                              |
+| Idempotent send (stable request ID until the draft changes)                                                   | [src][test]                                                                                                                                             | `channel/stableCommand.ts:14-30`, `channel/RoomsLocalChannelFeed.tsx:149-183`                                                                                      |
+| Agent turn lifecycle in the feed (running / delayed / replied / failed)                                       | [src][test]                                                                                                                                             | `packages/client-runtime/src/rooms/agentTurns.ts:96-196`, `channel/RoomsLocalChannelFeed.tsx:78-92`                                                                |
+| Persistent agent (Claw) via the OpenClaw connector: lease, restart resume, duplicate suppression              | [src][test]; one live reply [hist]                                                                                                                      | `packages/rooms-agent-connector/src/connector.ts:25-26,211-329`, `reports/app-m5-claw-live-activation-handoff.md`                                                  |
+| Claw doing work                                                                                               | **no**: `promptMode: "none"`, no message tool, channel text plus host health only                                                                       | `packages/rooms-agent-connector/src/openClawGatewayTransport.ts:851-858`                                                                                           |
+| Rooms MCP toolkit on T3's `/mcp`                                                                              | [src][test]; work tools refuse without an invocation envelope, and it has no message tool                                                               | `apps/server/src/mcp/McpHttpServer.ts:222-235`, `packages/rooms-agent-api/src/client.ts:302-312`, `contracts.ts:177-189`                                           |
+| "Monroe's agents" owner attribution                                                                           | [none]: the principal has no owner field, and a delegate only appears in the Sample fixture                                                             | `dataSource/humanSharedContract.ts:35-40`, `fixtures/workspace-read-v2.json`                                                                                       |
+| A T3 turn posting to a room, or a room message starting a T3 turn                                             | [none]                                                                                                                                                  | `threads/RoomsNativeThreadSurface.tsx:126`; `docs/rooms/cleanup-ledger.md` (mirroring never run)                                                                   |
+| Channel attachments                                                                                           | [none]: text-only composer; payload is `{ body_markdown }`; connector host requires empty `attachments`                                                 | `channel/RoomsLocalChannelFeed.tsx:191`, `dataSource/localChannelsContract.ts:37`, `packages/rooms-agent-connector-host/src/deliveryClient.ts:122-125`             |
+| Room file store                                                                                               | [src][test] for story evidence: CAS upload ≤ 5 MiB                                                                                                      | `packages/shared/src/roomsTransport.ts:107`, `apps/desktop/src/ipc/methods/roomsLocal.ts:16,81-89`                                                                 |
+| T3 image attachments (reusable UI and validation)                                                             | [src][test]                                                                                                                                             | `packages/contracts/src/orchestration.ts:142-180`, `apps/web/src/components/chat/ChatComposer.tsx`                                                                 |
+| Room ↔ project binding                                                                                        | [src][test], **device-local only** (localStorage); it filters your own threads                                                                          | `threads/roomProjectBindings.ts:17-48`                                                                                                                             |
+| Read-only project/diff access for others                                                                      | [none]: T3 reads exist but are environment-scoped (`orchestration:read` covers files, diffs and `filesystem.browse`), and file APIs take a caller `cwd` | `apps/server/src/auth/RpcAuthorization.ts:25-60`, `apps/server/src/ws.ts:1077-1094,1603-1640`                                                                      |
+| Desktop hosting the T3 server on LAN, Tailscale or relay                                                      | [src][test]                                                                                                                                             | `apps/desktop/src/backend/DesktopServerExposure.ts:30-133`, `docs/user/remote-access.md`                                                                           |
+| Desktop hosting a room                                                                                        | [none]: forwards requests only; no Rails or Postgres packaging in this repo                                                                             | `apps/desktop/src/ipc/methods/roomsLocal.ts:34-66`                                                                                                                 |
 
 Client defects found while tracing, each small and in scope for slice 1:
 
 - **The product path defaults to Sample.** The data-source mode is stored with default `"sample"`, and error panels still offer Sample (`dataSource/RoomsDataSourceProvider.tsx:307-311`, `shell/RoomsWorkspaceShell.tsx:351,501`).
 - **Shared cursor recovery can never run.** The change loop recovers from `change_cursor_ahead` only when the error has `headSeq` (`localChangesLoop.ts:149-152`). The Shared decoder builds errors without it (`humanSharedClient.ts:179-196`); only the Local decoder copies `head_seq` (`localChannelsClient.ts:176`). A Shared 409 therefore retries forever.
-- **A live refresh reloads only the first 100-item page** (`channel/RoomsLocalChannelFeed.tsx:415-423,467-470`), and "Load more" pages forward from there. If the server orders the feed oldest-first, new messages in a long channel stay hidden until someone pages. *Server order unverified.*
+- **A live refresh reloads only the first 100-item page** (`channel/RoomsLocalChannelFeed.tsx:415-423,467-470`), and "Load more" pages forward from there. If the server orders the feed oldest-first, new messages in a long channel stay hidden until someone pages. _Server order unverified._
 - **Invite issuance has no stable retry ID** (`shell/RoomsHumanWorkspaceSurface.tsx:60`). The `Idempotency-Replayed` header is parsed but never shown.
 
 ## 3. The three biggest bottlenecks
@@ -71,26 +76,28 @@ Client defects found while tracing, each small and in scope for slice 1:
 3. **Product: nothing shared but text.** Screenshots can't be posted, project bindings stay on one device, and no read path reaches another member's checkout. Humans and agents therefore never consume the same material, which #22 and #23 require.
 
 Separate from these:
+
 - **Environment:** a later implementation needs Node `^24.13.1`, pnpm `11.10.0` and `vp`, plus the private server.
 - **Device proof:** installed multi-device acceptance is still owed for everything past sign-in (#26 comments of Sept 10).
 
 ## 4. Architectural approaches
 
-| | A. Package the room server | B. The room inside the T3 server | C. Room server as the ledger, T3 environments as participants **(recommended now)** |
-| --- | --- | --- | --- |
-| Shape | Ship Rails + Postgres beside the desktop app (or as a one-command host); agents keep using connectors | Port the room protocol into `apps/server` as an event-sourced module on T3's SQLite, auth and exposure; Rails becomes optional or managed | Keep the room protocol and server for membership, conversation and files. Each member's T3 server runs one outbound **environment connector** that answers its owner's agent mentions and serves read-only project grants. |
-| Reuses | All server work: local auth, ledger, deliveries, CAS, conformance tests | Desktop backend, LAN/Tailscale/relay exposure, pairing, SQLite, attachments, providers; the client feed and agent-turn UI | Rails as-is; `rooms-agent-connector` lease, idempotency and lifecycle machinery with a new T3-turn adapter; T3 diff/read APIs; T3 composer attachments |
-| Removes | Nothing | The Rails dependency for the free core; eventually the second connector stack | The OpenClaw-only assumption; device-local project binding as the only binding |
-| Laptop hosting (#31) | Heavy: a Ruby and Postgres runtime per host, updates, backups | Natural: the host is the app users already install | Unchanged until the host decision; the slices don't depend on it |
-| Recovery (t3rooms#8) | Postgres replication or dumps between laptops | SQLite snapshot/WAL shipping plus an epoch fence | Recovery is still owned by the room host; agent execution never moves |
-| Migration | None | Export/import of existing FCFDEV rooms; a large port of private code; more fork delta against upstream `apps/server` | Additive: new principal owner field, delivery routing and a message attachment field on the server (provisional) |
-| Risk | Operational weight for every host | Rewrites a working, tested ledger without seeing it | Two protocols until hosting is decided |
+|                      | A. Package the room server                                                                            | B. The room inside the T3 server                                                                                                          | C. Room server as the ledger, T3 environments as participants **(recommended now)**                                                                                                                                        |
+| -------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shape                | Ship Rails + Postgres beside the desktop app (or as a one-command host); agents keep using connectors | Port the room protocol into `apps/server` as an event-sourced module on T3's SQLite, auth and exposure; Rails becomes optional or managed | Keep the room protocol and server for membership, conversation and files. Each member's T3 server runs one outbound **environment connector** that answers its owner's agent mentions and serves read-only project grants. |
+| Reuses               | All server work: local auth, ledger, deliveries, CAS, conformance tests                               | Desktop backend, LAN/Tailscale/relay exposure, pairing, SQLite, attachments, providers; the client feed and agent-turn UI                 | Rails as-is; `rooms-agent-connector` lease, idempotency and lifecycle machinery with a new T3-turn adapter; T3 diff/read APIs; T3 composer attachments                                                                     |
+| Removes              | Nothing                                                                                               | The Rails dependency for the free core; eventually the second connector stack                                                             | The OpenClaw-only assumption; device-local project binding as the only binding                                                                                                                                             |
+| Laptop hosting (#31) | Heavy: a Ruby and Postgres runtime per host, updates, backups                                         | Natural: the host is the app users already install                                                                                        | Unchanged until the host decision; the slices don't depend on it                                                                                                                                                           |
+| Recovery (t3rooms#8) | Postgres replication or dumps between laptops                                                         | SQLite snapshot/WAL shipping plus an epoch fence                                                                                          | Recovery is still owned by the room host; agent execution never moves                                                                                                                                                      |
+| Migration            | None                                                                                                  | Export/import of existing FCFDEV rooms; a large port of private code; more fork delta against upstream `apps/server`                      | Additive: new principal owner field, delivery routing and a message attachment field on the server (provisional)                                                                                                           |
+| Risk                 | Operational weight for every host                                                                     | Rewrites a working, tested ledger without seeing it                                                                                       | Two protocols until hosting is decided                                                                                                                                                                                     |
 
 **Recommendation: C, with the host runtime decided by a bounded spike.** C delivers the useful part of #26 (agents working in real projects, shared screenshots and diffs) on the server that already works. It puts agent execution where #11 and #23 require it: the owning environment keeps its permissions. It is portable. The environment connector speaks the room's delivery/result protocol, not Rails internals, so it survives either answer to hosting.
 
 For hosting (#31), I lean toward **B**: the installed app is already a network-exposed server, and SQLite replication is a much smaller recovery problem than moving Postgres between laptops. That lean rests on source I could not read, so take it as a hypothesis for the spike, not a decision.
 
 Run this comparison before starting slices 2 and 3; it is the next design assignment under #31 and t3rooms#8. The spike compares:
+
 - **(i)** a packaged Rails + Postgres helper supervised by the desktop app, on install size, update path, backup/restore and first-owner setup;
 - **(ii)** porting the minimal room surface (principals, membership, channel feed, deliveries, CAS) into `apps/server`, sized against the private ledger.
 
@@ -135,7 +142,7 @@ These are candidate feature slices, not permission to defer the hosting foundati
   - A T3-turn adapter beside the OpenClaw one in `packages/rooms-agent-connector`.
   - A connector supervisor in `apps/server`, off by default and enabled per room by its owner, bound to one project.
   - A project-scoped read grant in `packages/contracts` (auth) and `apps/server/src/auth/RpcAuthorization.ts`: `projectId` instead of a caller `cwd`, bounded to `listEntries`/`readFile`/diff.
-  - Binding UI showing which environment serves "*owner*'s agents".
+  - Binding UI showing which environment serves "_owner_'s agents".
 - **Server (provisional):** an agent principal `owner` field; delivery routing to the owner's connector; an optional `environment_offline` state.
 - **Behavior:**
   - A mention starts a normal T3 turn with bounded channel context and attachments, under the owner's approval mode.
@@ -163,7 +170,7 @@ Open: trusted recovery devices, stale-host fencing while partitioned, host runti
 
 - **D1. Host runtime.** Accept the spike framing (packaged Rails vs room-in-T3) and defer #31 building until it reports.
 - **D2. Acknowledged-loss policy** for takeover: synchronous peer acknowledgement, or a bounded asynchronous window (size?).
-- **D3. Agent identity.** Confirm "*owner*'s agents" as the addressable identity routed to the owner's environment, and set the default approval mode for room-started turns (recommend `ask`).
+- **D3. Agent identity.** Confirm "_owner_'s agents" as the addressable identity routed to the owner's environment, and set the default approval mode for room-started turns (recommend `ask`).
 - **D4. Visibility.** Should room members see the whole T3 thread a mention starts, or only the reply, the lifecycle and a link?
 - **D5.** Implement #21 with an explicit preference migration: Shared is the ThreadSpace entry target, while existing preferences and generic T3 defaults remain respected.
 

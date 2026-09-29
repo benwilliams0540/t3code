@@ -1,6 +1,9 @@
 # Rooms foundations (updated 2026-09-05)
 
-Monroe's answers to the foundation questions, recorded so features are built against them rather than re-guessed. Change this file when a decision changes.
+Historical foundation decisions. Read [current direction](README.md) first: the
+2026-09-29 fixed-host milestone supersedes the earlier hosting/recovery sequence
+and makes persistent room conversations the next work. The architecture now
+distinguishes native T3 threads from OpenClaw sessions through execution bindings.
 
 ## Unit of work
 
@@ -16,7 +19,9 @@ Monroe's answers to the foundation questions, recorded so features are built aga
 ## What agents may touch
 
 - Most agent work is agentic development and needs near-full access. Rooms does not invent a sandbox; agents run inside T3 threads and inherit T3's per-thread approval modes (auto, full, ask). Claw runs inside OpenClaw with its own policy.
-- Consequence: native T3 mirroring into Rooms is a foundation, not a feature. It is how the room sees what agents did.
+- Native T3 activity should be visible through its adapter. OpenClaw work needs
+  its own real session binding and work projection; native T3 identifiers are
+  not prerequisites for an OpenClaw conversation.
 
 ## What a room is
 
@@ -31,7 +36,9 @@ Monroe's answers to the foundation questions, recorded so features are built aga
 - Free self-hosting must work without our Clerk instance or permission from a maintainer. It still needs real participant authentication and room membership; network reachability alone is not room authority.
 - The client needs runtime server profiles and a join flow. Rebuilding a client with a different server URL or Clerk key is not acceptable release onboarding.
 - A room lives on a server; a server may host multiple separately authorized rooms. Creating a logical room does not provision a machine.
-- Current Shared Rooms is Clerk-only and uses public build-time server/auth configuration. The self-service New room feature removes the operator token dependency, but does not yet satisfy free self-hosting. See [hosting and access direction](hosting-and-access.md).
+- Local account/session support subsequently landed on main alongside the
+  managed Clerk path. Packaging, deployed configuration and installed acceptance
+  remain separate gates. See [hosting and access direction](hosting-and-access.md).
 
 ## Surfaces
 

@@ -6,6 +6,7 @@ This is a living glossary for T3 Code. It explains what common terms mean in thi
 
 - [Project and workspace](#project-and-workspace)
 - [Thread timeline](#thread-timeline)
+- [Rooms workspace](#rooms-workspace)
 - [Orchestration](#orchestration)
 - [Provider runtime](#provider-runtime)
 - [Checkpointing](#checkpointing)
@@ -39,6 +40,25 @@ A single user-to-assistant work cycle inside a thread. It starts with user input
 #### Activity
 
 A user-visible log item attached to a thread. In [the contracts][1], activities cover important non-message events like approvals, tool actions, and failures. They are projected into thread state in [projector.ts][4].
+
+### Rooms workspace
+
+The [Rooms direction](../rooms/README.md) introduces these target concepts. The
+conversation/binding contract is planned; current one-shot invocations do not
+implement it yet.
+
+- **Room conversation:** a durable, selectable shared work conversation inside a
+  room/channel. It can contain many turns and survives client reconnects.
+- **Execution binding:** the persisted association of a room conversation and
+  agent with a runtime, host, and opaque runtime session identifier.
+- **Invocation:** one request to execute a turn, with its own deduplication and
+  lifecycle identity. Several invocations may use the same execution binding.
+- **Room host:** the computer serving the room's durable shared state. In the
+  current milestone it also runs the connector and OpenClaw runtime.
+
+A T3 thread and an OpenClaw session are runtime-specific work identities. A room
+conversation references its real runtime through a binding; it is not created
+by pretending that one runtime's identifiers belong to the other.
 
 ### Orchestration
 

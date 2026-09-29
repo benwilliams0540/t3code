@@ -1,5 +1,11 @@
 # ThreadSpace hosting and access
 
+Scope update, 2026-09-29: [current direction](README.md) first proves a useful room
+on one existing host. Laptop host packaging, replicated recovery and takeover
+are deferred. The material below records longer-term direction and dated source
+checkpoints; it is not the next-work queue. Same-host persistence/reconnect
+remains part of the current milestone.
+
 Product direction confirmed by Monroe on 2026-09-05: the GitHub release enables free,
 self-managed rooms. The paid offering handles internet tunneling, provisioning, and setup.
 Authentication is part of the free core; Clerk is not a product requirement.

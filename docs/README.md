@@ -3,6 +3,7 @@
 - [Getting started](./getting-started/quick-start.md)
 - Architecture
   - [Overview](./architecture/overview.md)
+  - [ThreadSpace Rooms architecture](./architecture/rooms.md)
   - [Connection runtime](./architecture/connection-runtime.md)
   - [Remote environments](./architecture/remote.md)
   - [Server updates](./architecture/server-updates.md)
@@ -14,6 +15,7 @@
   - [Keybindings](./user/keybindings.md)
 - [T3 Connect](./cloud/t3-connect-clerk.md)
 - [Shared Rooms human identity](./rooms/shared-human-identity.md)
+- [ThreadSpace Rooms vision and work order](./rooms/README.md)
 - [Integrations](./integrations/source-control-providers.md)
 - [Mobile](./mobile/app.md)
 - Operations

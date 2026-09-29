@@ -118,6 +118,10 @@ Full glossary with file links: `docs/reference/encyclopedia.md`
 
 ## Where code lives
 
+For ThreadSpace Rooms product, UI, protocol, or connector work, start with
+`docs/rooms/README.md` for current scope and `docs/architecture/rooms.md` for
+module ownership. The roadmap linked there supersedes older task packets.
+
 - `apps/server` - WebSocket, orchestration, providers, checkpointing. Effect-heavy: read `.repos/effect-smol/LLMS.md` and `docs/operations/effect-fn-checklist.md` before writing Effect code.
 - `apps/web` - React/Vite UI. `apps/desktop` wraps it, `apps/mobile` is React Native, `apps/marketing` is the site.
 - `packages/contracts` - Effect/Schema contracts. Schema only, no runtime logic.
