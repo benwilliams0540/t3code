@@ -44,16 +44,18 @@ export function RoomsRealtimeCoordinator(): null {
   useEffect(() => {
     if (!client || !isLoaded || !isSignedIn || !userId) return;
     let cancelled = false;
+    let startupGeneration = 0;
 
     const stop = () => {
+      startupGeneration += 1;
       for (const loop of loopsRef.current.values()) loop.stop();
       loopsRef.current.clear();
     };
 
-    const start = async () => {
-      stop();
+    const start = async (generation: number) => {
       const session = await client.getSession();
-      if (cancelled || AppState.currentState !== "active") return;
+      if (cancelled || generation !== startupGeneration || AppState.currentState !== "active")
+        return;
       for (const room of session.rooms) {
         const loop = new RoomsMobileChangeLoop({
           client,
@@ -96,7 +98,13 @@ export function RoomsRealtimeCoordinator(): null {
       }
     };
 
-    const startSafely = () => void start().catch(() => stop());
+    const startSafely = () => {
+      stop();
+      const generation = startupGeneration;
+      void start(generation).catch(() => {
+        if (!cancelled && generation === startupGeneration) stop();
+      });
+    };
 
     if (AppState.currentState === "active") startSafely();
     const subscription = AppState.addEventListener("change", (state) => {
