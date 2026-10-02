@@ -22,9 +22,7 @@ function deferred<T>() {
 }
 
 async function flush(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let index = 0; index < 10; index += 1) await Promise.resolve();
 }
 
 function timeout(roomId: string, afterSeq: number): RoomsLocalChangeResponse {
@@ -152,7 +150,8 @@ describe("Rooms Local single change wait loop", () => {
       client: {
         waitForChanges: (_roomId, input) => {
           requests.push(input.afterSeq);
-          if (requests.length === 1) {
+          if (requests.length === 1) return Promise.resolve(advanced(ROOM_A, 0, 44));
+          if (requests.length === 2) {
             return Promise.reject(
               new RoomsLocalClientError({
                 kind: "server",
@@ -175,9 +174,10 @@ describe("Rooms Local single change wait loop", () => {
     loop.start(ROOM_A);
     await flush();
     expect(invalidations).toEqual([
-      { roomId: ROOM_A, afterSeq: 0, headSeq: 2, initial: true, reason: "cursor_ahead" },
+      { roomId: ROOM_A, afterSeq: 0, headSeq: 44, initial: true, reason: "advanced" },
+      { roomId: ROOM_A, afterSeq: 44, headSeq: 2, initial: true, reason: "cursor_ahead" },
     ]);
-    expect(requests).toEqual([0, 2]);
+    expect(requests).toEqual([0, 44, 2]);
     loop.stop();
   });
 

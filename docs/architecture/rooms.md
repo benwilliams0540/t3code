@@ -1,7 +1,8 @@
 # Rooms architecture and migration
 
 Source review: 2026-09-29, client `main` `ca74c303b`. Proposed boundaries below are
-targets, not implemented features. Product scope lives in the
+targets, not implemented features. The change-wait subsection below records its
+subsequent implementation; other proposed boundaries remain unfinished. Product scope lives in the
 [Rooms direction](../rooms/README.md); issue status lives in
 [#26](https://github.com/benwilliams0540/t3code/issues/26).
 
@@ -102,6 +103,36 @@ Expected dependency direction: UX → shared client state → protocol → room
 service; connector → room protocol and runtime adapters. Existing generic T3
 features keep their own runtime. Reuse its views where the contracts fit; add an
 OpenClaw view adapter instead of inventing T3 identities for OpenClaw work.
+
+## Implemented change-wait owner
+
+`packages/client-runtime/src/rooms/changeLoop.ts`, exported as
+`@t3tools/client-runtime/rooms/change-loop`, owns the serialized wait, session
+generation, stale-response rejection, reconnect backoff, and reconciled cursor.
+Its `start(roomId)` and `stop()` interface consumes transport, cursor-error
+decoding, invalidation delivery, status, retry scheduling and optional durable
+cursor storage adapters. It has no React, native navigation or runtime protocol
+imports.
+
+Web/desktop `localChangesLoop.ts` and mobile `changeLoop.ts` now adapt to that
+owner instead of implementing their own pumps, retries and generations. The web
+adapter preserves Local/Shared status behavior and serializes a physical request
+that its transport cannot abort. Mobile preserves abort signals, initial catch-up,
+client identity and realtime events. Its reconciliation callback (including
+notification recording and delivery acknowledgements) and durable cursor save
+finish before the next request advertises realtime availability. A failed save
+retries from the last committed cursor.
+
+Shared errors retain optional validated `after_seq`/`head_seq` values. An ahead
+cursor resets to a nonnegative safe integer below the requested cursor, after
+authoritative refresh. Missing, malformed or non-decreasing heads and unrelated
+errors use bounded retry rather than a tight reset loop.
+
+This is one lifecycle extraction under #39. Platform coordinators still own
+account/server selection, app visibility and notification presentation. Channel
+snapshot/pagination and new conversation projection ownership remain unfinished;
+this extraction does not fix the long-channel first-page refresh gap. Installed
+desktop and native mobile behavior require their own acceptance evidence.
 
 ## Identity and behavior contract
 
