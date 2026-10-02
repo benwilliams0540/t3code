@@ -21,30 +21,34 @@ function response(body: unknown, status = 200, headers: Record<string, string> =
 }
 
 describe("authenticated shared Rooms client", () => {
-  it("preserves cursor details when the Shared server rejects an ahead cursor", async () => {
-    const client = createRoomsHumanClient(
-      "https://rooms.example.test",
-      async () => "synthetic-bearer",
-      () => ({
-        request: async () =>
-          response(
-            {
-              error: "change_cursor_ahead",
-              message: "Cursor is ahead.",
-              after_seq: 44,
-              head_seq: 2,
-            },
-            409,
-          ),
-      }),
-    );
-    await expect(client.waitForChanges(roomId, { afterSeq: 44 })).rejects.toMatchObject({
-      code: "change_cursor_ahead",
-      status: 409,
-      afterSeq: 44,
-      headSeq: 2,
-    });
-  });
+  it.each(["top-level", "details"])(
+    "preserves cursor details when the Shared server rejects an ahead cursor (%s)",
+    async (shape) => {
+      const client = createRoomsHumanClient(
+        "https://rooms.example.test",
+        async () => "synthetic-bearer",
+        () => ({
+          request: async () =>
+            response(
+              {
+                error: "change_cursor_ahead",
+                message: "Cursor is ahead.",
+                ...(shape === "details"
+                  ? { request_id: "fixture-request", details: { after_seq: 44, head_seq: 2 } }
+                  : { after_seq: 44, head_seq: 2 }),
+              },
+              409,
+            ),
+        }),
+      );
+      await expect(client.waitForChanges(roomId, { afterSeq: 44 })).rejects.toMatchObject({
+        code: "change_cursor_ahead",
+        status: 409,
+        afterSeq: 44,
+        headSeq: 2,
+      });
+    },
+  );
 
   it("creates a room using the current bearer and preserves its request ID for a retry", async () => {
     const requests: Parameters<RoomsHumanTransport["request"]>[0][] = [];

@@ -198,20 +198,21 @@ export const RoomsHumanStoriesResponse = Schema.Struct({
 });
 export type RoomsHumanStoriesResponse = typeof RoomsHumanStoriesResponse.Type;
 
+const RoomsHumanErrorCursor = Schema.Int.check(
+  Schema.isGreaterThanOrEqualTo(0),
+  Schema.isLessThanOrEqualTo(Number.MAX_SAFE_INTEGER),
+);
+
 export const RoomsHumanErrorResponse = Schema.Struct({
   error: Schema.String,
   message: Schema.String,
-  after_seq: Schema.optionalKey(
-    Schema.Int.check(
-      Schema.isGreaterThanOrEqualTo(0),
-      Schema.isLessThanOrEqualTo(Number.MAX_SAFE_INTEGER),
-    ),
-  ),
-  head_seq: Schema.optionalKey(
-    Schema.Int.check(
-      Schema.isGreaterThanOrEqualTo(0),
-      Schema.isLessThanOrEqualTo(Number.MAX_SAFE_INTEGER),
-    ),
+  after_seq: Schema.optionalKey(RoomsHumanErrorCursor),
+  head_seq: Schema.optionalKey(RoomsHumanErrorCursor),
+  details: Schema.optionalKey(
+    Schema.Struct({
+      after_seq: Schema.optionalKey(RoomsHumanErrorCursor),
+      head_seq: Schema.optionalKey(RoomsHumanErrorCursor),
+    }),
   ),
 });
 
