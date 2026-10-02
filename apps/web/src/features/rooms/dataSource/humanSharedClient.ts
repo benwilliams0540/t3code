@@ -184,6 +184,8 @@ export function decodeRoomsHumanResponse<T>(
         status: response.status,
         code: error.error,
         message: error.message,
+        afterSeq: error.after_seq,
+        headSeq: error.head_seq,
       });
     } catch (cause) {
       if (cause instanceof RoomsLocalClientError) throw cause;

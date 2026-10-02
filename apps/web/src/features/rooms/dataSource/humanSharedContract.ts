@@ -201,6 +201,18 @@ export type RoomsHumanStoriesResponse = typeof RoomsHumanStoriesResponse.Type;
 export const RoomsHumanErrorResponse = Schema.Struct({
   error: Schema.String,
   message: Schema.String,
+  after_seq: Schema.optionalKey(
+    Schema.Int.check(
+      Schema.isGreaterThanOrEqualTo(0),
+      Schema.isLessThanOrEqualTo(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  head_seq: Schema.optionalKey(
+    Schema.Int.check(
+      Schema.isGreaterThanOrEqualTo(0),
+      Schema.isLessThanOrEqualTo(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
 });
 
 export {
