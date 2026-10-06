@@ -43,6 +43,10 @@
       "types": "./src/relay/index.ts",
       "default": "./src/relay/index.ts"
     },
+    "./rooms/change-loop": {
+      "types": "./src/rooms/changeLoop.ts",
+      "default": "./src/rooms/changeLoop.ts"
+    },
     "./rooms/agent-turns": {
       "types": "./src/rooms/agentTurns.ts",
       "default": "./src/rooms/agentTurns.ts"

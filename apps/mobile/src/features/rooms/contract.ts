@@ -335,6 +335,12 @@ export const RoomsHumanErrorResponse = Schema.Struct({
   message: Schema.String,
   after_seq: Schema.optionalKey(Schema.Int),
   head_seq: Schema.optionalKey(Schema.Int),
+  details: Schema.optionalKey(
+    Schema.Struct({
+      after_seq: Schema.optionalKey(Schema.Int),
+      head_seq: Schema.optionalKey(Schema.Int),
+    }),
+  ),
 });
 
 export function isRoomsHumanStoryV2(story: RoomsHumanStory): story is RoomsHumanStoryV2 {
