@@ -67,7 +67,10 @@ or acceptance response leaves uncertain state to reconcile rather than issuing
 another side-effecting request. Accepted turns retain their actual run ID across
 connector restart. Terminal result, attributed reply, receipt and outbox commit
 atomically using the existing result path; replay retains the same identity.
-Cancellation affects the turn and keeps its conversation/history.
+Cancellation affects the turn and keeps its conversation/history. Connector
+shutdown detaches its wait so an accepted run can be reconciled after restart.
+Independent conversations can proceed across delivery pages while the durable
+checkpoint stays before unresolved work.
 
 For exact routes, schemas, compatibility fixtures and storage behavior, read the
 [backend conversation contract](https://github.com/benwilliams0540/t3rooms/blob/main/docs/design/persistent-room-conversations.md).

@@ -1,43 +1,70 @@
-# Rooms resident Agent connector host
+# Threadspace resident agent connector host
 
-This private Node 24 executable is the supervised, non-listening host for one
-room-scoped Claw Agent and one explicitly allow-listed Rooms channel. It reads
-`rooms.agent-deliveries` v1 from loopback Rails, reuses the accepted connector,
-invocation, SQLite, and OpenClaw Gateway transports, and settles at most one
-server-attributed reply through `rooms.agent-invocations` v1.
+This private Node executable connects Threadspace's Rooms backend to one resident
+OpenClaw agent and one configured channel. It owns configuration and process
+supervision; the backend owns durable conversations, bindings and turn order.
+See [product architecture](../../docs/architecture/threadspace.md).
 
-It does not use the Local-human endpoint, expose a network service, accept
-caller-selected actor IDs, provide story/native-T3-control tools to the model,
-or store provider credentials in Rooms. The Rooms bearer is read from a
-mode-0600 file. The Gateway token is resolved at handshake time from the
-existing owner-only OpenClaw configuration and is not copied into the host
-configuration or state.
+The host reads Rooms and Gateway credentials from the intended owner-only files.
+It opens no listening service and stores no provider credentials in room records.
+Local SQLite files retain delivery checkpoints, mapping and accepted-run receipts;
+they do not become another conversation/binding authority.
 
-Run the credential-safe readiness check with:
+## Choose the configuration version
+
+`rooms.resident-agent-host-config` version **2** uses v2 delivery and continuing
+conversation contracts. It reserves a backend binding, initializes or adopts its
+actual OpenClaw session, commits the session receipt and consumes dispatch once.
+Follow-ups retain that binding; each turn retains a distinct invocation identity.
+
+The `nativeT3` block is optional in version 2. Omit it for a conversation-only
+OpenClaw host. Ordinary historical mentions without a conversation are then
+reported as unsupported and skipped; they cannot stop current conversation work.
+To retain legacy one-shot execution, provide actual environment/project/thread
+IDs. Version **1** remains supported for that existing path and requires those
+IDs. A Rooms channel ID or invented T3 identifier is never a substitute.
+
+The common configuration still supplies connector ID/version/epoch, actual
+room/channel/agent/machine IDs, loopback Rails and Gateway origins, credential
+file paths, OpenClaw host/agent identity, a state directory and delivery settings.
+`src/config.ts` owns the exact validated shape. Keep configuration and state
+under the intended host owner.
+
+## Build and check
+
+From this package:
 
 ```sh
-pnpm build
+vp run build
 node dist/bin.mjs --config /absolute/path/to/host-config.json --check
 ```
 
-The check validates strict configuration, secret ownership/mode, loopback
-Rails, authenticated delivery binding, Gateway protocol/method compatibility,
-and the three SQLite schemas. It does not move the delivery cursor, invoke a
-provider, or mutate Rooms.
+Readiness checks strict configuration, file ownership/mode, authenticated Rooms
+binding, Gateway protocol/method support and local state schemas. Version 2 also
+requires advertised `sessions.create` and `sessions.resolve` support. The check
+does not move the delivery cursor or execute agent work.
 
-Run the resident loop with:
+The resident loop is:
 
 ```sh
 node dist/bin.mjs --config /absolute/path/to/host-config.json
 ```
 
-The configuration contract is `rooms.resident-agent-host-config` version `1`.
-It requires genuine native T3 environment, project, and thread IDs. Those IDs
-must come from human-selected native T3 state; Rooms channel IDs are not a
-substitute.
+## Retry, shutdown and capabilities
 
-The cursor is checkpointed only after a whole bounded delivery page is handled
-sequentially. A crash replays the page, while the existing connector store and
-server invocation mapping make source delivery, provider acceptance, result,
-receipt, outbox, and reply idempotent. An accepted invocation that is still
-running defers the checkpoint so it can be resumed safely.
+The backend serializes turns on each binding. The host can process independent
+conversations and scan later delivery pages when an earlier conversation is
+blocked. A temporary scan position never replaces the durable checkpoint before
+unresolved work; a crash safely repeats already settled deliveries.
+
+Accepted runs keep their actual run ID for reconciliation. Unknown acceptance or
+cancellation retains the turn's queue barrier. Host shutdown detaches the wait
+instead of cancelling the accepted runtime run. Explicit cancellation requires a
+run-specific receipt. Missing or replaced sessions remain blocked for deliberate
+host reconciliation; they are never silently recreated.
+
+Continuing work uses the runtime's configured tools and approval policy. This
+connector supplies no approval UI bridge and never auto-approves. A yielded or
+unreconciled runtime state remains visible as uncertain. Actual tool/approval
+behavior and the designated host's runtime version need integration acceptance;
+protocol fixtures alone do not establish them.
