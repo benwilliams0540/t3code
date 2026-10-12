@@ -66,18 +66,18 @@ undefined.
 
 Paths below are repository-relative and exist at the review revision.
 
-| Area                      | Entry point                                                                                                    | Current responsibility / needed boundary                                                                                                                                                 |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Room UI                   | `apps/web/src/features/rooms/shell/`, `channel/`, `threads/`                                                   | Presentation and selection. Feed loading and lifecycle decisions still leak into components.                                                                                             |
-| Web connection state      | `apps/web/src/features/rooms/dataSource/RoomsDataSourceProvider.tsx`                                           | Over 1,000 lines combine auth generations, source/profile selection, refresh/change loops, messages, stories and invites. Extract owned state, then delete its duplicate decisions here. |
-| Channel feed              | `apps/web/src/features/rooms/channel/RoomsLocalChannelFeed.tsx`                                                | Fetch/refresh/pagination lives with rendering. A first-page refresh can miss new messages in long channels.                                                                              |
-| Mobile connection state   | `apps/mobile/src/features/rooms/RoomsRealtimeCoordinator.tsx`                                                  | Separate client/loop lifecycle. Share protocol and state ownership while keeping native UI/platform storage adapters.                                                                    |
-| Shared client state       | `packages/client-runtime/src/rooms/`                                                                           | Presently contains agent-turn/story helpers; the natural home for reusable connection and conversation state.                                                                            |
-| Wire clients              | `apps/web/src/features/rooms/dataSource/humanSharedClient.ts`, `humanSharedContract.ts`, `localChangesLoop.ts` | Shared decoding must preserve validated cursor-head errors; transport/decoding belongs behind shared interfaces.                                                                         |
-| Project/thread navigation | `apps/web/src/features/rooms/threads/roomProjectBindings.ts`, `RoomsNativeThreadSurface.tsx`                   | Browser-local bindings and native T3 rendering. Navigation is not a source-enforced sharing grant or an OpenClaw session viewer.                                                         |
-| Agent execution           | `packages/rooms-agent-connector/src/connector.ts`, `contracts.ts`                                              | Delivery/invocation lifecycle, leases, correlation and duplicate suppression. Preserve these while separating conversation binding from turn identity.                                   |
-| OpenClaw adapter          | `packages/rooms-agent-connector/src/openClawGatewayTransport.ts`                                               | Gateway-specific protocol, waiting and history. Current per-invocation session and restricted request options need an explicit continuing-work contract.                                 |
-| Connector process         | `packages/rooms-agent-connector-host/src/config.ts`, `host.ts`                                                 | Supervision/configuration. Currently requires native T3 environment/project/thread IDs even with OpenClaw; target configuration must express the actual runtime.                         |
+| Area                      | Entry point                                                                                                          | Current responsibility / needed boundary                                                                                                                                                 |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Room UI                   | `apps/web/src/features/rooms/shell/`, `channel/`, `threads/`                                                         | Presentation, selection and loading state. Selected-feed traversal and change waits use client-runtime owners. Broader connection snapshot ownership remains under #39.                  |
+| Web connection state      | `apps/web/src/features/rooms/dataSource/RoomsDataSourceProvider.tsx`                                                 | Over 1,000 lines combine auth generations, source/profile selection, refresh/change loops, messages, stories and invites. Extract owned state, then delete its duplicate decisions here. |
+| Channel feed              | `packages/client-runtime/src/rooms/feedSnapshot.ts`, `apps/web/src/features/rooms/channel/RoomsLocalChannelFeed.tsx` | Shared pinned forward-page loading and merging; UI owns selection/loading presentation. Refresh drains the snapshot so new messages beyond page one remain visible.                      |
+| Mobile connection state   | `apps/mobile/src/features/rooms/RoomsRealtimeCoordinator.tsx`                                                        | Native account/app-visibility coordination; shared change-wait ownership with mobile transport, notification and storage adapters. Startup remains under #44.                            |
+| Shared client state       | `packages/client-runtime/src/rooms/`                                                                                 | Presently contains agent-turn/story helpers; the natural home for reusable connection and conversation state.                                                                            |
+| Wire clients              | `apps/web/src/features/rooms/dataSource/humanSharedClient.ts`, `humanSharedContract.ts`, `localChangesLoop.ts`       | Shared decoding must preserve validated cursor-head errors; transport/decoding belongs behind shared interfaces.                                                                         |
+| Project/thread navigation | `apps/web/src/features/rooms/threads/roomProjectBindings.ts`, `RoomsNativeThreadSurface.tsx`                         | Browser-local bindings and native T3 rendering. Navigation is not a source-enforced sharing grant or an OpenClaw session viewer.                                                         |
+| Agent execution           | `packages/rooms-agent-connector/src/connector.ts`, `contracts.ts`                                                    | Delivery/invocation lifecycle, leases, correlation and duplicate suppression. Preserve these while separating conversation binding from turn identity.                                   |
+| OpenClaw adapter          | `packages/rooms-agent-connector/src/openClawGatewayTransport.ts`                                                     | Gateway-specific protocol, waiting and history. Current per-invocation session and restricted request options need an explicit continuing-work contract.                                 |
+| Connector process         | `packages/rooms-agent-connector-host/src/config.ts`, `host.ts`                                                       | Supervision/configuration. Currently requires native T3 environment/project/thread IDs even with OpenClaw; target configuration must express the actual runtime.                         |
 
 Private service implementation evidence and storage design live in that
 repository. Public client contracts should describe interoperable behavior
@@ -128,11 +128,20 @@ cursor resets to a nonnegative safe integer below the requested cursor, after
 authoritative refresh. Missing, malformed or non-decreasing heads and unrelated
 errors use bounded retry rather than a tight reset loop.
 
-This is one lifecycle extraction under #39. Platform coordinators still own
-account/server selection, app visibility and notification presentation. Channel
-snapshot/pagination and new conversation projection ownership remain unfinished;
-this extraction does not fix the long-channel first-page refresh gap. Installed
-desktop and native mobile behavior require their own acceptance evidence.
+`feedSnapshot.ts`, exported as `@t3tools/client-runtime/rooms/feed-snapshot`, owns
+forward page loading, the pinned snapshot head, exclusive next cursors, identity
+validation and durable item deduplication. Local and Shared web feeds use it for
+initial load, manual pagination and refresh. Initial load remains one page; refresh
+drains the current snapshot, including new messages after the first hundred rows.
+The UI passes its current source/account generation guard so late pages stop
+issuing requests and cannot replace the selected feed. Non-advancing cursors fail
+instead of repeatedly requesting the same page. Wire schemas remain at the adapters.
+
+These are focused ownership extractions under #39. Platform coordinators still own
+account/server selection, app visibility and notification presentation. Broader
+connection snapshot and conversation projection ownership remain unfinished;
+mobile startup is tracked separately in #44. Installed desktop and native mobile
+behavior require their own acceptance evidence.
 
 ## Identity and behavior contract
 

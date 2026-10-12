@@ -128,8 +128,44 @@ describe("portable Rooms change-wait ownership", () => {
     expect(save).not.toHaveBeenCalled();
   });
 
+  it("retries failed reconciliation from the committed cursor and reconnects after recovery", async () => {
+    const pending = deferred<{ changed: boolean; headSeq: number }>();
+    const requests: number[] = [];
+    const statuses: string[] = [];
+    const schedules: Array<() => void> = [];
+    let reconciliations = 0;
+    const loop = new RoomsChangeLoop({
+      ...defaults,
+      waitForChanges: async (_room, input) => {
+        requests.push(input.afterSeq);
+        return requests.length <= 2 ? { changed: true, headSeq: 5 } : pending.promise;
+      },
+      onInvalidate: async () => {
+        if (++reconciliations === 1) throw new Error("snapshot unavailable");
+      },
+      onStatusChange: (status) => statuses.push(status),
+      scheduleRetry: (callback) => {
+        schedules.push(callback);
+        return () => undefined;
+      },
+    });
+    loop.start("room");
+    await flush();
+    expect(requests).toEqual([0]);
+    expect(statuses).toEqual(["catching_up", "reconnecting"]);
+    schedules[0]!();
+    await flush();
+    expect(requests).toEqual([0, 0, 5]);
+    expect(statuses).toEqual(["catching_up", "reconnecting", "connected"]);
+    loop.stop();
+  });
+
   it("keeps retries bounded and ignores cancelled callbacks from an old session", async () => {
-    const schedules: Array<{ callback: () => void; delay: number }> = [];
+    const schedules: Array<{
+      callback: () => void;
+      delay: number;
+      cancel: ReturnType<typeof vi.fn>;
+    }> = [];
     const waitForChanges = vi.fn(async () => {
       throw new Error("offline");
     });
@@ -137,8 +173,9 @@ describe("portable Rooms change-wait ownership", () => {
       ...defaults,
       waitForChanges,
       scheduleRetry: (callback, delay) => {
-        schedules.push({ callback, delay });
-        return () => undefined;
+        const cancel = vi.fn();
+        schedules.push({ callback, delay, cancel });
+        return cancel;
       },
     });
     loop.start("old");
@@ -157,5 +194,6 @@ describe("portable Rooms change-wait ownership", () => {
     await flush();
     expect(waitForChanges).toHaveBeenCalledTimes(8);
     loop.stop();
+    expect(schedules.at(-1)!.cancel).toHaveBeenCalledOnce();
   });
 });

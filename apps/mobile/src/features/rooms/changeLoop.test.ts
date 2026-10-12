@@ -2,11 +2,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import { RoomsMobileClientError } from "./client";
 import type { RoomsRealtimeEvent } from "./contract";
-import {
-  RoomsMobileChangeLoop,
-  type RoomsMobileChangeInvalidation,
-  type RoomsMobileLiveUpdatesStatus,
-} from "./changeLoop";
+import { RoomsMobileChangeLoop, type RoomsMobileChangeInvalidation } from "./changeLoop";
 
 const ROOM_A = "room:019fbe90-0000-7000-8000-000000000001";
 const ROOM_B = "room:019fbe90-0000-7000-8000-000000000002";
@@ -192,39 +188,6 @@ describe("Rooms mobile change loop", () => {
       },
     ]);
     expect(requests).toEqual([44, 2]);
-    loop.stop();
-  });
-
-  it("backs off deterministically and returns to connected after recovery", async () => {
-    const schedules: Array<{ callback: () => void; delayMs: number }> = [];
-    const statuses: RoomsMobileLiveUpdatesStatus[] = [];
-    const pending = deferred<{ changed: boolean; head_seq: number }>();
-    let attempt = 0;
-    const loop = new RoomsMobileChangeLoop({
-      client: {
-        waitForChanges: () => {
-          attempt += 1;
-          if (attempt === 1) return Promise.reject(new Error("network interrupted"));
-          if (attempt === 2) return Promise.resolve({ changed: false, head_seq: 0 });
-          return pending.promise;
-        },
-      },
-      onInvalidate: async () => undefined,
-      onStatusChange: (status) => statuses.push(status),
-      scheduleRetry: (callback, delayMs) => {
-        schedules.push({ callback, delayMs });
-        return vi.fn();
-      },
-    });
-
-    loop.start(ROOM_A);
-    await flush();
-    expect(schedules[0]?.delayMs).toBe(500);
-    schedules[0]!.callback();
-    await flush();
-
-    expect(statuses).toEqual(["catching_up", "reconnecting", "connected"]);
-    expect(attempt).toBe(3);
     loop.stop();
   });
 

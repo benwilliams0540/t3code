@@ -13,6 +13,11 @@ import {
   roomsAgentTurnAnnouncement,
 } from "@t3tools/client-runtime/rooms/agent-turns";
 
+import {
+  loadRoomsFeedSnapshot,
+  RoomsFeedSnapshotError,
+} from "@t3tools/client-runtime/rooms/feed-snapshot";
+
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
@@ -29,10 +34,9 @@ import {
   projectRoomsLocalActivityItems,
 } from "./localActivityProjection";
 import { useRoomsDataSource } from "../dataSource";
-import { isRoomsLocalClientError, RoomsLocalClientError } from "../dataSource/localChannelsClient";
+import { isRoomsLocalClientError } from "../dataSource/localChannelsClient";
 import type { RoomsLocalChannel, RoomsLocalFeedItem } from "../dataSource/localChannelsContract";
 import type {
-  RoomsHumanFeedItem,
   RoomsInteractiveFeed,
   RoomsInteractiveWorkspace,
 } from "../dataSource/humanSharedContract";
@@ -45,35 +49,6 @@ import {
   tryStartStableRoomsSubmission,
   type StableRoomsCommand,
 } from "./stableCommand";
-
-export function mergeRoomsLocalFeedPages(
-  pages: readonly RoomsInteractiveFeed[],
-): RoomsInteractiveFeed | null {
-  const first = pages[0];
-  if (!first) return null;
-  const itemIds = new Set<string>();
-  const items: RoomsHumanFeedItem[] = [];
-  for (const page of pages) {
-    if (
-      page.room_id !== first.room_id ||
-      page.channel_id !== first.channel_id ||
-      page.page_info.snapshot_head_seq !== first.page_info.snapshot_head_seq
-    ) {
-      throw new RoomsLocalClientError({
-        kind: "invalid_response",
-        code: "feed_snapshot_mismatch",
-        message: "The Threadspace Local feed changed identity within a pinned snapshot.",
-      });
-    }
-    for (const item of page.items) {
-      if (itemIds.has(item.id)) continue;
-      itemIds.add(item.id);
-      items.push(item);
-    }
-  }
-  const last = pages.at(-1)!;
-  return { ...last, items };
-}
 
 export function RoomsAgentTurnLiveStatus({
   activities,
@@ -91,16 +66,8 @@ export function RoomsAgentTurnLiveStatus({
   );
 }
 
-export function isCurrentRoomsLocalFeedRequest(
-  requestGeneration: number,
-  currentGeneration: number,
-): boolean {
-  return requestGeneration === currentGeneration;
-}
-
 /**
- * Renders one durable Local item through the shared activity renderer. Local and Sample channels
- * differ in where their truth comes from, not in how a message reads.
+ * Renders one durable Local or Shared item through the shared activity renderer.
  */
 export function RoomsLocalFeedItemCard({
   item,
@@ -413,45 +380,35 @@ export function RoomsLocalChannelFeed({
   }, [activities]);
 
   const reload = useCallback(
-    async (loadCompleteSnapshot = false) => {
+    async (loadCompleteSnapshot = true) => {
       const generation = ++loadGeneration.current;
       setLoading(true);
       setError(null);
       try {
-        const pages: RoomsInteractiveFeed[] = [
-          await loadLocalFeed(workspace.room.id, channel.id, { limit: 100 }),
-        ];
-        if (loadCompleteSnapshot) {
-          while (pages.at(-1)?.page_info.has_more) {
-            const previous = pages.at(-1)!;
-            pages.push(
-              await loadLocalFeed(workspace.room.id, channel.id, {
-                afterSeq: previous.page_info.next_cursor,
-                limit: 100,
-                snapshotHeadSeq: pages[0]!.page_info.snapshot_head_seq,
-              }),
-            );
-          }
-        }
-        if (!isCurrentRoomsLocalFeedRequest(generation, loadGeneration.current)) return;
-        setFeed(mergeRoomsLocalFeedPages(pages));
+        const snapshot = await loadRoomsFeedSnapshot({
+          loadPage: (input) => loadLocalFeed(workspace.room.id, channel.id, input),
+          completeSnapshot: loadCompleteSnapshot,
+          isCurrent: () => generation === loadGeneration.current,
+        });
+        if (!snapshot || generation !== loadGeneration.current) return;
+        setFeed(snapshot);
         setFeedInvalidated(false);
       } catch (cause) {
-        if (!isCurrentRoomsLocalFeedRequest(generation, loadGeneration.current)) return;
+        if (generation !== loadGeneration.current) return;
         setError(
-          isRoomsLocalClientError(cause)
+          isRoomsLocalClientError(cause) || cause instanceof RoomsFeedSnapshotError
             ? { code: cause.code, message: cause.message }
             : { code: "unexpected_feed_error", message: "Could not load this channel feed." },
         );
       } finally {
-        if (isCurrentRoomsLocalFeedRequest(generation, loadGeneration.current)) setLoading(false);
+        if (generation === loadGeneration.current) setLoading(false);
       }
     },
     [channel.id, loadLocalFeed, workspace.room.id],
   );
 
   useEffect(() => {
-    void reload();
+    void reload(false);
     return () => {
       loadGeneration.current += 1;
     };
@@ -475,22 +432,22 @@ export function RoomsLocalChannelFeed({
     setLoadingMore(true);
     setError(null);
     try {
-      const next = await loadLocalFeed(workspace.room.id, channel.id, {
-        afterSeq: feed.page_info.next_cursor,
-        limit: feed.page_info.limit,
-        snapshotHeadSeq: feed.page_info.snapshot_head_seq,
+      const snapshot = await loadRoomsFeedSnapshot({
+        loadPage: (input) => loadLocalFeed(workspace.room.id, channel.id, input),
+        previous: feed,
+        completeSnapshot: false,
+        isCurrent: () => generation === loadGeneration.current,
       });
-      if (!isCurrentRoomsLocalFeedRequest(generation, loadGeneration.current)) return;
-      setFeed(mergeRoomsLocalFeedPages([feed, next]));
+      if (snapshot && generation === loadGeneration.current) setFeed(snapshot);
     } catch (cause) {
-      if (!isCurrentRoomsLocalFeedRequest(generation, loadGeneration.current)) return;
+      if (generation !== loadGeneration.current) return;
       setError(
-        isRoomsLocalClientError(cause)
+        isRoomsLocalClientError(cause) || cause instanceof RoomsFeedSnapshotError
           ? { code: cause.code, message: cause.message }
           : { code: "unexpected_feed_error", message: "Could not load the next feed page." },
       );
     } finally {
-      if (isCurrentRoomsLocalFeedRequest(generation, loadGeneration.current)) {
+      if (generation === loadGeneration.current) {
         setLoadingMore(false);
       }
     }

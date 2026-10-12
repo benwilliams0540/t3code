@@ -1,3 +1,7 @@
+import {
+  loadRoomsFeedSnapshot,
+  type RoomsFeedPageInput,
+} from "@t3tools/client-runtime/rooms/feed-snapshot";
 import * as Schema from "effect/Schema";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
@@ -15,12 +19,7 @@ import {
   projectRoomsLocalActivityItem,
   projectRoomsLocalActivityItems,
 } from "./localActivityProjection";
-import {
-  isCurrentRoomsLocalFeedRequest,
-  mergeRoomsLocalFeedPages,
-  RoomsAgentTurnLiveStatus,
-  RoomsLocalFeedItemCard,
-} from "./RoomsLocalChannelFeed";
+import { RoomsAgentTurnLiveStatus, RoomsLocalFeedItemCard } from "./RoomsLocalChannelFeed";
 
 const decodeFeed = Schema.decodeUnknownSync(RoomsLocalFeed);
 const decodeHumanFeed = Schema.decodeUnknownSync(RoomsHumanFeed);
@@ -82,43 +81,44 @@ const unknownItem = Schema.decodeUnknownSync(RoomsLocalFeedItem)({
 });
 
 describe("Rooms Local channel feed", () => {
-  it("merges exclusive pages only within one pinned snapshot", () => {
-    const secondPage = decodeFeed({
-      room_id: firstPage.room_id,
-      channel_id: firstPage.channel_id,
-      page_info: {
-        after_seq: 4,
+  it("loads decoded Local and Shared pages through the shared pinned snapshot owner", async () => {
+    for (const [decode, contract] of [
+      [decodeFeed, undefined],
+      [
+        decodeHumanFeed,
+        {
+          ...sharedWorkspace.contract,
+          version: 2,
+          schema_uri: "contracts/rooms/human-shared/v2/schema.json",
+        },
+      ],
+    ] as const) {
+      const inputs: RoomsFeedPageInput[] = [];
+      const secondPage = decode({
+        contract,
+        room_id: firstPage.room_id,
+        channel_id: firstPage.channel_id,
+        page_info: {
+          after_seq: 4,
+          limit: 1,
+          snapshot_head_seq: 5,
+          next_cursor: 5,
+          has_more: false,
+        },
+        items: [unknownItem],
+      });
+      const feed = await loadRoomsFeedSnapshot({
         limit: 1,
-        snapshot_head_seq: 5,
-        next_cursor: 5,
-        has_more: false,
-      },
-      items: [unknownItem],
-    });
-    const merged = mergeRoomsLocalFeedPages([firstPage, secondPage]);
-    expect(merged?.items.map((item) => item.source_event.seq)).toEqual([4, 5]);
-    expect(merged?.page_info).toEqual(secondPage.page_info);
-  });
-
-  it("rejects room, channel, or snapshot drift between pages", () => {
-    const mismatched = decodeFeed({
-      ...populatedFeedDocument,
-      page_info: { ...populatedFeedDocument.page_info, snapshot_head_seq: 99 },
-    });
-    expect(() => mergeRoomsLocalFeedPages([firstPage, mismatched])).toThrow(
-      "changed identity within a pinned snapshot",
-    );
-  });
-
-  it("deduplicates command and notification refresh results by durable feed-item identity", () => {
-    const merged = mergeRoomsLocalFeedPages([firstPage, firstPage]);
-    expect(merged?.items).toHaveLength(1);
-    expect(merged?.items[0]?.id).toBe(firstPage.items[0]?.id);
-  });
-
-  it("discards a pinned pagination response after a live invalidation generation", () => {
-    expect(isCurrentRoomsLocalFeedRequest(7, 7)).toBe(true);
-    expect(isCurrentRoomsLocalFeedRequest(7, 8)).toBe(false);
+        isCurrent: () => true,
+        loadPage: async (input) => {
+          inputs.push(input);
+          return input.afterSeq ? secondPage : decode({ ...firstPage, contract });
+        },
+      });
+      expect(feed?.items.map((item) => item.source_event.seq)).toEqual([4, 5]);
+      expect(feed?.page_info).toEqual(secondPage.page_info);
+      expect(inputs).toEqual([{ limit: 1 }, { afterSeq: 4, limit: 1, snapshotHeadSeq: 5 }]);
+    }
   });
 
   it("renders exact Markdown with explicit principal attribution and unknown schemas visibly", () => {

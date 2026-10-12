@@ -236,34 +236,4 @@ describe("Rooms Local single change wait loop", () => {
     expect(statuses).toEqual(["reconnecting", "connected"]);
     loop.stop();
   });
-
-  it("keeps the last reconciled cursor when refresh fails and cancels its retry on stop", async () => {
-    const schedules: Array<{ callback: () => void; cancelled: ReturnType<typeof vi.fn> }> = [];
-    const requests: number[] = [];
-    const loop = new RoomsLocalChangeLoop({
-      client: {
-        waitForChanges: (_roomId, input) => {
-          requests.push(input.afterSeq);
-          return Promise.resolve(advanced(ROOM_A, input.afterSeq, 5));
-        },
-      },
-      onInvalidate: async () => {
-        throw new Error("workspace refresh failed");
-      },
-      onStatusChange: vi.fn(),
-      scheduleRetry: (callback) => {
-        const cancelled = vi.fn();
-        schedules.push({ callback, cancelled });
-        return cancelled;
-      },
-    });
-    loop.start(ROOM_A);
-    await flush();
-    expect(requests).toEqual([0]);
-    schedules[0]!.callback();
-    await flush();
-    expect(requests).toEqual([0, 0]);
-    loop.stop();
-    expect(schedules[1]?.cancelled).toHaveBeenCalledOnce();
-  });
 });
