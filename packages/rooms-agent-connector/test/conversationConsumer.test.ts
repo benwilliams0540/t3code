@@ -493,3 +493,28 @@ it("lost accepted receipt response is resumed from backend after local cache los
     restarted.close();
   }
 });
+
+it("a missing A session is explicitly blocked without stopping unrelated B", async () => {
+  const h = make();
+  try {
+    const a = await h.service.reserve({
+      conversationId: "conversation:a",
+      connectorId: provision.connectorId,
+      configurationEpoch: 7,
+      hostId: provision.openClawHostId,
+      agentId: provision.openClawAgentId,
+    });
+    h.service.bindings.set(a.conversationId, { ...a, initializationState: "missing" });
+    expect(await handle(h)).toEqual({
+      kind: "blocked",
+      code: "runtime_session_missing",
+      bindingId: a.id,
+    });
+    expect((await handle(h, event("b", 2))).kind).toBe("settled");
+    expect(h.runtime.invoked).toHaveLength(1);
+    expect(h.runtime.invoked[0]?.runtimeBinding?.conversationId).toBe("conversation:b");
+    expect(h.runtime.sessions.size).toBe(1);
+  } finally {
+    h.close();
+  }
+});

@@ -140,7 +140,7 @@ export const processDeliveryPage = async (input: {
           ...(input.signal ? { signal: input.signal } : {}),
           ...(input.config.contract.version === 2 ? { abortMode: "detach" as const } : {}),
         });
-        if (outcome.kind === "deferred") {
+        if (outcome.kind === "deferred" || outcome.kind === "blocked") {
           if (input.config.contract.version === 1)
             throw new ResidentHostError(
               "delivery_deferred",
