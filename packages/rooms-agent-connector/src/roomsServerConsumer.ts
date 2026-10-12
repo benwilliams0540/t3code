@@ -994,6 +994,8 @@ const recognizedRateLimitCodes = new Set([
 const recognizedRequestRejectionCodes = new Set([
   "gateway_protocol_mismatch",
   "gateway_request_rejected",
+  "gateway_scope_required",
+  "gateway_authentication_failed",
 ]);
 
 export const normalizeRoomsFailure = (result: ResidentAgentResult): RoomsSafeFailureCode => {
