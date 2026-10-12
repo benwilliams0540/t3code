@@ -1,11 +1,17 @@
 # Shared Rooms human identity
 
-Shared Rooms is the authenticated, server-backed multiplayer source in the Version 3 sidebar. It
+Shared Rooms is the authenticated, server-backed source in the Threadspace sidebar. It
 is available alongside the explicit development-only Local fallback. Certified workspace
 fixtures remain test/reference data rather than a selectable product source. Shared Rooms
 does not change T3 Connect managed Relay minting or native T3 thread ownership.
 
-## Immutable producer contract
+## Supported historical producer contracts
+
+These pins record the existing v1 workspace and v2 feed lineage. Continuing
+conversations add the v2 conversation contract described in
+[Threadspace architecture](../architecture/threadspace.md); they do not change
+the v1 workspace envelope. The shared `humanWire.ts` and `conversationClient.ts`
+are the current web/mobile decoder and conversation request owners.
 
 The consumer is pinned in source to:
 
@@ -44,8 +50,13 @@ vocabulary. Protocol rejection maps to `provider_request_rejected` instead of th
 `connector_internal`. Automatic retry is intentionally excluded because the invocation protocol
 does not yet define idempotency and double-execution rules.
 
-The OpenClaw transport sends `modelRun: true` whenever it sends `promptMode: "none"`, as required
-by the OpenClaw 2026.8.2 agent protocol. The connector regression test freezes that request shape.
+That delayed-state projection describes historical one-shot invocations.
+Selected conversations use authoritative queued, starting, accepted, uncertain
+and terminal records instead; they do not infer working state from an old start
+event. The continuing OpenClaw adapter inherits the host's tool/approval policy.
+The historical one-shot adapter keeps its existing restricted request options.
+See the [connector host contract](../../packages/rooms-agent-connector-host/README.md)
+for the verified runtime revision, continuation and recovery behavior.
 
 ## Server-owned local sign-in (free self-hosting)
 
@@ -93,7 +104,7 @@ settings, local storage, project bindings, diagnostics, serialized source state,
 Electron sends a narrow typed request to the main process. The main process:
 
 - accepts only HTTP loopback with no URL credentials, path, query, or fragment in the base origin;
-- owns the exact `/rooms/human/v1` route and method allow-list plus the single v2 feed route;
+- owns an exact route/method allow-list for human v1, the v2 feed and v2 conversation operations;
 - constructs the only `Authorization` header itself;
 - accepts no renderer-controlled header map;
 - rejects blank, CR/LF-bearing, or oversized bearers;

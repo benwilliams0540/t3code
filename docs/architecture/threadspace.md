@@ -28,7 +28,8 @@ or shared history.
 | --------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Presentation          | `apps/web`, `apps/desktop`, `apps/mobile`             | Layout, drafts, navigation, platform app visibility and notification presentation.                                                                   |
 | Shared client state   | `packages/client-runtime/src/rooms`                   | Connection identity and generations, selected-source/room state, reconciliation, change waits, feed traversal and conversation projections/commands. |
-| Human transports      | Web/mobile Rooms clients                              | Wire validation, authenticated HTTP, local bridge, server-origin credential and platform storage adapters.                                           |
+| Human contract/client | `packages/client-runtime/src/rooms`                   | One wire decoder, scoped conversation requests and validated response identity, consumed by web and mobile.                                          |
+| Human transports      | Web/mobile Rooms clients                              | Authenticated HTTP, local bridge, server-origin credential and platform storage adapters.                                                            |
 | Rooms domain          | Separate `t3rooms/ledger` Rails backend               | Membership and authorization; room/channel/conversation identity; history, bindings, ordered turns and atomic result/outbox records.                 |
 | Agent contract/client | `packages/rooms-agent-api` and connector wire clients | Validated versioned requests/responses consumed by connectors.                                                                                       |
 | Agent connector       | `packages/rooms-agent-connector`                      | Runtime session initialization, actual acceptance receipts, delivery and reconciliation.                                                             |
@@ -79,7 +80,7 @@ cross-product interface and responsibilities.
 
 ## Client lifecycle
 
-Connection snapshots are scoped to source, server and authenticated identity.
+`connection.ts` owns connection snapshots scoped to source, server and authenticated identity.
 Changing those identities invalidates pending discovery, reads and change waits.
 A stale success or rejection cannot replace the current workspace or stop its
 newer lifecycle. Local/Shared preferences and selected-room state stay explicit;
@@ -94,10 +95,14 @@ durable-item deduplication. Initial loading stays lazy; refresh can traverse the
 whole snapshot. A failed partial refresh retains old rows and offers a fresh
 snapshot Retry.
 
-Conversation selection and projections consume backend records. Start/send
+`serverProfile.ts` owns server identity and credential provenance;
+`humanWire.ts` and `conversationClient.ts` own the human conversation contract.
+`conversations.ts` owns selection and projections over backend records. Start/send
 commands use stable request IDs and preserve a failed draft for deliberate
 retry. AppState, secure storage and notification effects stay in native adapters;
-layout and accessible loading/error states stay in the UI.
+layout and accessible loading/error states stay in the UI. `conversationStatus.ts`
+maps authoritative turn/binding states to shared human-readable labels. Queued or
+uncertain turns never inherit a misleading working label from historical events.
 
 ## Compatibility and acceptance
 

@@ -42,10 +42,10 @@ does not establish ownership while old callers still make the same decisions.
 
 ## Complete the milestone
 
-Source work implements compatible durable conversation contracts, shared client
-state and runtime continuation. The useful workspace then needs conversation
-navigation and authorized current files/diffs, followed by proof on the intended
-host with two separately authenticated clients.
+Source implements compatible durable conversation contracts, shared client state,
+runtime continuation and channel conversation navigation. Authorized current
+files/diffs and proof on the intended host with two separately authenticated
+clients remain milestone work; the roadmap owns their current status.
 
 Acceptance includes distinct conversations, continued follow-ups, ordered
 concurrent turns, safe retry/reconnect, honest cancellation and uncertain states,
