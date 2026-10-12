@@ -1,0 +1,46 @@
+{
+  "contract": {
+    "id": "rooms.conversations",
+    "version": 2,
+    "schema_uri": "contracts/rooms/conversations/v2/schema.json"
+  },
+  "conversation": {
+    "id": "conversation:01a13157-d386-768f-88c0-6c3a073deabe",
+    "room_id": "room:01a13157-d35a-7103-ab50-fc27a027e341",
+    "channel_id": "channel:01a13157-d37b-766e-90a4-6d682d044bb1",
+    "title": "Build plan",
+    "created_by": "h:01a13157-d34f-78be-9b3c-0c1f26e9f571",
+    "created_at": "2026-10-12T18:20:01.798Z",
+    "status": "active"
+  },
+  "item": {
+    "id": "feed-item:01a13157-d393-70bd-bc66-630e245e8c31",
+    "room_id": "room:01a13157-d35a-7103-ab50-fc27a027e341",
+    "channel_id": "channel:01a13157-d37b-766e-90a4-6d682d044bb1",
+    "occurred_at": "2026-10-12T18:20:01.811Z",
+    "source_event": {
+      "seq": 11,
+      "event_id": "01a13157-d393-70bd-bc66-630e245e8c31",
+      "type": "message.created",
+      "schema": 2
+    },
+    "attribution": {
+      "mode": "explicit_principal",
+      "writer_principal_id": "h:01a13157-d34f-78be-9b3c-0c1f26e9f571",
+      "actor_principal_id": "h:01a13157-d34f-78be-9b3c-0c1f26e9f571"
+    },
+    "kind": "human_message",
+    "summary": "@Claw continue",
+    "payload": {
+      "body_markdown": "@Claw continue",
+      "conversation_id": "conversation:01a13157-d386-768f-88c0-6c3a073deabe"
+    }
+  },
+  "source_event": {
+    "seq": 11,
+    "event_id": "01a13157-d393-70bd-bc66-630e245e8c31",
+    "type": "message.created",
+    "schema": 2
+  },
+  "replayed": false
+}

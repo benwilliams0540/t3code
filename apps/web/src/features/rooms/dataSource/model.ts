@@ -1,5 +1,6 @@
 import * as Schema from "effect/Schema";
 import * as Effect from "effect/Effect";
+export { normalizeRoomsDataSourceMode } from "@t3tools/client-runtime/rooms/connection";
 
 import type { RoomsLocalWorkspace } from "./localChannelsContract";
 import type {
@@ -17,9 +18,6 @@ export type RoomsDataSourceMode = typeof RoomsDataSourceMode.Type;
 
 // Retired Sample preferences enter the existing Shared connect/sign-in flow.
 // Explicit Local and Shared preferences keep their current meaning.
-export function normalizeRoomsDataSourceMode(value: string): RoomsDataSourceMode {
-  return value === "local" ? "local" : "shared";
-}
 
 export const PersistedRoomsProjectRef = Schema.Struct({
   environmentId: Schema.String,
@@ -126,36 +124,7 @@ export type RoomsDataSourceState =
   | RoomsHumanSourceReady
   | RoomsHumanSourceFailure;
 
-export function isRoomsHumanStateCurrent(
-  state: RoomsHumanSourceState,
-  authentication: { readonly generation: number; readonly accountId: string | null },
-): boolean {
-  if (state.authenticationGeneration !== authentication.generation) return false;
-  return state.status !== "ready" || state.accountId === authentication.accountId;
-}
-
 export type RoomsHumanSourceState = RoomsHumanSourceReady | RoomsHumanSourceFailure;
-
-export function shouldReloadRoomsHumanSelection(
-  state: RoomsHumanSourceState,
-  authentication: { readonly generation: number; readonly accountId: string | null },
-  roomId: string,
-): boolean {
-  return (
-    state.status !== "ready" ||
-    !isRoomsHumanStateCurrent(state, authentication) ||
-    state.workspace.room.id !== roomId
-  );
-}
-
-export function resolveSelectedSourceRoom(
-  state: RoomsDataSourceState,
-  selectedBySource: RoomsSelectedRoomBySource,
-): RoomsSourceRoom | null {
-  if (state.status !== "ready") return null;
-  const requestedId = selectedBySource[state.mode];
-  return state.rooms.find((room) => room.id === requestedId) ?? state.rooms[0] ?? null;
-}
 
 export function findSourceRoomBySlug(
   state: RoomsDataSourceState,

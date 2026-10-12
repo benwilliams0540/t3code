@@ -1,0 +1,82 @@
+{
+  "contract": {
+    "id": "rooms.conversations",
+    "version": 2,
+    "schema_uri": "contracts/rooms/conversations/v2/schema.json"
+  },
+  "conversation": {
+    "id": "conversation:01a13157-d386-768f-88c0-6c3a073deabe",
+    "room_id": "room:01a13157-d35a-7103-ab50-fc27a027e341",
+    "channel_id": "channel:01a13157-d37b-766e-90a4-6d682d044bb1",
+    "title": "Build plan",
+    "created_by": "h:01a13157-d34f-78be-9b3c-0c1f26e9f571",
+    "created_at": "2026-10-12T18:20:01.798Z",
+    "status": "active"
+  },
+  "bindings": [
+    {
+      "id": "binding:01a13157-d38d-7e64-baa0-5f8df91c5668",
+      "conversation_id": "conversation:01a13157-d386-768f-88c0-6c3a073deabe",
+      "room_id": "room:01a13157-d35a-7103-ab50-fc27a027e341",
+      "channel_id": "channel:01a13157-d37b-766e-90a4-6d682d044bb1",
+      "agent_principal_id": "a:019fc590-5b80-7ff0-bd8c-850a72e4761e",
+      "machine_principal_id": "m:019fc590-5b80-74a0-a245-395e560fa47b",
+      "runtime_target": {
+        "kind": "openclaw",
+        "host_id": "fixture-host",
+        "agent_id": "main",
+        "session_key": "agent:main:rooms:01a13157-d38d-7e64-baa0-5f8df91c5668"
+      },
+      "runtime_reference": {
+        "session_key": "agent:main:rooms:01a13157-d38d-7e64-baa0-5f8df91c5668",
+        "session_id": "fixture-session-binding:01a13157-d38d-7e64-baa0-5f8df91c5668"
+      },
+      "initialization_state": "ready",
+      "created_at": "2026-10-12T18:20:01.805Z"
+    }
+  ],
+  "invocations": [
+    {
+      "id": "invocation:01a13157-d396-7122-97f5-a864fd5f4f55",
+      "status": "succeeded",
+      "connector": {
+        "id": "claw",
+        "configuration_epoch": 1
+      },
+      "agent": {
+        "principal_id": "a:019fc590-5b80-7ff0-bd8c-850a72e4761e",
+        "host_machine_principal_id": "m:019fc590-5b80-74a0-a245-395e560fa47b"
+      },
+      "room_id": "room:01a13157-d35a-7103-ab50-fc27a027e341",
+      "channel_id": "channel:01a13157-d37b-766e-90a4-6d682d044bb1",
+      "context": {
+        "cutoff_seq": 11,
+        "source_head_seq": 11
+      },
+      "started_at": "2026-10-12T18:20:01.814Z",
+      "terminal_at": "2026-10-12T18:20:01.830Z",
+      "outbox": {
+        "id": "outbox:01a13157-d3a6-72b5-9709-8600657b92f7",
+        "result_id": "result:invocation:01a13157-d396-7122-97f5-a864fd5f4f55",
+        "terminal_status": "succeeded",
+        "safe_error_code": null,
+        "receipt_id": "receipt:invocation:01a13157-d396-7122-97f5-a864fd5f4f55",
+        "result_event_seq": 15,
+        "reply_event_seq": 16,
+        "receipt_event_seq": 17,
+        "notification_seq": 17
+      },
+      "conversation_id": "conversation:01a13157-d386-768f-88c0-6c3a073deabe",
+      "binding_id": "binding:01a13157-d38d-7e64-baa0-5f8df91c5668",
+      "turn_ordinal": 1,
+      "turn_state": "terminal",
+      "runtime_target": {
+        "kind": "openclaw",
+        "host_id": "fixture-host",
+        "agent_id": "main",
+        "session_key": "agent:main:rooms:01a13157-d38d-7e64-baa0-5f8df91c5668"
+      },
+      "runtime_run_id": "fixture-runtime-run"
+    }
+  ]
+}

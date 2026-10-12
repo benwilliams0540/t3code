@@ -1,4 +1,10 @@
 import {
+  roomsConversationHistoryItems,
+  roomsConversationBindingLabel,
+  roomsConversationTurnLabel,
+} from "@t3tools/client-runtime/rooms/conversation-status";
+import { RoomsConversations } from "@t3tools/client-runtime/rooms/conversations";
+import {
   AlertTriangleIcon,
   GitBranchIcon,
   HashIcon,
@@ -7,7 +13,15 @@ import {
   SendIcon,
   XIcon,
 } from "lucide-react";
-import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   nextRoomsAgentTurnTransitionAt,
   roomsAgentTurnAnnouncement,
@@ -96,13 +110,22 @@ function ChannelComposer({
   channel,
   onSent,
   roomId,
+  sendMessage,
 }: {
+  readonly sendMessage?: ((body: string) => Promise<unknown>) | undefined;
   readonly canSend: boolean;
   readonly channel: RoomsLocalChannel;
   readonly onSent: () => Promise<void>;
   readonly roomId: string;
 }) {
-  const { sendLocalMessage } = useRoomsDataSource();
+  const { sendLocalMessage, captureConnection, isCurrentConnection } = useRoomsDataSource();
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const channelComposerSendShortcut = useClientSettings(
     (settings) => settings.channelComposerSendShortcut,
   );
@@ -125,19 +148,26 @@ function ChannelComposer({
     ) {
       return;
     }
+    const scope = captureConnection?.();
+    const current = () => mounted.current && (!scope || isCurrentConnection(scope));
     const next = prepareStableRoomsCommand(command, draft, createLowercaseUuidV7);
     setCommand(next);
     setPending(true);
     setError(null);
     try {
-      await sendLocalMessage(roomId, channel.id, {
-        requestId: next.requestId,
-        bodyMarkdown: next.payload,
-      });
+      await (sendMessage
+        ? sendMessage(next.payload)
+        : sendLocalMessage(roomId, channel.id, {
+            requestId: next.requestId,
+            bodyMarkdown: next.payload,
+          }));
+      if (!current()) return;
       await onSent();
+      if (!current()) return;
       setDraft("");
       setCommand(null);
     } catch (cause) {
+      if (!current()) return;
       setError(
         isRoomsLocalClientError(cause)
           ? { code: cause.code, message: cause.message }
@@ -145,7 +175,7 @@ function ChannelComposer({
       );
     } finally {
       finishStableRoomsSubmission(pendingRef);
-      setPending(false);
+      if (mounted.current) setPending(false);
     }
   };
 
@@ -348,9 +378,47 @@ export function RoomsLocalChannelFeed({
   readonly channel: RoomsLocalChannel;
   readonly workspace: RoomsInteractiveWorkspace;
 }) {
-  const { loadLocalFeed, localFeedInvalidationGeneration, localFeedRefreshGeneration } =
-    useRoomsDataSource();
+  const {
+    mode,
+    connectionIdentity,
+    connectionGeneration,
+    captureConnection,
+    isCurrentConnection,
+    conversationClientFor,
+    loadLocalFeed,
+    localFeedInvalidationGeneration,
+    localFeedRefreshGeneration,
+  } = useRoomsDataSource();
+  const conversationOwner = useMemo(
+    () =>
+      new RoomsConversations({
+        clientFor: conversationClientFor,
+        isCurrent: isCurrentConnection,
+        createRequestId: createLowercaseUuidV7,
+      }),
+    [conversationClientFor, isCurrentConnection],
+  );
+  const conversation = useSyncExternalStore(
+    conversationOwner.subscribe,
+    conversationOwner.getSnapshot,
+  );
+  const hasConversations = mode === "shared" && workspace.capabilities["channel.read"];
+  const [title, setTitle] = useState("");
+  useEffect(() => {
+    if (!hasConversations) return;
+    conversationOwner.configure(workspace.room.id, channel.id, captureConnection());
+    return () => conversationOwner.stop();
+  }, [
+    conversationOwner,
+    hasConversations,
+    connectionIdentity,
+    connectionGeneration,
+    captureConnection,
+    channel.id,
+    workspace.room.id,
+  ]);
   const [feed, setFeed] = useState<RoomsInteractiveFeed | null>(null);
+  const displayFeed = conversation.selectedId ? conversation.feed : feed;
   const [agentTurnNow, setAgentTurnNow] = useState(() => Date.now());
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -360,8 +428,15 @@ export function RoomsLocalChannelFeed({
   const loadGeneration = useRef(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const activities = useMemo(
-    () => projectRoomsLocalActivityItems(workspace, feed?.items ?? [], agentTurnNow),
-    [agentTurnNow, feed?.items, workspace],
+    () =>
+      projectRoomsLocalActivityItems(
+        workspace,
+        conversation.selectedId
+          ? roomsConversationHistoryItems(displayFeed?.items ?? [])
+          : (displayFeed?.items ?? []),
+        agentTurnNow,
+      ),
+    [agentTurnNow, displayFeed?.items, workspace, conversation.selectedId],
   );
   const selectedActivity =
     activities.find((activity) => activity.item.id === selectedActivityId) ?? null;
@@ -386,6 +461,10 @@ export function RoomsLocalChannelFeed({
       setLoadingMore(false);
       setError(null);
       try {
+        if (hasConversations) {
+          await conversationOwner.refresh();
+          if (generation !== loadGeneration.current || conversation.selectedId) return;
+        }
         const snapshot = await loadRoomsFeedSnapshot({
           loadPage: (input) => loadLocalFeed(workspace.room.id, channel.id, input),
           completeSnapshot: loadCompleteSnapshot,
@@ -405,7 +484,14 @@ export function RoomsLocalChannelFeed({
         if (generation === loadGeneration.current) setLoading(false);
       }
     },
-    [channel.id, loadLocalFeed, workspace.room.id],
+    [
+      channel.id,
+      loadLocalFeed,
+      workspace.room.id,
+      conversation.selectedId,
+      conversationOwner,
+      hasConversations,
+    ],
   );
 
   useEffect(() => {
@@ -479,8 +565,80 @@ export function RoomsLocalChannelFeed({
               </div>
             </div>
           </header>
+          {hasConversations && conversation.capabilities ? (
+            <div className="mb-5 space-y-3 border border-border bg-muted/15 p-3">
+              <label className="block text-sm">
+                Conversation
+                <select
+                  aria-label="Conversation"
+                  className="ml-3 max-w-full rounded border border-border bg-background p-2"
+                  value={conversation.selectedId ?? ""}
+                  onChange={(event) => void conversationOwner.select(event.target.value || null)}
+                >
+                  <option value="">All channel messages</option>
+                  {conversation.conversations.map((value) => (
+                    <option key={value.id} value={value.id}>
+                      {value.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {conversation.capabilities["conversations.create"] ? (
+                <div className="flex gap-2">
+                  <Input
+                    aria-label="New conversation title"
+                    maxLength={100}
+                    value={title}
+                    disabled={conversation.pending}
+                    onChange={(event) => setTitle(event.target.value)}
+                  />
+                  <Button
+                    disabled={conversation.pending || !title.trim()}
+                    onClick={() =>
+                      void conversationOwner
+                        .create(title.trim())
+                        .then(() => setTitle(""))
+                        .catch(() => undefined)
+                    }
+                  >
+                    Start conversation
+                  </Button>
+                </div>
+              ) : null}
+              {conversation.projection ? (
+                <p aria-live="polite" className="text-xs text-muted-foreground">
+                  {conversation.projection.bindings
+                    .map(
+                      (binding) =>
+                        `${("principals" in workspace ? workspace.principals.find((principal) => principal.id === binding.agent_principal_id)?.display_name : null) ?? "Agent"}: ${roomsConversationBindingLabel(binding)}`,
+                    )
+                    .join(" · ")}
+                  {conversation.projection.invocations
+                    .map(
+                      (turn) =>
+                        ` · Turn ${turn.turn_ordinal ?? ""}: ${roomsConversationTurnLabel(turn)}`,
+                    )
+                    .join("")}
+                </p>
+              ) : null}
+              {conversation.error ? (
+                <p role="alert" className="text-sm text-destructive">
+                  {conversation.error instanceof Error
+                    ? conversation.error.message
+                    : "Could not load the conversation."}{" "}
+                  <Button
+                    onClick={() => void conversationOwner.refresh()}
+                    size="sm"
+                    variant="outline"
+                  >
+                    Retry
+                  </Button>
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
-          {loading && feed === null ? (
+          {(loading || conversation.loading) && displayFeed === null ? (
             <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
               <RefreshCwIcon
                 aria-hidden
@@ -488,7 +646,7 @@ export function RoomsLocalChannelFeed({
               />
               Loading channel feed…
             </div>
-          ) : error && feed === null ? (
+          ) : error && displayFeed === null ? (
             <div className="rounded-2xl border border-destructive/30 bg-destructive/8 p-6">
               <AlertTriangleIcon aria-hidden className="size-5 text-destructive" />
               <h2 className="mt-3 font-semibold text-foreground">Could not load this channel</h2>
@@ -498,7 +656,7 @@ export function RoomsLocalChannelFeed({
                 Retry
               </Button>
             </div>
-          ) : feed?.items.length === 0 ? (
+          ) : displayFeed?.items.length === 0 ? (
             <div className="mt-auto rounded-2xl border border-dashed border-border bg-muted/20 p-8 text-center">
               <InboxIcon aria-hidden className="mx-auto size-6 text-muted-foreground" />
               <h2 className="mt-4 text-lg font-semibold text-foreground">No messages yet</h2>
@@ -515,11 +673,13 @@ export function RoomsLocalChannelFeed({
                 onActivitySelect={(activity) => setSelectedActivityId(activity.item.id)}
                 selectedActivityId={selectedActivityId}
               />
-              <RoomsAgentTurnLiveStatus activities={activities} />
+              {!conversation.selectedId ? (
+                <RoomsAgentTurnLiveStatus activities={activities} />
+              ) : null}
             </div>
           )}
 
-          {feed?.page_info.has_more && !feedInvalidated ? (
+          {!conversation.selectedId && feed?.page_info.has_more && !feedInvalidated ? (
             <div className="mt-5 flex justify-center">
               <Button
                 disabled={loadingMore || loading}
@@ -530,7 +690,7 @@ export function RoomsLocalChannelFeed({
               </Button>
             </div>
           ) : null}
-          {error && feed !== null ? (
+          {error && displayFeed !== null ? (
             <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/8 px-3 py-2 text-sm text-destructive">
               <p>
                 {error.message} <code className="text-[10px]">{error.code}</code>
@@ -553,7 +713,13 @@ export function RoomsLocalChannelFeed({
         />
       ) : null}
       <ChannelComposer
-        canSend={workspace.capabilities["message.create"]}
+        key={`${connectionIdentity}:${channel.id}:${conversation.selectedId ?? "channel"}`}
+        sendMessage={conversation.selectedId ? (body) => conversationOwner.send(body) : undefined}
+        canSend={
+          conversation.selectedId
+            ? conversation.capabilities?.["conversations.message"] === true
+            : workspace.capabilities["message.create"]
+        }
         channel={channel}
         onSent={() => reload(true)}
         roomId={workspace.room.id}
@@ -570,7 +736,7 @@ export function RoomsLocalChannelSurface({
   readonly workspace: RoomsInteractiveWorkspace;
 }) {
   const channel = workspace.channels.find((candidate) => candidate.slug === channelSlug);
-  const { retryLocalWorkspace } = useRoomsDataSource();
+  const { retryLocalWorkspace, connectionIdentity } = useRoomsDataSource();
   if (!workspace.capabilities["channel.read"]) {
     return (
       <section className="flex min-h-full items-center justify-center p-6">
@@ -607,5 +773,11 @@ export function RoomsLocalChannelSurface({
       </section>
     );
   }
-  return <RoomsLocalChannelFeed channel={channel} workspace={workspace} />;
+  return (
+    <RoomsLocalChannelFeed
+      key={`${connectionIdentity}:${workspace.room.id}:${channel.id}`}
+      channel={channel}
+      workspace={workspace}
+    />
+  );
 }

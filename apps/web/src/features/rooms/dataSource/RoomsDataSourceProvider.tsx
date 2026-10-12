@@ -1,4 +1,10 @@
+import type { RoomsConversationClient } from "@t3tools/client-runtime/rooms/conversation-client";
 import { normalizeRoomsOrigin } from "@t3tools/shared/roomsTransport";
+import {
+  RoomsConnection,
+  type RoomsConnectionIdentity,
+  type RoomsConnectionRequest,
+} from "@t3tools/client-runtime/rooms/connection";
 import * as Schema from "effect/Schema";
 import {
   createContext,
@@ -68,6 +74,8 @@ import type {
   RoomsHumanRole,
   RoomsHumanStoriesResponse,
   RoomsHumanWorkspace,
+  RoomsHumanSession,
+  RoomsInteractiveWorkspace,
 } from "./humanSharedContract";
 import {
   RoomsLocalChangeLoop,
@@ -110,10 +118,7 @@ import {
   ROOMS_DATA_SOURCE_STORAGE_KEY,
   ROOMS_LOCAL_WORKSPACE_STORAGE_KEY,
   ROOMS_SELECTED_ROOM_BY_SOURCE_STORAGE_KEY,
-  isRoomsHumanStateCurrent,
   normalizeRoomsDataSourceMode,
-  resolveSelectedSourceRoom,
-  shouldReloadRoomsHumanSelection,
 } from "./model";
 
 type RoomsLocalSourceState = RoomsLocalSourceReady | RoomsLocalSourceFailure;
@@ -141,10 +146,15 @@ interface RoomsDataSourceContextValue {
     input: RoomsLocalPasswordResetInput,
   ) => Promise<RoomsLocalAuthSignedIn>;
   readonly signOutLocal: () => Promise<void>;
+  readonly connectionIdentity: string;
+  readonly connectionGeneration: number;
+  readonly conversationClientFor: (request: RoomsConnectionRequest) => RoomsConversationClient;
+  readonly captureConnection: () => RoomsConnectionRequest;
+  readonly isCurrentConnection: (request: RoomsConnectionRequest) => boolean;
   readonly localFeedInvalidationGeneration: number;
   readonly localFeedRefreshGeneration: number;
   readonly localLiveUpdatesStatus: RoomsLocalLiveUpdatesStatus;
-  readonly retryLocalWorkspace: () => Promise<RoomsLocalWorkspace | null>;
+  readonly retryLocalWorkspace: () => Promise<RoomsInteractiveWorkspace | null>;
   readonly retryHumanSession: () => Promise<RoomsHumanWorkspace | null>;
   readonly createHumanRoom: (
     name: string,
@@ -280,9 +290,7 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
   const storedLocalSessionToken = storedLocalSession?.token ?? null;
   const storedLocalSessionAccountId = storedLocalSession?.accountId ?? null;
   const serverProfileRef = useRef(serverProfile);
-  useEffect(() => {
-    serverProfileRef.current = serverProfile;
-  }, [serverProfile]);
+  serverProfileRef.current = serverProfile;
   // Hand the published Rooms session to whichever provider the selected server
   // uses. A stored local session is re-activated here on every launch; Clerk keeps
   // its own intent and is republished when ownership returns to it.
@@ -314,291 +322,214 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
   );
   const localApiBaseUrl = useClientSettings((settings) => settings.roomsLocalApiBaseUrl);
   const client = useMemo(() => createRoomsLocalChannelsClient(localApiBaseUrl), [localApiBaseUrl]);
-  const humanClientForGeneration = useCallback(
-    (generation: number) =>
-      createRoomsHumanClient(
-        humanApiBaseUrl,
-        () => readRoomsClerkToken(generation),
-        undefined,
-        () => assertRoomsAuthenticationGeneration(generation),
-      ),
-    [humanApiBaseUrl],
+  const configured =
+    authProvider === "local"
+      ? humanApiBaseUrl !== ""
+      : Boolean(
+          humanPublicConfig.clerkPublishableKey &&
+          humanApiBaseUrl &&
+          humanPublicConfig.roomsClerkJwtTemplate,
+        );
+  const identity = useMemo<RoomsConnectionIdentity>(
+    () => ({
+      source: mode,
+      server: mode === "local" ? localApiBaseUrl : humanApiBaseUrl,
+      accountId:
+        mode === "shared" && authentication.status === "signed-in"
+          ? authentication.accountId
+          : null,
+      authenticationGeneration: mode === "shared" ? authentication.generation : 0,
+      authenticationStatus: mode === "local" ? "signed-in" : authentication.status,
+      configured: mode === "local" || configured,
+    }),
+    [mode, localApiBaseUrl, humanApiBaseUrl, authentication, configured],
   );
-  const humanClientForGenerationRef = useRef(humanClientForGeneration);
-  useEffect(() => {
-    humanClientForGenerationRef.current = humanClientForGeneration;
-  }, [humanClientForGeneration]);
+  const identityRef = useRef(identity);
+  identityRef.current = identity;
   const clientRef = useRef(client);
-  const [localState, setLocalState] = useState<RoomsLocalSourceState>(
-    connectingLocalRoomsDataSourceState,
-  );
-  const [humanState, setHumanState] = useState<RoomsHumanSourceState>(() =>
-    humanFailure("authenticating"),
-  );
+  clientRef.current = client;
+  const preferencesRef = useRef(setSelectedBySource);
+  preferencesRef.current = setSelectedBySource;
+  const connectionRef = useRef<RoomsConnection<
+    RoomsHumanSession,
+    RoomsInteractiveWorkspace
+  > | null>(null);
+  const liveRequestRef = useRef<RoomsConnectionRequest | null>(null);
+  const liveLoopRef = useRef<RoomsLocalChangeLoop | null>(null);
+  const refreshAfterChangeRef = useRef<
+    (invalidation: RoomsLocalChangeInvalidation, request: RoomsConnectionRequest) => Promise<void>
+  >(async () => undefined);
+  const [liveUpdatesStatus, setLiveUpdatesStatus] =
+    useState<RoomsLocalLiveUpdatesStatus>("connected");
   const [localFeedSync, setLocalFeedSync] = useState({
     invalidationGeneration: 0,
     refreshGeneration: 0,
   });
-  const [localLiveUpdatesStatus, setLocalLiveUpdatesStatus] =
-    useState<RoomsLocalLiveUpdatesStatus>("connected");
-  const [humanLiveUpdatesStatus, setHumanLiveUpdatesStatus] =
-    useState<RoomsLocalLiveUpdatesStatus>("connected");
-  const localConfigRef = useRef(localConfig);
-  const localStateRef = useRef(localState);
-  const humanStateRef = useRef(humanState);
-  const loadGenerationRef = useRef(0);
   const feedInvalidationGenerationRef = useRef(0);
-  const humanLoadGenerationRef = useRef(0);
-  useEffect(() => {
-    clientRef.current = client;
-  }, [client]);
-  useEffect(() => {
-    localConfigRef.current = localConfig;
-  }, [localConfig]);
-  useEffect(() => {
-    localStateRef.current = localState;
-  }, [localState]);
-  useEffect(() => {
-    humanStateRef.current = humanState;
-  }, [humanState]);
-
-  const commitWorkspace = useCallback(
-    (workspace: RoomsLocalWorkspace): RoomsLocalSourceReady => {
-      const config = reconcileLocalWorkspaceConfig(localConfigRef.current, workspace);
-      localConfigRef.current = config;
-      setLocalConfig((current) => {
-        const next = reconcileLocalWorkspaceConfig(current, workspace);
-        return next === current ? current : next;
-      });
-      setSelectedBySource((current) =>
-        current.local === workspace.room.id ? current : { ...current, local: workspace.room.id },
-      );
-      const ready = resolveLocalRoomsDataSourceState(workspace, config);
-      localStateRef.current = ready;
-      setLocalState(ready);
-      return ready;
-    },
-    [setLocalConfig, setSelectedBySource],
+  const humanClientForRequest = useCallback(
+    (request: RoomsConnectionRequest) =>
+      createRoomsHumanClient(
+        request.server,
+        () => readRoomsClerkToken(request.authenticationGeneration),
+        undefined,
+        () => {
+          connectionRef.current!.assertCurrent(request, identityRef.current);
+          assertRoomsAuthenticationGeneration(request.authenticationGeneration);
+        },
+      ),
+    [],
   );
-
-  const loadWorkspace = useCallback(
-    async (
-      showConnecting: boolean,
-      preserveReadyState = false,
-    ): Promise<RoomsLocalWorkspace | null> => {
-      const generation = ++loadGenerationRef.current;
-      if (showConnecting) {
-        const connecting = connectingLocalRoomsDataSourceState();
-        localStateRef.current = connecting;
-        setLocalState(connecting);
-      }
-      try {
-        const workspace = await client.getWorkspace();
-        if (generation !== loadGenerationRef.current) return null;
-        commitWorkspace(workspace);
-        return workspace;
-      } catch (error) {
-        if (generation !== loadGenerationRef.current) return null;
-        if (preserveReadyState && localStateRef.current.status === "ready") return null;
-        const failed = failedLocalRoomsDataSourceState(error);
-        localStateRef.current = failed;
-        setLocalState(failed);
-        return null;
-      }
-    },
-    [client, commitWorkspace],
+  const [connection] = useState(
+    () =>
+      new RoomsConnection<RoomsHumanSession, RoomsInteractiveWorkspace>({
+        selected: selectedBySource,
+        onSelection: (source, roomId) =>
+          preferencesRef.current((current) =>
+            current[source] === roomId ? current : { ...current, [source]: roomId },
+          ),
+        createLiveSubscription: (_roomId, request) => {
+          liveRequestRef.current = request;
+          // Reuse the physical web wait owner: this transport cannot abort an HTTP bridge request.
+          if (!liveLoopRef.current)
+            liveLoopRef.current = new RoomsLocalChangeLoop({
+              client: {
+                waitForChanges: (roomId, input) => {
+                  const current = liveRequestRef.current!;
+                  connectionRef.current!.assertCurrent(current, identityRef.current);
+                  return current.source === "local"
+                    ? clientRef.current.waitForChanges(roomId, input)
+                    : humanClientForRequest(current).waitForChanges(roomId, input);
+                },
+              },
+              onInvalidate: (invalidation) =>
+                refreshAfterChangeRef.current(invalidation, liveRequestRef.current!),
+              onStatusChange: (status) => {
+                const current = liveRequestRef.current;
+                if (current && connectionRef.current!.isCurrent(current))
+                  setLiveUpdatesStatus(status);
+              },
+            });
+          return liveLoopRef.current;
+        },
+      }),
   );
-  const loadWorkspaceRef = useRef(loadWorkspace);
+  connectionRef.current = connection;
+  const projection = useSyncExternalStore(
+    connection.subscribe,
+    connection.getSnapshot,
+    connection.getSnapshot,
+  );
+  const adapter = useMemo(
+    () => ({
+      discover: async (request: RoomsConnectionRequest) => {
+        connection.assertCurrent(request, identityRef.current);
+        if (request.source === "local") {
+          const workspace = await client.getWorkspace();
+          connection.assertCurrent(request, identityRef.current);
+          return {
+            session: null,
+            workspace,
+            rooms: [{ ...workspace.room, role: workspace.principal.role }],
+          };
+        }
+        const session = await humanClientForRequest(request).getSession();
+        return { session, rooms: session.rooms };
+      },
+      loadWorkspace: (roomId: string, request: RoomsConnectionRequest) =>
+        request.source === "local"
+          ? client.getWorkspace()
+          : humanClientForRequest(request).getWorkspace(roomId),
+      workspaceRoomId: (workspace: RoomsInteractiveWorkspace) => workspace.room.id,
+    }),
+    [client, connection, humanClientForRequest],
+  );
   useEffect(() => {
-    loadWorkspaceRef.current = loadWorkspace;
-  }, [loadWorkspace]);
-
-  const loadHumanSession = useCallback(
-    async (
-      preferredRoomId: string | null = null,
-      preserveReadyState = false,
-    ): Promise<RoomsHumanWorkspace | null> => {
-      const generation = ++humanLoadGenerationRef.current;
-      const authGeneration = authentication.generation;
-      const configured =
-        authProvider === "local"
-          ? humanApiBaseUrl !== ""
-          : Boolean(
-              humanPublicConfig.clerkPublishableKey &&
-              humanApiBaseUrl &&
-              humanPublicConfig.roomsClerkJwtTemplate,
-            );
-      if (!configured) {
-        const next = humanFailure("invalid-configuration");
-        humanStateRef.current = next;
-        setHumanState(next);
-        return null;
-      }
-      if (authentication.status === "authenticating") {
-        const next = humanFailure("authenticating");
-        humanStateRef.current = next;
-        setHumanState(next);
-        return null;
-      }
-      if (authentication.status !== "signed-in") {
-        const next = humanFailure("signed-out");
-        humanStateRef.current = next;
-        setHumanState(next);
-        return null;
-      }
-      if (!preserveReadyState) {
-        const pending = humanFailure("authenticating");
-        humanStateRef.current = pending;
-        setHumanState(pending);
-      }
-      try {
-        const requestClient = humanClientForGeneration(authGeneration);
-        const session = await requestClient.getSession();
-        if (
-          generation !== humanLoadGenerationRef.current ||
-          readRoomsAuthenticationSnapshot().generation !== authGeneration
-        ) {
-          return null;
-        }
-        if (session.status === "authenticated_nonmember" || session.rooms.length === 0) {
-          const next = humanFailure("authenticated-nonmember");
-          humanStateRef.current = next;
-          setHumanState(next);
-          return null;
-        }
-        const requestedRoom =
-          session.rooms.find((room) => room.id === preferredRoomId) ?? session.rooms[0]!;
-        const workspace = await requestClient.getWorkspace(requestedRoom.id);
-        if (
-          generation !== humanLoadGenerationRef.current ||
-          readRoomsAuthenticationSnapshot().generation !== authGeneration
-        ) {
-          return null;
-        }
-        const rooms: readonly RoomsSourceRoom[] = session.rooms.map((room) => ({
-          sourceMode: "shared",
-          id: room.id,
-          slug: room.slug,
-          name: room.name,
-          locality: "shared",
-          membershipRole: room.role,
-          unreadCount: null,
-        }));
-        const ready: RoomsHumanSourceReady = {
+    connection.configure(identity, adapter);
+    connection.setActive(true);
+    void connection.refresh();
+    return () => connection.setActive(false);
+  }, [adapter, connection, identity]);
+  const projectionCurrent = connection.matches(identity);
+  const projectedWorkspace =
+    projectionCurrent && projection.status === "ready" ? projection.workspace : null;
+  const localState: RoomsLocalSourceState =
+    mode === "local" && projectedWorkspace
+      ? resolveLocalRoomsDataSourceState(
+          projectedWorkspace as RoomsLocalWorkspace,
+          reconcileLocalWorkspaceConfig(localConfig, projectedWorkspace as RoomsLocalWorkspace),
+        )
+      : mode === "local" && projectionCurrent && projection.status === "error"
+        ? failedLocalRoomsDataSourceState(projection.error)
+        : connectingLocalRoomsDataSourceState();
+  const humanState: RoomsHumanSourceState =
+    mode === "shared" && projectedWorkspace && projection.session && projection.identity
+      ? {
           mode: "shared",
           status: "ready",
-          rooms,
-          session,
-          workspace,
-          authenticationGeneration: authGeneration,
-          accountId: authentication.accountId,
-        };
-        humanStateRef.current = ready;
-        setHumanState(ready);
-        setSelectedBySource((current) =>
-          current.shared === workspace.room.id
-            ? current
-            : { ...current, shared: workspace.room.id },
-        );
-        return workspace;
-      } catch (error) {
-        if (
-          generation !== humanLoadGenerationRef.current ||
-          readRoomsAuthenticationSnapshot().generation !== authGeneration
-        ) {
-          return null;
+          session: projection.session,
+          workspace: projectedWorkspace as RoomsHumanWorkspace,
+          rooms: projection.session.rooms.map((room) => ({
+            sourceMode: "shared",
+            id: room.id,
+            slug: room.slug,
+            name: room.name,
+            locality: "shared",
+            membershipRole: room.role,
+            unreadCount: null,
+          })),
+          authenticationGeneration: projection.identity.authenticationGeneration,
+          accountId: projection.identity.accountId!,
         }
-        if (preserveReadyState && humanStateRef.current.status === "ready") return null;
-        const next = humanFailureFor(error);
-        humanStateRef.current = next;
-        setHumanState(next);
-        return null;
-      }
-    },
-    [
-      authProvider,
-      authentication,
-      humanApiBaseUrl,
-      humanClientForGeneration,
-      humanPublicConfig.clerkPublishableKey,
-      humanPublicConfig.roomsClerkJwtTemplate,
-      setSelectedBySource,
-    ],
+      : mode === "shared" && projectionCurrent && projection.status === "error"
+        ? humanFailureFor(projection.error)
+        : humanFailure(
+            mode === "shared" &&
+              projectionCurrent &&
+              projection.status !== "ready" &&
+              projection.status !== "connecting"
+              ? (projection.status as RoomsHumanSourceFailure["status"])
+              : authentication.status === "signed-out"
+                ? "signed-out"
+                : "authenticating",
+            null,
+            projection.status === "invited"
+              ? (projection.invitation as RoomsHumanInviteInspection)
+              : null,
+          );
+  useEffect(() => {
+    if (localState.status !== "ready") return;
+    setLocalConfig((current) => reconcileLocalWorkspaceConfig(current, localState.workspace));
+  }, [localState.status === "ready" ? localState.workspace : null, setLocalConfig]);
+  const loadWorkspace = useCallback(
+    (_showConnecting = false, preserveReadyState = false) =>
+      connection.refresh(null, preserveReadyState),
+    [connection],
   );
-  const loadHumanSessionRef = useRef(loadHumanSession);
-  useEffect(() => {
-    loadHumanSessionRef.current = loadHumanSession;
-  }, [loadHumanSession]);
-
-  useEffect(() => {
-    humanLoadGenerationRef.current += 1;
-    setSelectedBySource((current) =>
-      current.shared === null ? current : { ...current, shared: null },
-    );
-    const cleared =
-      authentication.status === "signed-out"
-        ? humanFailure("signed-out")
-        : humanFailure("authenticating");
-    humanStateRef.current = cleared;
-    setHumanState(cleared);
-    if (mode === "shared") void loadHumanSessionRef.current(null);
-    return () => {
-      humanLoadGenerationRef.current += 1;
-    };
-  }, [authentication.generation, mode, setSelectedBySource]);
-
-  useEffect(() => {
-    if (mode !== "local") return;
-    void loadWorkspaceRef.current(true);
-    return () => {
-      loadGenerationRef.current += 1;
-    };
-  }, [localApiBaseUrl, mode]);
-
-  const refreshAfterLocalChange = useCallback(
-    async (_invalidation: RoomsLocalChangeInvalidation): Promise<void> => {
+  const loadHumanSession = useCallback(
+    async (preferredRoomId: string | null = null, preserveReadyState = false) =>
+      (await connection.refresh(preferredRoomId, preserveReadyState)) as RoomsHumanWorkspace | null,
+    [connection],
+  );
+  const refreshAfterChange = useCallback(
+    async (invalidation: RoomsLocalChangeInvalidation, request: RoomsConnectionRequest) => {
+      connection.assertCurrent(request, identityRef.current);
       const invalidationGeneration = ++feedInvalidationGenerationRef.current;
       setLocalFeedSync((current) => ({
         invalidationGeneration,
         refreshGeneration: current.refreshGeneration,
       }));
-      const workspace = await loadWorkspace(false, true);
-      if (!workspace) {
-        throw new RoomsLocalClientError({
-          kind: "transport",
-          code: "local_change_reconciliation_failed",
-          message: "Live Threadspace state changed, but its workspace could not be reconciled yet.",
-        });
-      }
-      setLocalFeedSync((current) =>
-        current.invalidationGeneration === invalidationGeneration
-          ? { ...current, refreshGeneration: invalidationGeneration }
-          : current,
-      );
-    },
-    [loadWorkspace],
-  );
-  const refreshAfterLocalChangeRef = useRef(refreshAfterLocalChange);
-  useEffect(() => {
-    refreshAfterLocalChangeRef.current = refreshAfterLocalChange;
-  }, [refreshAfterLocalChange]);
-  const refreshAfterHumanChange = useCallback(
-    async (invalidation: RoomsLocalChangeInvalidation): Promise<void> => {
-      const invalidationGeneration = ++feedInvalidationGenerationRef.current;
-      setLocalFeedSync((current) => ({
-        invalidationGeneration,
-        refreshGeneration: current.refreshGeneration,
-      }));
-      const workspace = await loadHumanSession(invalidation.roomId, true);
+      const workspace = await connection.refresh(invalidation.roomId, true);
+      connection.assertCurrent(request, identityRef.current);
       if (!workspace) throw sourceNotReadyError();
-      if (!invalidation.initial && invalidation.reason === "advanced") {
+      if (
+        request.source === "shared" &&
+        !invalidation.initial &&
+        invalidation.reason === "advanced"
+      ) {
         try {
-          const current = humanStateRef.current;
           const showNotification = window.desktopBridge?.showNotification;
-          if (current.status === "ready" && showNotification) {
-            const notificationClient = humanClientForGenerationRef.current(
-              current.authenticationGeneration,
-            );
+          if (showNotification) {
+            const notificationClient = humanClientForRequest(request);
             for (const channel of workspace.channels) {
               let afterSeq = invalidation.afterSeq;
               let hasMore = true;
@@ -608,13 +539,15 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
                   snapshotHeadSeq: invalidation.headSeq,
                   limit: 100,
                 });
+                connection.assertCurrent(request, identityRef.current);
                 for (const notification of selectRoomsDesktopNotifications({
-                  workspace,
+                  workspace: workspace as RoomsHumanWorkspace,
                   channel,
                   items: feed.items,
                   afterSeq: invalidation.afterSeq,
                   headSeq: invalidation.headSeq,
                 })) {
+                  connection.assertCurrent(request, identityRef.current);
                   await showNotification(notification);
                 }
                 hasMore = feed.page_info.has_more;
@@ -624,87 +557,22 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
             }
           }
         } catch (error) {
+          if (!connection.isCurrent(request)) return;
           console.warn("Could not deliver a Shared Threadspace desktop notification.", error);
         }
       }
+      connection.assertCurrent(request, identityRef.current);
       setLocalFeedSync((current) =>
         current.invalidationGeneration === invalidationGeneration
           ? { ...current, refreshGeneration: invalidationGeneration }
           : current,
       );
     },
-    [loadHumanSession],
+    [connection, humanClientForRequest],
   );
-  const refreshAfterHumanChangeRef = useRef(refreshAfterHumanChange);
-  useEffect(() => {
-    refreshAfterHumanChangeRef.current = refreshAfterHumanChange;
-  }, [refreshAfterHumanChange]);
-  const localChangeLoopRef = useRef<RoomsLocalChangeLoop | null>(null);
-  if (localChangeLoopRef.current === null) {
-    localChangeLoopRef.current = new RoomsLocalChangeLoop({
-      client: {
-        waitForChanges: (roomId, input) => clientRef.current.waitForChanges(roomId, input),
-      },
-      onInvalidate: (invalidation) => refreshAfterLocalChangeRef.current(invalidation),
-      onStatusChange: setLocalLiveUpdatesStatus,
-    });
-  }
-  const activeLocalRoomId =
-    mode === "local" && localState.status === "ready" ? localState.workspace.room.id : null;
-  useEffect(() => {
-    const loop = localChangeLoopRef.current!;
-    if (!activeLocalRoomId) {
-      loop.stop();
-      return;
-    }
-    loop.start(activeLocalRoomId);
-    return () => loop.stop();
-  }, [activeLocalRoomId, localApiBaseUrl]);
-  const humanChangeLoopRef = useRef<RoomsLocalChangeLoop | null>(null);
-  if (humanChangeLoopRef.current === null) {
-    humanChangeLoopRef.current = new RoomsLocalChangeLoop({
-      client: {
-        waitForChanges: (roomId, input) => {
-          const current = humanStateRef.current;
-          if (current.status !== "ready") throw sourceNotReadyError();
-          return humanClientForGenerationRef
-            .current(current.authenticationGeneration)
-            .waitForChanges(roomId, input);
-        },
-      },
-      onInvalidate: (invalidation) => refreshAfterHumanChangeRef.current(invalidation),
-      onStatusChange: setHumanLiveUpdatesStatus,
-    });
-  }
-  const activeHumanRoomId =
-    mode === "shared" &&
-    humanState.status === "ready" &&
-    humanState.authenticationGeneration === authentication.generation &&
-    authentication.status === "signed-in" &&
-    humanState.accountId === authentication.accountId
-      ? humanState.workspace.room.id
-      : null;
-  useEffect(() => {
-    const loop = humanChangeLoopRef.current!;
-    if (!activeHumanRoomId) {
-      loop.stop();
-      return;
-    }
-    loop.start(activeHumanRoomId);
-    return () => loop.stop();
-  }, [activeHumanRoomId, authentication.generation, humanApiBaseUrl]);
-
-  const visibleHumanState: RoomsHumanSourceState = isRoomsHumanStateCurrent(humanState, {
-    generation: authentication.generation,
-    accountId: authentication.status === "signed-in" ? authentication.accountId : null,
-  })
-    ? humanState
-    : humanFailure(authentication.status === "signed-out" ? "signed-out" : "authenticating");
-  const state = mode === "local" ? localState : visibleHumanState;
-  const selectedRoom = useMemo(
-    () => resolveSelectedSourceRoom(state, selectedBySource),
-    [selectedBySource, state],
-  );
+  refreshAfterChangeRef.current = refreshAfterChange;
+  const state = mode === "local" ? localState : humanState;
+  const selectedRoom = state.rooms.find((room) => room.id === projection.selectedRoomId) ?? null;
 
   const retryLocalWorkspace = useCallback(() => loadWorkspace(true), [loadWorkspace]);
   const retryHumanSession = useCallback(
@@ -712,74 +580,65 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
     [loadHumanSession, selectedBySource.shared],
   );
 
-  const currentHumanAccessClient = useCallback(() => {
-    const current = readRoomsAuthenticationSnapshot();
-    if (current.status !== "signed-in") throw sourceNotReadyError();
-    return humanClientForGeneration(current.generation);
-  }, [humanClientForGeneration]);
-
-  const currentHumanReadyClient = useCallback(
-    (roomId?: string) => {
-      const state = humanStateRef.current;
-      const authentication = readRoomsAuthenticationSnapshot();
-      if (
-        state.status !== "ready" ||
-        authentication.status !== "signed-in" ||
-        authentication.generation !== state.authenticationGeneration ||
-        authentication.accountId !== state.accountId
-      ) {
-        throw sourceNotReadyError();
-      }
-      if (roomId !== undefined && roomId !== state.workspace.room.id) throw sourceNotReadyError();
-      return { client: humanClientForGeneration(state.authenticationGeneration), state };
-    },
-    [humanClientForGeneration],
+  const runConnection = useCallback(
+    <Value,>(operation: (request: RoomsConnectionRequest) => Promise<Value>) =>
+      connection.run((request) => {
+        connection.assertCurrent(request, identity);
+        return operation(request).then((value) => {
+          connection.assertCurrent(request, identityRef.current);
+          return value;
+        });
+      }),
+    [connection, identity],
   );
 
   const redeemHumanBootstrap = useCallback(
-    async (bootstrapToken: string) => {
-      const result = await currentHumanAccessClient().redeemBootstrap(bootstrapToken);
-      await loadHumanSession(result.room.id);
-      return result;
-    },
-    [currentHumanAccessClient, loadHumanSession],
+    (bootstrapToken: string) =>
+      runConnection(async (request) => {
+        const result = await humanClientForRequest(request).redeemBootstrap(bootstrapToken);
+        connection.assertCurrent(request, identityRef.current);
+        await connection.refresh(result.room.id);
+        return result;
+      }),
+    [runConnection, humanClientForRequest, connection],
   );
-
   const createHumanRoom = useCallback(
-    async (name: string, requestId: string) => {
-      const generation = readRoomsAuthenticationSnapshot().generation;
-      const result = await currentHumanAccessClient().createRoom({ name, requestId });
-      await loadHumanSession(result.room.id);
-      assertRoomsAuthenticationGeneration(generation);
-      return result;
-    },
-    [currentHumanAccessClient, loadHumanSession],
+    (name: string, requestId: string) =>
+      runConnection(async (request) => {
+        const result = await humanClientForRequest(request).createRoom({ name, requestId });
+        connection.assertCurrent(request, identityRef.current);
+        await connection.refresh(result.room.id);
+        return result;
+      }),
+    [runConnection, humanClientForRequest, connection],
   );
-
   const inspectHumanInvite = useCallback(
     async (roomId: string, inviteToken: string) => {
-      const invitation = await currentHumanAccessClient().inspectInvite(roomId, inviteToken);
-      const invited = humanFailure("invited", null, invitation);
-      humanStateRef.current = invited;
-      setHumanState(invited);
+      const invitation = await runConnection((request) =>
+        humanClientForRequest(request).inspectInvite(roomId, inviteToken),
+      );
+      connection.presentInvitation(invitation);
       return invitation;
     },
-    [currentHumanAccessClient],
+    [runConnection, humanClientForRequest, connection],
   );
-
   const redeemHumanInvite = useCallback(
-    async (roomId: string, inviteToken: string) => {
-      const result = await currentHumanAccessClient().redeemInvite(roomId, inviteToken);
-      await loadHumanSession(result.room.id);
-      return result;
-    },
-    [currentHumanAccessClient, loadHumanSession],
+    (roomId: string, inviteToken: string) =>
+      runConnection(async (request) => {
+        const result = await humanClientForRequest(request).redeemInvite(roomId, inviteToken);
+        connection.assertCurrent(request, identityRef.current);
+        await connection.refresh(result.room.id);
+        return result;
+      }),
+    [runConnection, humanClientForRequest, connection],
   );
-
   const createHumanInvite = useCallback(
     (roomId: string, role: RoomsHumanRole, requestId: string) =>
-      currentHumanReadyClient(roomId).client.createInvite(roomId, { role, requestId }),
-    [currentHumanReadyClient],
+      runConnection((request) => {
+        connection.readyRequest(roomId);
+        return humanClientForRequest(request).createInvite(roomId, { role, requestId });
+      }),
+    [runConnection, humanClientForRequest, connection],
   );
 
   const localAuthClient = useMemo(
@@ -797,12 +656,14 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
           message: "Use an HTTPS origin or HTTP loopback origin for the Threadspace server.",
         });
       }
-      const discovered = await createRoomsLocalAuthClient(normalized).getAuthProvider();
+      const discovered = await runConnection(() =>
+        createRoomsLocalAuthClient(normalized).getAuthProvider(),
+      );
       setServerProfile((current) => roomsProfileAfterDiscovery(current, normalized, discovered));
       setPersistedMode("shared");
       return discovered;
     },
-    [setPersistedMode, setServerProfile],
+    [runConnection, setPersistedMode, setServerProfile],
   );
 
   const commitLocalSignIn = useCallback(
@@ -821,150 +682,193 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
 
   const setUpLocalServer = useCallback(
     async (input: RoomsLocalSetupInput) =>
-      commitLocalSignIn(await localAuthClient.setUp(withDeviceLabel(input))),
-    [commitLocalSignIn, localAuthClient],
+      commitLocalSignIn(await runConnection(() => localAuthClient.setUp(withDeviceLabel(input)))),
+    [commitLocalSignIn, localAuthClient, runConnection],
   );
 
   const signInLocal = useCallback(
     async (input: RoomsLocalSignInInput) =>
-      commitLocalSignIn(await localAuthClient.signIn(withDeviceLabel(input))),
-    [commitLocalSignIn, localAuthClient],
+      commitLocalSignIn(await runConnection(() => localAuthClient.signIn(withDeviceLabel(input)))),
+    [commitLocalSignIn, localAuthClient, runConnection],
   );
 
   const enrollLocal = useCallback(
     async (input: RoomsLocalEnrollInput) =>
-      commitLocalSignIn(await localAuthClient.enroll(withDeviceLabel(input))),
-    [commitLocalSignIn, localAuthClient],
+      commitLocalSignIn(await runConnection(() => localAuthClient.enroll(withDeviceLabel(input)))),
+    [commitLocalSignIn, localAuthClient, runConnection],
   );
 
   const resetLocalPassword = useCallback(
     async (input: RoomsLocalPasswordResetInput) =>
-      commitLocalSignIn(await localAuthClient.resetPassword(withDeviceLabel(input))),
-    [commitLocalSignIn, localAuthClient],
+      commitLocalSignIn(
+        await runConnection(() => localAuthClient.resetPassword(withDeviceLabel(input))),
+      ),
+    [commitLocalSignIn, localAuthClient, runConnection],
   );
 
   // Revoke on the server when it can be reached; clear the device either way. A
   // token that could not be revoked stays valid on the server until it expires.
   const signOutLocal = useCallback(async () => {
-    const session = usableRoomsSharedSession(serverProfileRef.current);
+    const request = connection.capture();
+    connection.assertCurrent(request, identity);
+    const profile = serverProfileRef.current;
+    const session = usableRoomsSharedSession(profile);
+    // Clear the captured profile immediately. The revocation uses its old origin/token,
+    // and its late completion cannot clear a newly connected server's session.
+    setServerProfile((current) =>
+      current === profile ? roomsProfileAfterSignOut(current) : current,
+    );
     if (session) {
       try {
-        await localAuthClient.signOut(session.token);
+        await createRoomsLocalAuthClient(profile!.baseUrl).signOut(session.token);
       } catch (error) {
         console.warn("Could not revoke the Threadspace session on the server.", error);
       }
     }
-    setServerProfile((current) => roomsProfileAfterSignOut(current));
-  }, [localAuthClient, setServerProfile]);
-
+  }, [connection, identity, setServerProfile]);
   const forgetServer = useCallback(async () => {
-    await signOutLocal();
-    setServerProfile(null);
+    const profile = serverProfileRef.current;
+    const revoke = signOutLocal();
+    setServerProfile((current) =>
+      current === profile || (current?.baseUrl === profile?.baseUrl && current?.session === null)
+        ? null
+        : current,
+    );
+    await revoke;
   }, [setServerProfile, signOutLocal]);
-
   const createLocalChannel = useCallback(
-    async (input: RoomsLocalCreateChannelInput) => {
-      if (mode === "shared") {
-        const current = currentHumanReadyClient();
-        const result = await current.client.createChannel(current.state.workspace.room.id, input);
-        await loadHumanSession(current.state.workspace.room.id, true);
+    (input: RoomsLocalCreateChannelInput) =>
+      runConnection(async (request) => {
+        connection.readyRequest();
+        const roomId = connection.getSnapshot().selectedRoomId!;
+        const result =
+          request.source === "shared"
+            ? await humanClientForRequest(request).createChannel(roomId, input)
+            : await client.createChannel(roomId, input);
+        connection.assertCurrent(request, identityRef.current);
+        const workspace = await connection.refresh(roomId, true);
+        if (!workspace)
+          throw new RoomsLocalClientError({
+            kind: "transport",
+            code: "rooms_workspace_refresh_failed",
+            message: "The channel was accepted, but workspace discovery could not be refreshed.",
+          });
         return result;
-      }
-      const current = localStateRef.current;
-      if (current.status !== "ready") throw sourceNotReadyError();
-      const result = await client.createChannel(current.workspace.room.id, input);
-      const workspace = await loadWorkspace(false, true);
-      if (!workspace) {
-        throw new RoomsLocalClientError({
-          kind: "transport",
-          code: "local_workspace_refresh_failed",
-          message: "The channel was accepted, but workspace discovery could not be refreshed.",
-        });
-      }
-      return result;
-    },
-    [client, currentHumanReadyClient, loadHumanSession, loadWorkspace, mode],
+      }),
+    [runConnection, connection, humanClientForRequest, client],
   );
 
   const loadLocalFeed = useCallback(
     (roomId: string, channelId: string, input?: RoomsLocalFeedPageInput) =>
-      mode === "shared"
-        ? currentHumanReadyClient(roomId).client.getFeed(roomId, channelId, input)
-        : client.getFeed(roomId, channelId, input),
-    [client, currentHumanReadyClient, mode],
+      runConnection<RoomsInteractiveFeed>((request) => {
+        connection.readyRequest(roomId);
+        return request.source === "shared"
+          ? humanClientForRequest(request).getFeed(roomId, channelId, input)
+          : client.getFeed(roomId, channelId, input);
+      }),
+    [client, connection, humanClientForRequest, runConnection],
   );
 
   const sendLocalMessage = useCallback(
     (roomId: string, channelId: string, input: RoomsLocalCreateMessageInput) =>
-      mode === "shared"
-        ? currentHumanReadyClient(roomId).client.createMessage(roomId, channelId, input)
-        : client.createMessage(roomId, channelId, input),
-    [client, currentHumanReadyClient, mode],
+      runConnection((request) => {
+        connection.readyRequest(roomId);
+        return request.source === "shared"
+          ? humanClientForRequest(request).createMessage(roomId, channelId, input)
+          : client.createMessage(roomId, channelId, input);
+      }),
+    [client, connection, humanClientForRequest, runConnection],
   );
 
   const loadLocalStories = useCallback(
     (roomId: string) =>
-      mode === "shared"
-        ? currentHumanReadyClient(roomId).client.getStories(roomId)
-        : client.getStories(roomId),
-    [client, currentHumanReadyClient, mode],
+      runConnection<RoomsHumanStoriesResponse | RoomsLocalStoriesResponse>((request) => {
+        connection.readyRequest(roomId);
+        return request.source === "shared"
+          ? humanClientForRequest(request).getStories(roomId)
+          : client.getStories(roomId);
+      }),
+    [client, connection, humanClientForRequest, runConnection],
   );
 
   const loadLocalStory = useCallback(
     (roomId: string, storyId: string) =>
-      mode === "shared"
-        ? currentHumanReadyClient(roomId).client.getStory(roomId, storyId)
-        : client.getStory(roomId, storyId),
-    [client, currentHumanReadyClient, mode],
+      runConnection((request) => {
+        connection.readyRequest(roomId);
+        return request.source === "shared"
+          ? humanClientForRequest(request).getStory(roomId, storyId)
+          : client.getStory(roomId, storyId);
+      }),
+    [client, connection, humanClientForRequest, runConnection],
   );
 
   const createLocalStory = useCallback(
     (roomId: string, input: RoomsLocalCreateStoryInput) =>
-      mode === "shared"
-        ? currentHumanReadyClient(roomId).client.createStory(roomId, input)
-        : client.createStory(roomId, input),
-    [client, currentHumanReadyClient, mode],
+      runConnection((request) => {
+        connection.readyRequest(roomId);
+        return request.source === "shared"
+          ? humanClientForRequest(request).createStory(roomId, input)
+          : client.createStory(roomId, input);
+      }),
+    [client, connection, humanClientForRequest, runConnection],
   );
 
   const linkLocalStoryThread = useCallback(
     (roomId: string, storyId: string, input: RoomsLocalLinkStoryThreadInput) =>
-      mode === "shared"
-        ? currentHumanReadyClient(roomId).client.linkStoryThread(roomId, storyId, input)
-        : client.linkStoryThread(roomId, storyId, input),
-    [client, currentHumanReadyClient, mode],
+      runConnection((request) => {
+        connection.readyRequest(roomId);
+        return request.source === "shared"
+          ? humanClientForRequest(request).linkStoryThread(roomId, storyId, input)
+          : client.linkStoryThread(roomId, storyId, input);
+      }),
+    [client, connection, humanClientForRequest, runConnection],
   );
 
   const uploadLocalCas = useCallback(
-    (input: RoomsLocalUploadCasInput) => {
-      if (mode !== "shared") return client.uploadCas(input);
-      const current = currentHumanReadyClient();
-      return current.client.uploadCas(current.state.workspace.room.id, input);
-    },
-    [client, currentHumanReadyClient, mode],
+    (input: RoomsLocalUploadCasInput) =>
+      runConnection((request) => {
+        connection.readyRequest();
+        return request.source === "shared"
+          ? humanClientForRequest(request).uploadCas(
+              connection.getSnapshot().selectedRoomId!,
+              input,
+            )
+          : client.uploadCas(input);
+      }),
+    [runConnection, connection, humanClientForRequest, client],
   );
 
   const attachLocalStoryEvidence = useCallback(
     (roomId: string, storyId: string, input: RoomsLocalAttachEvidenceInput) =>
-      mode === "shared"
-        ? currentHumanReadyClient(roomId).client.attachStoryEvidence(roomId, storyId, input)
-        : client.attachStoryEvidence(roomId, storyId, input),
-    [client, currentHumanReadyClient, mode],
+      runConnection((request) => {
+        connection.readyRequest(roomId);
+        return request.source === "shared"
+          ? humanClientForRequest(request).attachStoryEvidence(roomId, storyId, input)
+          : client.attachStoryEvidence(roomId, storyId, input);
+      }),
+    [client, connection, humanClientForRequest, runConnection],
   );
 
   const transitionLocalStory = useCallback(
     (roomId: string, storyId: string, input: RoomsLocalTransitionStoryInput) =>
-      mode === "shared"
-        ? currentHumanReadyClient(roomId).client.transitionStory(roomId, storyId, input)
-        : client.transitionStory(roomId, storyId, input),
-    [client, currentHumanReadyClient, mode],
+      runConnection((request) => {
+        connection.readyRequest(roomId);
+        return request.source === "shared"
+          ? humanClientForRequest(request).transitionStory(roomId, storyId, input)
+          : client.transitionStory(roomId, storyId, input);
+      }),
+    [client, connection, humanClientForRequest, runConnection],
   );
 
   const reviewLocalStory = useCallback(
     (roomId: string, storyId: string, input: RoomsLocalReviewStoryInput) =>
-      mode === "shared"
-        ? currentHumanReadyClient(roomId).client.reviewStory(roomId, storyId, input)
-        : client.reviewStory(roomId, storyId, input),
-    [client, currentHumanReadyClient, mode],
+      runConnection((request) => {
+        connection.readyRequest(roomId);
+        return request.source === "shared"
+          ? humanClientForRequest(request).reviewStory(roomId, storyId, input)
+          : client.reviewStory(roomId, storyId, input);
+      }),
+    [client, connection, humanClientForRequest, runConnection],
   );
 
   const setMode = useCallback(
@@ -974,38 +878,36 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
 
   const selectRoom = useCallback(
     (room: RoomsSourceRoom) => {
-      if (room.sourceMode !== mode || !state.rooms.some((candidate) => candidate.id === room.id)) {
-        return;
-      }
-      setSelectedBySource((current) =>
-        current[mode] === room.id ? current : { ...current, [mode]: room.id },
-      );
-      if (mode === "shared") {
-        const currentAuthentication = readRoomsAuthenticationSnapshot();
-        if (
-          shouldReloadRoomsHumanSelection(
-            humanStateRef.current,
-            {
-              generation: currentAuthentication.generation,
-              accountId:
-                currentAuthentication.status === "signed-in"
-                  ? currentAuthentication.accountId
-                  : null,
-            },
-            room.id,
-          )
-        ) {
-          void loadHumanSession(room.id);
-        }
-      }
+      if (room.sourceMode !== mode) return;
+      void connection.selectRoom(room.id);
     },
-    [loadHumanSession, mode, setSelectedBySource, state.rooms],
+    [connection, mode],
   );
+  const captureConnection = useCallback(() => connection.capture(), [connection]);
+  const isCurrentConnection = useCallback(
+    (request: RoomsConnectionRequest) =>
+      connection.isCurrent(request) && connection.matches(identityRef.current),
+    [connection],
+  );
+  const conversationClientFor = useCallback(
+    (request: RoomsConnectionRequest) => {
+      connection.assertCurrent(request, identityRef.current);
+      if (request.source !== "shared") throw sourceNotReadyError();
+      return humanClientForRequest(request).conversations;
+    },
+    [connection, humanClientForRequest],
+  );
+  const connectionIdentity = JSON.stringify([identity.source, identity.server, identity.accountId]);
 
   const value = useMemo<RoomsDataSourceContextValue>(
     () => ({
       mode,
       state,
+      connectionIdentity,
+      connectionGeneration: projection.identity?.generation ?? 0,
+      captureConnection,
+      conversationClientFor,
+      isCurrentConnection,
       selectedRoom,
       selectedBySource,
       localConfig,
@@ -1022,7 +924,7 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       signOutLocal,
       localFeedInvalidationGeneration: localFeedSync.invalidationGeneration,
       localFeedRefreshGeneration: localFeedSync.refreshGeneration,
-      localLiveUpdatesStatus: mode === "shared" ? humanLiveUpdatesStatus : localLiveUpdatesStatus,
+      localLiveUpdatesStatus: liveUpdatesStatus,
       retryLocalWorkspace,
       retryHumanSession,
       redeemHumanBootstrap,
@@ -1062,8 +964,12 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       signOutLocal,
       localFeedSync.invalidationGeneration,
       localFeedSync.refreshGeneration,
-      localLiveUpdatesStatus,
-      humanLiveUpdatesStatus,
+      liveUpdatesStatus,
+      connectionIdentity,
+      projection.identity?.generation,
+      captureConnection,
+      conversationClientFor,
+      isCurrentConnection,
       mode,
       retryLocalWorkspace,
       retryHumanSession,

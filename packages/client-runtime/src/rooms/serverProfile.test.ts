@@ -9,7 +9,7 @@ import {
   roomsProfileAfterSignOut,
   type RoomsSharedServerProfile,
   usableRoomsSharedSession,
-} from "./serverProfile";
+} from "./serverProfile.ts";
 
 const contract = {
   id: "rooms.local-auth",

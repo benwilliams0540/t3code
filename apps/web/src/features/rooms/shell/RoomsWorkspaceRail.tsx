@@ -74,7 +74,7 @@ export function RoomsWorkspaceRail({
       <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto px-2 py-2">
         {state.rooms.map((room, index) => {
           const isSelected = selectedRoom?.id === room.id;
-          const LocalityIcon = room.locality === "local_only" ? LockKeyholeIcon : UsersIcon;
+          const LocalityIcon = room.sourceMode === "local" ? LockKeyholeIcon : UsersIcon;
           const modifierLabel =
             typeof navigator !== "undefined" && navigator.platform.includes("Mac") ? "⌘" : "Ctrl+";
           return (
@@ -82,8 +82,8 @@ export function RoomsWorkspaceRail({
               aria-current={isSelected ? "page" : undefined}
               aria-label={
                 room.unreadCount === null
-                  ? `${room.name}, local only`
-                  : `${room.name}, ${room.unreadCount} unread, ${room.locality === "local_only" ? "local only" : "shared"}`
+                  ? `${room.name}, ${room.sourceMode === "local" ? "Local" : "Shared"}`
+                  : `${room.name}, ${room.unreadCount} unread, ${room.sourceMode === "local" ? "Local" : "Shared"}`
               }
               className={cn(
                 "group/room relative flex size-10 shrink-0 items-center justify-center rounded-sm border font-mono text-[10px] font-semibold tracking-[0.08em] transition-[border-color,background-color] motion-reduce:transition-none",

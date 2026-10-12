@@ -1,3 +1,4 @@
+import { createRoomsConversationClient } from "@t3tools/client-runtime/rooms/conversation-client";
 import type { RoomsHumanHttpRequest } from "@t3tools/contracts";
 import {
   resolveRoomsHumanRequestUrl,
@@ -87,7 +88,7 @@ async function parseResponse<T>(response: Response, decoder: (input: unknown) =>
   } catch {
     throw new RoomsMobileClientError(
       "rooms_contract_mismatch",
-      "The Threadspace response does not match rooms.human-shared v1.",
+      "The Threadspace response does not match the current human contract.",
       response.status,
     );
   }
@@ -108,7 +109,9 @@ export function createRoomsMobileClient(options: {
     body?: Readonly<Record<string, unknown>>,
     requestOptions: { readonly signal?: AbortSignal } = {},
   ): Promise<T> => {
+    options.assertCurrent?.();
     const bearer = await options.readToken();
+    options.assertCurrent?.();
     if (!bearer) {
       throw new RoomsMobileClientError(
         "rooms_signed_out",
@@ -156,12 +159,15 @@ export function createRoomsMobileClient(options: {
         "Could not reach the private Threadspace service. Check Tailscale and try again.",
       );
     }
-    return parseResponse(response, decoder);
+    const value = await parseResponse(response, decoder);
+    options.assertCurrent?.();
+    return value;
   };
 
   const roomPath = (roomId: string) => `/rooms/human/v1/rooms/${encodeURIComponent(roomId)}`;
 
   return {
+    conversations: createRoomsConversationClient(request),
     getSession: () => request("/rooms/human/v1/session", "GET", decodeSession),
     getWorkspace: async (roomId: string) => {
       const workspace = await request(`${roomPath(roomId)}/workspace`, "GET", decodeWorkspace);
@@ -185,7 +191,7 @@ export function createRoomsMobileClient(options: {
     },
     getFeed: async (roomId: string, channelId: string) => {
       const feed = await request(
-        `${roomPath(roomId)}/channels/${encodeURIComponent(channelId)}/feed?limit=100`,
+        `/rooms/human/v2/rooms/${encodeURIComponent(roomId)}/channels/${encodeURIComponent(channelId)}/feed?limit=100`,
         "GET",
         decodeFeed,
       );
