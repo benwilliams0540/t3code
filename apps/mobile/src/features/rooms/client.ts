@@ -67,9 +67,11 @@ async function parseResponse<T>(response: Response, decoder: (input: unknown) =>
   if (!response.ok) {
     try {
       const failure = decodeError(body);
+      const afterSeq = failure.details?.after_seq ?? failure.after_seq;
+      const headSeq = failure.details?.head_seq ?? failure.head_seq;
       throw new RoomsMobileClientError(failure.error, failure.message, response.status, {
-        ...(failure.after_seq === undefined ? {} : { afterSeq: failure.after_seq }),
-        ...(failure.head_seq === undefined ? {} : { headSeq: failure.head_seq }),
+        ...(afterSeq === undefined ? {} : { afterSeq }),
+        ...(headSeq === undefined ? {} : { headSeq }),
       });
     } catch (cause) {
       if (cause instanceof RoomsMobileClientError) throw cause;

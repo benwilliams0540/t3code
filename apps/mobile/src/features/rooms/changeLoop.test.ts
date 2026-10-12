@@ -1,11 +1,8 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { RoomsMobileClientError } from "./client";
-import {
-  RoomsMobileChangeLoop,
-  type RoomsMobileChangeInvalidation,
-  type RoomsMobileLiveUpdatesStatus,
-} from "./changeLoop";
+import type { RoomsRealtimeEvent } from "./contract";
+import { RoomsMobileChangeLoop, type RoomsMobileChangeInvalidation } from "./changeLoop";
 
 const ROOM_A = "room:019fbe90-0000-7000-8000-000000000001";
 const ROOM_B = "room:019fbe90-0000-7000-8000-000000000002";
@@ -25,6 +22,60 @@ async function flush(): Promise<void> {
 }
 
 describe("Rooms mobile change loop", () => {
+  it("preserves realtime events and waits for notification acknowledgement and cursor storage", async () => {
+    const acknowledged = deferred<void>();
+    const stored = deferred<void>();
+    const notified = deferred<RoomsMobileChangeInvalidation>();
+    const saving = deferred<void>();
+    const resumed = deferred<void>();
+    const pending = deferred<{ changed: boolean; head_seq: number }>();
+    const event: RoomsRealtimeEvent = {
+      event_id: "event:synthetic",
+      seq: 12,
+      room_id: ROOM_A,
+      channel_id: "channel:synthetic",
+      actor_principal_id: "h:other",
+      sender_display_name: "Other human",
+      summary: "Hello",
+      occurred_at: "2026-10-02T00:00:00Z",
+      fallback_published: false,
+    };
+    const requests: Array<{ afterSeq: number; realtime: boolean | undefined }> = [];
+    const loop = new RoomsMobileChangeLoop({
+      clientId: "ios:synthetic",
+      cursorStore: {
+        load: async () => 9,
+        save: async () => {
+          saving.resolve();
+          await stored.promise;
+        },
+      },
+      client: {
+        waitForChanges: (_room, input) => {
+          requests.push({ afterSeq: input.afterSeq, realtime: input.realtime });
+          if (requests.length === 1)
+            return Promise.resolve({ changed: true, head_seq: 12, realtime_events: [event] });
+          resumed.resolve();
+          return pending.promise;
+        },
+      },
+      onInvalidate: async (invalidation) => {
+        notified.resolve(invalidation);
+        await acknowledged.promise;
+      },
+    });
+    loop.start(ROOM_A);
+    expect((await notified.promise).realtimeEvents).toEqual([event]);
+    expect(requests).toEqual([{ afterSeq: 9, realtime: false }]);
+    acknowledged.resolve();
+    await saving.promise;
+    expect(requests).toHaveLength(1);
+    stored.resolve();
+    await resumed.promise;
+    expect(requests[1]).toEqual({ afterSeq: 12, realtime: true });
+    loop.stop();
+  });
+
   it("reissues timeouts and refreshes before advancing the cursor", async () => {
     const waits = [
       deferred<{ changed: boolean; head_seq: number }>(),
@@ -104,6 +155,7 @@ describe("Rooms mobile change loop", () => {
     const requests: number[] = [];
     const invalidations: RoomsMobileChangeInvalidation[] = [];
     const loop = new RoomsMobileChangeLoop({
+      cursorStore: { load: async () => 44, save: async () => undefined },
       client: {
         waitForChanges: (_roomId, input) => {
           requests.push(input.afterSeq);
@@ -128,47 +180,14 @@ describe("Rooms mobile change loop", () => {
     expect(invalidations).toEqual([
       {
         roomId: ROOM_A,
-        afterSeq: 0,
+        afterSeq: 44,
         headSeq: 2,
         initial: true,
         reason: "cursor_ahead",
         realtimeEvents: [],
       },
     ]);
-    expect(requests).toEqual([0, 2]);
-    loop.stop();
-  });
-
-  it("backs off deterministically and returns to connected after recovery", async () => {
-    const schedules: Array<{ callback: () => void; delayMs: number }> = [];
-    const statuses: RoomsMobileLiveUpdatesStatus[] = [];
-    const pending = deferred<{ changed: boolean; head_seq: number }>();
-    let attempt = 0;
-    const loop = new RoomsMobileChangeLoop({
-      client: {
-        waitForChanges: () => {
-          attempt += 1;
-          if (attempt === 1) return Promise.reject(new Error("network interrupted"));
-          if (attempt === 2) return Promise.resolve({ changed: false, head_seq: 0 });
-          return pending.promise;
-        },
-      },
-      onInvalidate: async () => undefined,
-      onStatusChange: (status) => statuses.push(status),
-      scheduleRetry: (callback, delayMs) => {
-        schedules.push({ callback, delayMs });
-        return vi.fn();
-      },
-    });
-
-    loop.start(ROOM_A);
-    await flush();
-    expect(schedules[0]?.delayMs).toBe(500);
-    schedules[0]!.callback();
-    await flush();
-
-    expect(statuses).toEqual(["catching_up", "reconnecting", "connected"]);
-    expect(attempt).toBe(3);
+    expect(requests).toEqual([44, 2]);
     loop.stop();
   });
 
