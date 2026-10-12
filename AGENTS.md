@@ -1,9 +1,11 @@
-# ThreadSpace
+# Threadspace
 
-This repository is Ben and Monroe's collaborative prototype fork of T3 Code.
-The current Rooms milestone and scope live in [docs/rooms/README.md](docs/rooms/README.md);
+Threadspace is one product. This repository owns its clients, shared client state
+and agent connectors; `t3rooms` owns its Rooms backend. It is Ben and Monroe's
+collaborative prototype fork of T3 Code.
+Read [product direction](docs/product/threadspace.md) when choosing scope;
 [roadmap #26](https://github.com/benwilliams0540/t3code/issues/26) owns delivery status.
-Read [Rooms architecture](docs/architecture/rooms.md) when changing connection,
+Read [Threadspace architecture](docs/architecture/threadspace.md) when changing connection,
 conversation, contract or agent ownership. Dated reviews describe their recorded
 revision; check current callers and issue status before treating them as work.
 

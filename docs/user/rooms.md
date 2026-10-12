@@ -1,6 +1,6 @@
-# Rooms
+# Shared rooms in Threadspace
 
-Rooms brings the shared work around a project into T3 Code. Open **Version 3** in the sidebar,
+Threadspace uses its Rooms backend to keep shared project work durable. Open **Version 3** in the sidebar,
 select a Rooms source, and then select a project.
 
 The Shared source needs a T3 Connect account. When you are signed out, the Rooms workspace shows
@@ -51,7 +51,7 @@ which service users join and how they connect to it.
 
 The dashboard leads with **Needs you**, then shows active work, the project's vision status,
 momentum, and recent durable activity. Counts and story state come from the selected Rooms source;
-T3 Code does not fill missing records with sample data.
+Threadspace does not fill missing records with sample data.
 
 Open **Stories** to switch between a board and a list with a detail pane. The board/list preference
 is stored on the current device. Story ownership is shown from durable workflow history. A current

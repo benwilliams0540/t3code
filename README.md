@@ -1,104 +1,45 @@
-# T3 Code
+# Threadspace
 
-T3 Code is an "agent harness control surface". It enables control of the agents on your machine with a best-in-class mobile app, [web app](https://app.t3.codes) and [Electron-based desktop app](https://t3.codes).
+Threadspace is a shared workspace for people and agents. Its web, desktop and
+mobile clients let participants discuss project work, review durable results,
+and work with agents on a designated host.
 
-Works with your subscriptions on Claude Code, Codex, Cursor, Grok Build, and OpenCode. If they're set up on your computer, T3 Code can control them.
+This repository is Ben and Monroe's prototype fork of
+[T3 Code](https://github.com/pingdotgg/t3code). Its existing coding workspace and
+provider integrations remain useful parts of Threadspace. Upstream T3 Code
+downloads and `npx t3` do not install this fork.
 
-## "Wait, what are you selling me?"
+## One product, separate responsibilities
 
-Nothing. We built T3 Code because we wanted the best possible development experience with agents. We were inspired by existing solutions like the Codex desktop app, Conductor, Claude Desktop and Cursor Glass, but none met our bar.
+- **Threadspace clients** own presentation and shared client state in this repo.
+- **Rooms** is Threadspace's [Rails/PostgreSQL backend](https://github.com/benwilliams0540/t3rooms).
+  It owns membership, shared history and durable work records.
+- **Agent connectors** in this repo connect durable room work to the actual
+  agent runtime. OpenClaw and native T3 runtimes own execution and tool policy.
 
-We wanted something performant, remote-ready, and truly open. If we ever go the wrong direction, we want you to have everything you need to fork and build the editor that you want.
+The repositories have one [product direction](docs/product/threadspace.md).
+See [architecture](docs/architecture/threadspace.md) for the implemented owners
+and contracts, and [roadmap #26](https://github.com/benwilliams0540/t3code/issues/26)
+for delivery and outstanding acceptance.
 
-## Installation
+## Develop locally
 
-> [!WARNING]
-> T3 Code currently supports Codex, Claude, Cursor, Grok Build and OpenCode. Install and authenticate at least one provider before use:
->
-> - Codex: install [Codex CLI](https://developers.openai.com/codex/cli) and run `codex login`
-> - Claude: install [Claude Code](https://claude.com/product/claude-code) and run `claude auth login`
-> - Cursor: install [Cursor CLI](https://cursor.com/cli) and run `cursor-agent login`
-> - Grok Build: install [Grok Build CLI](https://x.ai/cli) and run `grok login`
-> - OpenCode: install [OpenCode](https://opencode.ai) and run `opencode auth login`
+Use the repository's Node version, pnpm and Vite+ workflow. Start with
+[quick start](docs/getting-started/quick-start.md) and [AGENTS.md](AGENTS.md).
+Room work also needs the compatible Rooms backend; launching the web app or its
+T3 server does not provision that backend.
 
-### Try it out (install-free)
-
-The easiest way to test T3 Code is to run the server in your terminal:
-
-```bash
-npx t3@latest
-```
-
-This will launch T3 Code's backend on your machine as well as the local web app to control your agents.
-
-Tip: Use `npx t3@latest --help` for the full CLI reference.
-
-### Desktop app
-
-Install the latest version of the desktop app from [GitHub Releases](https://github.com/pingdotgg/t3code/releases), or from your favorite package registry:
-
-#### Windows (`winget`)
-
-```bash
-winget install T3Tools.T3Code
-```
-
-#### macOS (Homebrew)
-
-```bash
-brew install --cask t3-code
-```
-
-#### Arch Linux (AUR)
-
-```bash
-yay -S t3code-bin
-```
-
-## Some notes
-
-We are very very early in this project. Expect bugs.
-
-We are (mostly) not accepting contributions yet. Small fixes may be considered. Big features will not be.
-
-There's no public docs site yet, checkout the miscellaneous markdown files in [docs](./docs).
+Choose checks for the changed behavior using [local checks](docs/operations/ci.md).
+Whole-repository tests and hosted workflows are explicit opt-ins.
 
 ## Documentation
 
-- [Getting started](./docs/getting-started/quick-start.md)
-- [Remote access](./docs/user/remote-access.md)
-- [Keeping T3 Code in sync](./docs/user/server-updates.md)
-- [Architecture overview](./docs/architecture/overview.md)
-- [Provider guides](./docs/providers/codex.md)
-- [Operations](./docs/operations/ci.md)
-- [Reference](./docs/reference/encyclopedia.md)
+- [Product direction](docs/product/threadspace.md)
+- [Product architecture](docs/architecture/threadspace.md)
+- [Using rooms](docs/user/rooms.md)
+- [Development and delivery](docs/operations/threadspace-delivery.md)
+- [Documentation index](docs/README.md)
 
-## If you REALLY want to contribute still.... read this first
-
-### Install `vp`
-
-T3 Code uses Vite+ so you'll need to install the global `vp` command-line tool.
-
-#### macOS / Linux
-
-```bash
-curl -fsSL https://vite.plus | bash
-```
-
-#### Windows
-
-```bash
-irm https://vite.plus/ps1 | iex
-```
-
-Checkout their getting started guide for more information: https://viteplus.dev/guide/
-
-### Install dependencies
-
-```bash
-vp i
-```
-
-Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening an issue or PR.
-
-Need support? Join the [Discord](https://discord.gg/jn4EGJjrvv).
+Provider and platform guides document capabilities inherited from T3 Code.
+Build, installed-client behavior and deployed room/runtime acceptance are
+recorded separately in the owning issues.

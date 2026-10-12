@@ -43,7 +43,7 @@ A user-visible log item attached to a thread. In [the contracts][1], activities 
 
 ### Rooms workspace
 
-The [Rooms direction](../rooms/README.md) introduces these target concepts. The
+The [Rooms direction](../product/threadspace.md) introduces these target concepts. The
 conversation/binding contract is planned; current one-shot invocations do not
 implement it yet.
 
