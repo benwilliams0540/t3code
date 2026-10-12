@@ -89,6 +89,21 @@ function messageMarkdown(item: RoomsAgentFeedItemLike | undefined): string | nul
   return typeof item.payload.body_markdown === "string" ? item.payload.body_markdown : null;
 }
 
+/** Conversation lifecycle comes from the authoritative read projection, including in channel views. */
+export function roomsLegacyChannelHistoryItems<
+  Item extends { readonly kind: string; readonly payload: unknown },
+>(items: readonly Item[]): readonly Item[] {
+  return items.filter(
+    (item) =>
+      !(
+        item.kind === "agent_invocation_update" &&
+        isObject(item.payload) &&
+        typeof item.payload.conversation_id === "string" &&
+        item.payload.conversation_id.length > 0
+      ),
+  );
+}
+
 /**
  * Folds the append-only invocation ledger into one stable conversational turn. The triggering
  * human message stays in the feed; correlated Agent reply messages are rendered by the turn.
@@ -99,9 +114,10 @@ export function projectRoomsAgentTurns<T extends RoomsAgentFeedItemLike>(
   nowMs: number,
   delayMs: number = ROOMS_AGENT_DELAY_MS,
 ): readonly RoomsProjectedFeedEntry<T>[] {
+  const legacyItems = roomsLegacyChannelHistoryItems(items);
   const updatesByInvocation = new Map<string, RoomsAgentInvocationFeedUpdate[]>();
   const messagesByEventId = new Map<string, T>();
-  for (const item of items) {
+  for (const item of legacyItems) {
     if (isAgentUpdate(item)) {
       const updates = updatesByInvocation.get(item.payload.invocation_id) ?? [];
       updates.push(item);
@@ -150,7 +166,7 @@ export function projectRoomsAgentTurns<T extends RoomsAgentFeedItemLike>(
   }
 
   const result: RoomsProjectedFeedEntry<T>[] = [];
-  for (const item of items) {
+  for (const item of legacyItems) {
     if (replyEventIds.has(item.source_event.event_id)) continue;
     const turn = turnsByFirstItemId.get(item.id);
     if (turn) result.push({ kind: "agent_turn", turn });
