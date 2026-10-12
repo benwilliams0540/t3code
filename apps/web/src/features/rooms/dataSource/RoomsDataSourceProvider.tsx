@@ -20,9 +20,8 @@ import {
 } from "~/cloud/roomsAuth";
 import { resolveCloudPublicConfig } from "~/cloud/publicConfig";
 import { useClientSettings } from "~/hooks/useSettings";
-import { getLocalStorageItem, useLocalStorage } from "~/hooks/useLocalStorage";
+import { useLocalStorage } from "~/hooks/useLocalStorage";
 
-import { ROOMS_SELECTED_ROOM_STORAGE_KEY } from "../model/selection";
 import { selectRoomsDesktopNotifications } from "../notifications/roomsDesktopNotifications";
 import {
   connectingLocalRoomsDataSourceState,
@@ -98,7 +97,6 @@ import type {
 import {
   EMPTY_ROOMS_SELECTED_ROOM_BY_SOURCE,
   type RoomsDataSourceMode,
-  RoomsDataSourceMode as RoomsDataSourceModeSchema,
   type RoomsDataSourceState,
   type RoomsHumanSourceFailure,
   type RoomsHumanSourceReady,
@@ -113,10 +111,10 @@ import {
   ROOMS_LOCAL_WORKSPACE_STORAGE_KEY,
   ROOMS_SELECTED_ROOM_BY_SOURCE_STORAGE_KEY,
   isRoomsHumanStateCurrent,
+  normalizeRoomsDataSourceMode,
   resolveSelectedSourceRoom,
   shouldReloadRoomsHumanSelection,
 } from "./model";
-import { roomsSampleDataSource } from "./sample";
 
 type RoomsLocalSourceState = RoomsLocalSourceReady | RoomsLocalSourceFailure;
 type RoomsHumanSourceState = RoomsHumanSourceReady | RoomsHumanSourceFailure;
@@ -221,15 +219,6 @@ interface RoomsDataSourceContextValue {
 const RoomsDataSourceContext = createContext<RoomsDataSourceContextValue | null>(null);
 const RoomsLocalWorkspaceConfigOrNullSchema = Schema.NullOr(RoomsLocalWorkspaceConfigSchema);
 
-function readLegacySampleRoomId(): string | null {
-  try {
-    return getLocalStorageItem(ROOMS_SELECTED_ROOM_STORAGE_KEY, Schema.String);
-  } catch (error) {
-    console.error("Could not read the legacy Threadspace sample selection.", error);
-    return null;
-  }
-}
-
 function sourceNotReadyError(): RoomsLocalClientError {
   return new RoomsLocalClientError({
     kind: "transport",
@@ -304,11 +293,15 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       storedLocalSessionToken,
     );
   }, [authProvider, storedLocalSessionAccountId, storedLocalSessionToken]);
-  const [mode, setPersistedMode] = useLocalStorage(
+  const [storedMode, setPersistedMode] = useLocalStorage(
     ROOMS_DATA_SOURCE_STORAGE_KEY,
-    "sample" as const,
-    RoomsDataSourceModeSchema,
+    "shared",
+    Schema.String,
   );
+  const mode = normalizeRoomsDataSourceMode(storedMode);
+  useEffect(() => {
+    if (storedMode !== mode) setPersistedMode(mode);
+  }, [mode, setPersistedMode, storedMode]);
   const [localConfig, setLocalConfig] = useLocalStorage(
     ROOMS_LOCAL_WORKSPACE_STORAGE_KEY,
     null,
@@ -701,18 +694,16 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
     return () => loop.stop();
   }, [activeHumanRoomId, authentication.generation, humanApiBaseUrl]);
 
-  const legacySampleRoomId = useMemo(readLegacySampleRoomId, []);
   const visibleHumanState: RoomsHumanSourceState = isRoomsHumanStateCurrent(humanState, {
     generation: authentication.generation,
     accountId: authentication.status === "signed-in" ? authentication.accountId : null,
   })
     ? humanState
     : humanFailure(authentication.status === "signed-out" ? "signed-out" : "authenticating");
-  const state =
-    mode === "sample" ? roomsSampleDataSource : mode === "local" ? localState : visibleHumanState;
+  const state = mode === "local" ? localState : visibleHumanState;
   const selectedRoom = useMemo(
-    () => resolveSelectedSourceRoom(state, selectedBySource, legacySampleRoomId),
-    [legacySampleRoomId, selectedBySource, state],
+    () => resolveSelectedSourceRoom(state, selectedBySource),
+    [selectedBySource, state],
   );
 
   const retryLocalWorkspace = useCallback(() => loadWorkspace(true), [loadWorkspace]);

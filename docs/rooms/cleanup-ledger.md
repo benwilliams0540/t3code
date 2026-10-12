@@ -10,7 +10,7 @@ Keep concrete unfinished areas here with an owning issue. In-code markers use
 
 ## Product flow
 
-- **Sample and Local sources are still selectable.** Decided 2026-09-04 (see `foundations.md`): remove Sample from the app, keep fixtures for tests. Monroe wants the core flow only. The signed-out Shared panel no longer offers "Use Sample workspace" (#9), but Beta settings "Rooms content" and the Local-source error panel in `RoomsWorkspaceShell.tsx` still do. Drop them from the Alpha when asked; keep Sample for the certified fixtures in tests.
+- **Sample product flow is retired** ([#46](https://github.com/benwilliams0540/t3code/issues/46)). The September 4 decision in `foundations.md` is implemented: only Local and Shared are selectable. Old Sample source preferences normalize to the existing Shared connect/sign-in flow; existing Local/Shared preferences, server profiles and room/project bindings remain. Certified workspace fixtures and their decoder contracts stay as test/reference data, with no production fixture renderer.
 - **Status header has no health fact.** `RoomsInteractiveDashboard.tsx` carries a `TODO(rooms)`; a real fact needs native T3 mirroring or project-impact telemetry (benwilliams0540/t3rooms#1). Do not fake one.
 - **Native thread linking shows nothing.** `t3_environments` and `t3_mirrored_events` are empty on staging; the Rails adapter that mirrors T3 events was never run against a real environment. This is what would let Ben and Monroe see each other's agent work.
 - **OpenClaw conversations are isolated per invocation.** The transport derives

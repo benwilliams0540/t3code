@@ -103,7 +103,7 @@ export function resolvePersistedRoomProjectBindings(
 
 export function useRoomProjectBindings(roomId: string, sourceMode: RoomsDataSourceMode) {
   const projects = useProjects();
-  const [sampleBindings, setSampleBindings] = useLocalStorage(
+  const [roomBindings, setRoomBindings] = useLocalStorage(
     ROOMS_PROJECT_BINDINGS_STORAGE_KEY,
     EMPTY_ROOMS_PROJECT_BINDINGS,
     RoomsProjectBindings,
@@ -114,7 +114,7 @@ export function useRoomProjectBindings(roomId: string, sourceMode: RoomsDataSour
       ? localConfig?.roomId === roomId
         ? localConfig.projectBindings
         : []
-      : (sampleBindings[roomId] ?? []);
+      : (roomBindings[roomId] ?? []);
   const resolved = useMemo(
     () => resolvePersistedRoomProjectBindings(persistedRefs, projects),
     [persistedRefs, projects],
@@ -138,9 +138,9 @@ export function useRoomProjectBindings(roomId: string, sourceMode: RoomsDataSour
         });
         return;
       }
-      setSampleBindings((current) => addRoomProjectBinding(current, roomId, project));
+      setRoomBindings((current) => addRoomProjectBinding(current, roomId, project));
     },
-    [roomId, setLocalConfig, setSampleBindings, sourceMode],
+    [roomId, setLocalConfig, setRoomBindings, sourceMode],
   );
   const unbindProject = useCallback(
     (projectRef: PersistedRoomsProjectRef) => {
@@ -157,9 +157,9 @@ export function useRoomProjectBindings(roomId: string, sourceMode: RoomsDataSour
         });
         return;
       }
-      setSampleBindings((current) => removeRoomProjectBinding(current, roomId, projectRef));
+      setRoomBindings((current) => removeRoomProjectBinding(current, roomId, projectRef));
     },
-    [roomId, setLocalConfig, setSampleBindings, sourceMode],
+    [roomId, setLocalConfig, setRoomBindings, sourceMode],
   );
 
   return { ...resolved, bindProject, unbindProject };

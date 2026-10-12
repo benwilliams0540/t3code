@@ -63,17 +63,8 @@ export function projectSectionLabel(projectSection: string): string {
   return projectSection.charAt(0).toUpperCase() + projectSection.slice(1).replaceAll("-", " ");
 }
 
-export function roomsSurfaceSourceLabel(
-  surface: RoomsWorkspaceSurface,
-  sourceMode: RoomsDataSourceMode,
-): string {
-  if (sourceMode === "local") return "Local · live workspace";
-  if (sourceMode === "shared") return "Shared · live workspace";
-  return surface.kind === "native-thread" || surface.kind === "native-draft"
-    ? "Local T3 thread"
-    : surface.kind === "threads"
-      ? "Local T3 projects"
-      : "Sample · declared data";
+export function roomsSurfaceSourceLabel(sourceMode: RoomsDataSourceMode): string {
+  return sourceMode === "local" ? "Local · live workspace" : "Shared · live workspace";
 }
 
 export function buildRoomsBreadcrumbs(

@@ -8,7 +8,7 @@ import {
   resolveLocalRoomsDataSourceState,
 } from "../dataSource/local";
 import { RoomsLocalWorkspace } from "../dataSource/localChannelsContract";
-import { roomsProjectNavigationItems } from "./RoomsWorkspaceNavigation";
+import { ROOMS_PROJECT_NAVIGATION } from "./RoomsWorkspaceNavigation";
 import { RoomsLocalUnavailableSurface } from "./RoomsLocalWorkspaceSurface";
 import { RoomsLocalStoriesEmptyState } from "../stories/RoomsLocalStories";
 
@@ -36,7 +36,7 @@ describe("Rooms Local source isolation", () => {
     ] as const;
     const output = JSON.stringify({
       localState,
-      navigation: roomsProjectNavigationItems("local", null),
+      navigation: ROOMS_PROJECT_NAVIGATION,
       markup: surfaces.map((surface) =>
         renderToStaticMarkup(<RoomsLocalUnavailableSurface surface={surface} />),
       ),
