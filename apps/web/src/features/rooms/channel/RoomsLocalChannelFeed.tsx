@@ -383,6 +383,7 @@ export function RoomsLocalChannelFeed({
     async (loadCompleteSnapshot = true) => {
       const generation = ++loadGeneration.current;
       setLoading(true);
+      setLoadingMore(false);
       setError(null);
       try {
         const snapshot = await loadRoomsFeedSnapshot({
@@ -427,7 +428,7 @@ export function RoomsLocalChannelFeed({
   }, [localFeedRefreshGeneration, reload]);
 
   const loadMore = async () => {
-    if (!feed?.page_info.has_more || feedInvalidated || loadingMore) return;
+    if (!feed?.page_info.has_more || feedInvalidated || loadingMore || loading) return;
     const generation = loadGeneration.current;
     setLoadingMore(true);
     setError(null);
@@ -520,14 +521,23 @@ export function RoomsLocalChannelFeed({
 
           {feed?.page_info.has_more && !feedInvalidated ? (
             <div className="mt-5 flex justify-center">
-              <Button disabled={loadingMore} onClick={() => void loadMore()} variant="outline">
+              <Button
+                disabled={loadingMore || loading}
+                onClick={() => void loadMore()}
+                variant="outline"
+              >
                 {loadingMore ? "Loading…" : "Load more"}
               </Button>
             </div>
           ) : null}
           {error && feed !== null ? (
             <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/8 px-3 py-2 text-sm text-destructive">
-              {error.message} <code className="text-[10px]">{error.code}</code>
+              <p>
+                {error.message} <code className="text-[10px]">{error.code}</code>
+              </p>
+              <Button className="mt-3" onClick={() => void reload()} size="sm" variant="outline">
+                Retry
+              </Button>
             </div>
           ) : null}
         </main>

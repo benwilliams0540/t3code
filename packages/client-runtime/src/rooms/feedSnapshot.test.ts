@@ -69,6 +69,30 @@ describe("Rooms pinned forward feed ownership", () => {
     expect(appended?.page_info.next_cursor).toBe(600);
   });
 
+  it("restarts a failed partial refresh with a fresh pinned snapshot on explicit retry", async () => {
+    const inputs: RoomsFeedPageInput[] = [];
+    let interrupted = true;
+    const options = {
+      isCurrent: () => true,
+      loadPage: async (input: RoomsFeedPageInput) => {
+        inputs.push(input);
+        if (interrupted && input.afterSeq === 300) throw new Error("connection interrupted");
+        return page(input.afterSeq ?? 0, input.snapshotHeadSeq ?? (interrupted ? 603 : 606));
+      },
+    };
+    await expect(loadRoomsFeedSnapshot(options)).rejects.toThrow("connection interrupted");
+    expect(inputs).toEqual([{ limit: 100 }, { afterSeq: 300, limit: 100, snapshotHeadSeq: 603 }]);
+    interrupted = false;
+    const recovered = await loadRoomsFeedSnapshot(options);
+    expect(recovered?.items).toHaveLength(202);
+    expect(recovered?.items.at(-1)?.id).toBe("item:606");
+    expect(inputs.slice(2)).toEqual([
+      { limit: 100 },
+      { afterSeq: 300, limit: 100, snapshotHeadSeq: 606 },
+      { afterSeq: 600, limit: 100, snapshotHeadSeq: 606 },
+    ]);
+  });
+
   it("rejects room, channel and snapshot drift and deduplicates durable item identity", () => {
     const first = page(0);
     for (const changed of [
