@@ -15,34 +15,20 @@ import type { RoomsDataSourceMode, RoomsSourceRoom } from "../dataSource";
 import type { RoomsInteractiveWorkspace } from "../dataSource/humanSharedContract";
 import { RoomsAddChannelDialog } from "../channel/RoomsAddChannelDialog";
 import {
-  channelSlugFromName,
   projectSectionSlug,
   type RoomsNavigationTarget,
   type RoomsWorkspaceSurface,
 } from "./navigation";
-import type { RoomsWorkspace } from "../model/workspace";
 import { RoomsYourThreadsNavigation } from "../threads/RoomsThreadNavigation";
 
 export type RoomsWorkspaceNavigate = (target: RoomsNavigationTarget) => void;
 
-const LOCAL_PROJECT_NAVIGATION = [
+export const ROOMS_PROJECT_NAVIGATION = [
   { key: "vision", label: "Vision" },
   { key: "stories", label: "Stories" },
   { key: "evidence", label: "Evidence" },
   { key: "audit_decisions", label: "Audit & Decisions" },
 ] as const;
-
-export function roomsProjectNavigationItems(
-  sourceMode: RoomsDataSourceMode,
-  workspace: RoomsWorkspace | null,
-): readonly { readonly key: string; readonly label: string }[] {
-  if (sourceMode !== "sample") return LOCAL_PROJECT_NAVIGATION;
-  return (
-    workspace?.navigation.filter((item) =>
-      ["vision", "stories", "evidence", "audit_decisions"].includes(item.key),
-    ) ?? []
-  );
-}
 
 function WorkspaceNavItem({
   active,
@@ -86,7 +72,6 @@ export function RoomsWorkspaceNavigation({
   room,
   sourceMode,
   surface,
-  workspace,
 }: {
   readonly localLiveUpdatesReconnecting: boolean;
   readonly navigate: RoomsWorkspaceNavigate;
@@ -94,7 +79,6 @@ export function RoomsWorkspaceNavigation({
   readonly room: RoomsSourceRoom;
   readonly sourceMode: RoomsDataSourceMode;
   readonly surface: RoomsWorkspaceSurface;
-  readonly workspace: RoomsWorkspace | null;
 }) {
   const [addChannelOpen, setAddChannelOpen] = useState(false);
   return (
@@ -109,11 +93,7 @@ export function RoomsWorkspaceNavigation({
         </p>
         <p className="mt-1 truncate text-sm font-semibold text-sidebar-foreground">{room.name}</p>
         <p className="mt-1 font-mono text-[9px] tracking-[0.08em] text-sidebar-muted-foreground uppercase">
-          {sourceMode === "local"
-            ? "Local Threadspace"
-            : sourceMode === "shared"
-              ? `Shared · ${room.membershipRole}`
-              : `${room.locality === "local_only" ? "Local-only room" : "Shared room"} · ${room.membershipRole}`}
+          {sourceMode === "local" ? "Local Threadspace" : `Shared · ${room.membershipRole}`}
         </p>
         {sourceMode === "local" && localLiveUpdatesReconnecting ? (
           <p
@@ -137,51 +117,32 @@ export function RoomsWorkspaceNavigation({
           <p className="text-[10px] font-semibold tracking-[0.12em] text-sidebar-muted-foreground/65 uppercase">
             Channels
           </p>
-          {sourceMode !== "sample" ? (
-            <button
-              aria-label="Add channel"
-              className="ml-auto rounded p-0.5 text-sidebar-muted-foreground transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-foreground disabled:cursor-not-allowed disabled:opacity-45"
-              disabled={!localWorkspace?.capabilities["channel.create"]}
-              onClick={() => setAddChannelOpen(true)}
-              title="Add channel"
-              type="button"
-            >
-              <PlusIcon aria-hidden className="size-3.5" />
-            </button>
-          ) : null}
+
+          <button
+            aria-label="Add channel"
+            className="ml-auto rounded p-0.5 text-sidebar-muted-foreground transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-foreground disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={!localWorkspace?.capabilities["channel.create"]}
+            onClick={() => setAddChannelOpen(true)}
+            title="Add channel"
+            type="button"
+          >
+            <PlusIcon aria-hidden className="size-3.5" />
+          </button>
         </div>
-        {sourceMode !== "sample" ? (
-          localWorkspace?.channels.length ? (
-            localWorkspace.channels.map((channel) => (
-              <WorkspaceNavItem
-                active={surface.kind === "channel" && surface.channelSlug === channel.slug}
-                icon={HashIcon}
-                key={channel.id}
-                label={channel.slug}
-                onClick={() => navigate({ kind: "channel", channelSlug: channel.slug })}
-              />
-            ))
-          ) : (
-            <p className="px-2 py-1.5 text-xs leading-relaxed text-sidebar-muted-foreground">
-              No channels yet. Add one to begin.
-            </p>
-          )
-        ) : workspace ? (
-          workspace.channels.map((channel) => {
-            const channelSlug = channelSlugFromName(channel.name);
-            return (
-              <WorkspaceNavItem
-                active={surface.kind === "channel" && surface.channelSlug === channelSlug}
-                badge={channel.unread.count}
-                icon={HashIcon}
-                key={channel.id}
-                label={channelSlug}
-                onClick={() => navigate({ kind: "channel", channelSlug })}
-              />
-            );
-          })
+        {localWorkspace?.channels.length ? (
+          localWorkspace.channels.map((channel) => (
+            <WorkspaceNavItem
+              active={surface.kind === "channel" && surface.channelSlug === channel.slug}
+              icon={HashIcon}
+              key={channel.id}
+              label={channel.slug}
+              onClick={() => navigate({ kind: "channel", channelSlug: channel.slug })}
+            />
+          ))
         ) : (
-          <p className="px-2 py-1.5 text-xs text-sidebar-muted-foreground">No channel fixture.</p>
+          <p className="px-2 py-1.5 text-xs leading-relaxed text-sidebar-muted-foreground">
+            No channels yet. Add one to begin.
+          </p>
         )}
 
         <RoomsYourThreadsNavigation
@@ -194,7 +155,7 @@ export function RoomsWorkspaceNavigation({
         <p className="mb-1 mt-5 px-2 text-[10px] font-semibold tracking-[0.12em] text-sidebar-muted-foreground/65 uppercase">
           Project
         </p>
-        {roomsProjectNavigationItems(sourceMode, workspace).map((item) => {
+        {ROOMS_PROJECT_NAVIGATION.map((item) => {
           const projectSection = projectSectionSlug(item.key);
           return (
             <WorkspaceNavItem
@@ -206,35 +167,24 @@ export function RoomsWorkspaceNavigation({
             />
           );
         })}
-        {sourceMode === "sample" && !workspace ? (
-          <p className="px-2 py-1.5 text-xs text-sidebar-muted-foreground">No project fixture.</p>
-        ) : null}
 
         <p className="mb-1 mt-5 px-2 text-[10px] font-semibold tracking-[0.12em] text-sidebar-muted-foreground/65 uppercase">
           Network
         </p>
         <WorkspaceNavItem
           active={surface.kind === "present"}
-          badge={
-            sourceMode === "sample" && workspace
-              ? workspace.presence.human_ids.length +
-                workspace.presence.agent_ids.length +
-                workspace.presence.machine_ids.length
-              : undefined
-          }
           icon={NetworkIcon}
           label="People and machines"
           onClick={() => navigate({ kind: "present" })}
         />
       </div>
       <SidebarChromeFooter />
-      {sourceMode !== "sample" ? (
-        <RoomsAddChannelDialog
-          onCreated={(channel) => navigate({ kind: "channel", channelSlug: channel.slug })}
-          onOpenChange={setAddChannelOpen}
-          open={addChannelOpen}
-        />
-      ) : null}
+
+      <RoomsAddChannelDialog
+        onCreated={(channel) => navigate({ kind: "channel", channelSlug: channel.slug })}
+        onOpenChange={setAddChannelOpen}
+        open={addChannelOpen}
+      />
     </nav>
   );
 }

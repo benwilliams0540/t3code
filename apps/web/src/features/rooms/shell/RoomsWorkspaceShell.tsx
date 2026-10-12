@@ -11,7 +11,6 @@ import { useResizableWidth } from "~/hooks/useResizableWidth";
 import { cn } from "~/lib/utils";
 
 import { findSourceRoomBySlug, useRoomsDataSource, type RoomsSourceRoom } from "../dataSource";
-import { workspaceForDeclaredRoom } from "../model/selection";
 import {
   buildRoomsBreadcrumbs,
   isRoomsWorkspaceEnabled,
@@ -32,6 +31,7 @@ import {
   ROOMS_SIDEBAR_WIDTH_STORAGE_KEY,
 } from "./roomsSidebarWidth";
 import { RoomsWorkspaceSurfaceView } from "./RoomsWorkspaceSurface";
+import { RoomsSourceStatePanel } from "./RoomsSourceStatePanel";
 import { ThreadspaceBrand, ThreadspaceThemeControl } from "./ThreadspaceIdentity";
 
 function subscribeToViewportWidth(onChange: () => void): () => void {
@@ -192,52 +192,10 @@ function RoomsBreadcrumbBar({
         className="ml-auto hidden h-7 items-center border border-border bg-muted/35 px-2 font-mono text-[10px] tracking-[0.08em] text-muted-foreground uppercase sm:inline-flex"
         data-threadspace-plate="source"
       >
-        {roomsSurfaceSourceLabel(surface, room.sourceMode)}
+        {roomsSurfaceSourceLabel(room.sourceMode)}
       </span>
       <ThreadspaceThemeControl />
     </header>
-  );
-}
-
-function RoomsSourceStatePanel({
-  errorCode,
-  message,
-  onOpenSettings,
-  onRetry,
-  onUseSample,
-  title,
-}: {
-  readonly errorCode?: string | undefined;
-  readonly message: string;
-  readonly onOpenSettings: () => void;
-  readonly onRetry?: (() => void) | undefined;
-  readonly onUseSample: () => void;
-  readonly title: string;
-}) {
-  return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground">
-      <section className="flex flex-1 items-center justify-center p-6">
-        <div className="max-w-md rounded-2xl border border-border bg-card p-7 text-center">
-          <div className="mb-6 flex justify-center">
-            <ThreadspaceBrand />
-          </div>
-          <h1 className="text-lg font-semibold">{title}</h1>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{message}</p>
-          {errorCode ? (
-            <code className="mt-2 block text-[10px] text-muted-foreground">{errorCode}</code>
-          ) : null}
-          <div className="mt-5 flex flex-wrap justify-center gap-2">
-            {onRetry ? <Button onClick={onRetry}>Retry connection</Button> : null}
-            <Button onClick={onOpenSettings} variant="outline">
-              Threadspace settings
-            </Button>
-            <Button onClick={onUseSample} variant="outline">
-              Use Sample workspace
-            </Button>
-          </div>
-        </div>
-      </section>
-    </SidebarInset>
   );
 }
 
@@ -250,7 +208,7 @@ export function RoomsWorkspaceShell({
 }) {
   const navigate = useNavigate();
   const [sidebarVariant] = useAppSidebarVariantSelection();
-  const { localLiveUpdatesStatus, retryLocalWorkspace, selectRoom, selectedRoom, setMode, state } =
+  const { localLiveUpdatesStatus, retryLocalWorkspace, selectRoom, selectedRoom, state } =
     useRoomsDataSource();
   const room = findSourceRoomBySlug(state, roomSlug);
   const currentRoute = roomsRoutePath(roomSlug, surface);
@@ -348,7 +306,6 @@ export function RoomsWorkspaceShell({
         message={copy.message}
         onOpenSettings={() => void navigate({ to: "/settings/beta" })}
         onRetry={copy.canRetry ? () => void retryLocalWorkspace() : undefined}
-        onUseSample={() => setMode("sample")}
         title={copy.title}
       />
     );
@@ -358,16 +315,11 @@ export function RoomsWorkspaceShell({
     return <SidebarInset className="h-dvh min-h-0 bg-background" />;
   }
 
-  const workspace = (() => {
-    if (state.mode !== "sample") return null;
-    const declaredRoom = state.fixture.rooms.find((candidate) => candidate.id === room.id);
-    return declaredRoom ? workspaceForDeclaredRoom(state.fixture, declaredRoom.id) : null;
-  })();
-  const localWorkspace = state.mode === "sample" ? null : state.workspace;
+  const localWorkspace = state.workspace;
   const surfaceOwnsScrolling =
     surface.kind === "native-thread" ||
     surface.kind === "native-draft" ||
-    (state.mode !== "sample" && surface.kind === "channel");
+    surface.kind === "channel";
   return (
     <SidebarInset className="threadspace-shell h-dvh min-h-0 overflow-hidden bg-background text-foreground">
       <RoomsBreadcrumbBar
@@ -402,7 +354,6 @@ export function RoomsWorkspaceShell({
               room={room}
               sourceMode={state.mode}
               surface={surface}
-              workspace={workspace}
             />
           </div>
           {isSidebarVisible ? (
@@ -446,7 +397,6 @@ export function RoomsWorkspaceShell({
                 room={room}
                 sourceMode={state.mode}
                 surface={surface}
-                workspace={workspace}
               />
             </div>
           </details>
@@ -456,7 +406,6 @@ export function RoomsWorkspaceShell({
               room={room}
               sourceState={state}
               surface={surface}
-              workspace={workspace}
             />
           </div>
         </div>
@@ -468,7 +417,7 @@ export function RoomsWorkspaceShell({
 export function RoomsWorkspaceLanding() {
   const navigate = useNavigate();
   const [sidebarVariant] = useAppSidebarVariantSelection();
-  const { retryLocalWorkspace, selectedRoom, setMode, state } = useRoomsDataSource();
+  const { retryLocalWorkspace, selectedRoom, state } = useRoomsDataSource();
   useEffect(() => {
     if (!isRoomsWorkspaceEnabled(sidebarVariant)) {
       void navigate({ to: "/", replace: true });
@@ -498,7 +447,6 @@ export function RoomsWorkspaceLanding() {
         message={copy.message}
         onOpenSettings={() => void navigate({ to: "/settings/beta" })}
         onRetry={copy.canRetry ? () => void retryLocalWorkspace() : undefined}
-        onUseSample={() => setMode("sample")}
         title={copy.title}
       />
     );

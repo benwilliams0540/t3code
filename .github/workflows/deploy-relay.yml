@@ -1,9 +1,8 @@
 name: Deploy T3 Connect relay
 
+# Deploy only when explicitly requested; ordinary prototype commits stay local.
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 permissions:
   contents: read

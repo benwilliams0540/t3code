@@ -10,7 +10,7 @@ Keep concrete unfinished areas here with an owning issue. In-code markers use
 
 ## Product flow
 
-- **Sample and Local sources are still selectable.** Decided 2026-09-04 (see `foundations.md`): remove Sample from the app, keep fixtures for tests. Monroe wants the core flow only. The signed-out Shared panel no longer offers "Use Sample workspace" (#9), but Beta settings "Rooms content" and the Local-source error panel in `RoomsWorkspaceShell.tsx` still do. Drop them from the Alpha when asked; keep Sample for the certified fixtures in tests.
+- **Sample product flow is retired** ([#46](https://github.com/benwilliams0540/t3code/issues/46)). The September 4 decision in `foundations.md` is implemented: only Local and Shared are selectable. Old Sample source preferences normalize to the existing Shared connect/sign-in flow; existing Local/Shared preferences, server profiles and room/project bindings remain. Certified workspace fixtures and their decoder contracts stay as test/reference data, with no production fixture renderer.
 - **Status header has no health fact.** `RoomsInteractiveDashboard.tsx` carries a `TODO(rooms)`; a real fact needs native T3 mirroring or project-impact telemetry (benwilliams0540/t3rooms#1). Do not fake one.
 - **Native thread linking shows nothing.** `t3_environments` and `t3_mirrored_events` are empty on staging; the Rails adapter that mirrors T3 events was never run against a real environment. This is what would let Ben and Monroe see each other's agent work.
 - **OpenClaw conversations are isolated per invocation.** The transport derives
@@ -36,10 +36,10 @@ Keep concrete unfinished areas here with an owning issue. In-code markers use
 
 ## Repository hygiene
 
-- **Upstream sync has no cadence yet.** Decision: track upstream closely, merge (never rebase) `main` into `integrate/rooms-current` on a schedule; recipe still to be written here.
+- **Upstream maintenance** is owned by [#18](https://github.com/benwilliams0540/t3code/issues/18). Use its current merge recipe and selected sync point; dated divergence reports are evidence to refresh.
 
-- **The main CI workflow cannot run on this fork** (Blacksmith runners). `rooms-focused.yml` is manual-only by Monroe's request; proof is local focused checks recorded in PR bodies.
+- **CI and Rooms Focused are manual** on GitHub-hosted runners. Use the [focused verification recipe](../operations/ci.md); ordinary changes record relevant local proof in their PRs.
 - **Draft #2 is superseded by the Threadspace stack** (#12, web/desktop slice, mobile slice). Close it with a link once the mobile slice merges.
-- **M7 cloud transport** (`feat/rooms-m7-cloud-transport`, both repos) stays unmerged until after human acceptance (benwilliams0540/t3code#6; map in `reports/rooms-m7-m6c-reconciliation-map.md` in Monroe's root checkout, untracked).
+- **M7 cloud transport** is deferred in [#6](https://github.com/benwilliams0540/t3code/issues/6). Port only the parts needed for a demonstrated transport gap; historical branches are candidates to inspect, not a wholesale merge prerequisite.
 - **Four pinned fixture JSONs** under `apps/web/src/features/rooms/fixtures/` fail `vp fmt`; do not format them, their boundary tests hash the bytes.
 - **Historical handoff branches** (`feat/rooms-agent-connector-contract`, `feat/rooms-m5-*`, `feat/rooms-m6b-*`, `feat/rooms-m6c-*`) are evidence, not integration targets.

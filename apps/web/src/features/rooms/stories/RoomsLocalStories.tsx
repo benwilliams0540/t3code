@@ -1119,8 +1119,7 @@ export function RoomsLocalStoriesSurface({
   );
   const sourceLabel = sourceMode === "shared" ? "Shared" : "Local";
   const loadGeneration = useRef(0);
-  const interactiveWorkspace =
-    state.status === "ready" && state.mode !== "sample" ? state.workspace : null;
+  const interactiveWorkspace = state.status === "ready" ? state.workspace : null;
   const currentPrincipalId = interactiveWorkspace?.principal.id ?? null;
   const displayPrincipal = useCallback(
     (principalId: string) => {

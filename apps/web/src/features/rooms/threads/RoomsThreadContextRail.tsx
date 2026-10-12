@@ -48,7 +48,7 @@ export function RoomsThreadContextRail({
   );
   const story = findRoomsContextStory(stories, { environmentId, projectId, threadId });
   const ownerId = story ? localStoryOwnerId(story) : null;
-  const workspace = state.status === "ready" && state.mode !== "sample" ? state.workspace : null;
+  const workspace = state.status === "ready" ? state.workspace : null;
   const ownerName = (() => {
     if (!ownerId || !workspace) return ownerId;
     if (workspace.principal.id === ownerId)

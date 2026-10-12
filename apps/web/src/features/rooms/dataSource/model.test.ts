@@ -7,6 +7,7 @@ import { RoomsLocalWorkspace } from "./localChannelsContract";
 import {
   findSourceRoomBySlug,
   isRoomsHumanStateCurrent,
+  normalizeRoomsDataSourceMode,
   RoomsDataSourceMode,
   RoomsLocalWorkspaceConfig,
   RoomsSelectedRoomBySource,
@@ -14,7 +15,6 @@ import {
   shouldReloadRoomsHumanSelection,
 } from "./model";
 import { roomsRoutePath } from "../shell/navigation";
-import { roomsSampleDataSource } from "./sample";
 
 const decodeRoomsDataSourceMode = Schema.decodeUnknownSync(RoomsDataSourceMode);
 const decodeRoomsLocalWorkspaceConfig = Schema.decodeUnknownSync(RoomsLocalWorkspaceConfig);
@@ -23,14 +23,6 @@ const decodeSelectedRooms = Schema.decodeUnknownSync(RoomsSelectedRoomBySource);
 const workspace = decodeWorkspace(zeroWorkspaceDocument);
 
 describe("Rooms data source boundary", () => {
-  it("defaults to the certified Sample workspace without changing its declared identities", () => {
-    expect(roomsSampleDataSource.mode).toBe("sample");
-    expect(roomsSampleDataSource.status).toBe("ready");
-    expect(roomsSampleDataSource.rooms.map((room) => room.id)).toEqual(
-      roomsSampleDataSource.fixture.rooms.map((room) => room.id),
-    );
-  });
-
   it("replaces shell-only identity with server truth while preserving native project bindings", () => {
     const legacyConfig = decodeRoomsLocalWorkspaceConfig({
       version: 1,
@@ -49,27 +41,10 @@ describe("Rooms data source boundary", () => {
       projectBindings: legacyConfig.projectBindings,
     });
     expect(config.roomId).not.toBe(legacyConfig.roomId);
-    expect(roomsSampleDataSource.rooms.some((room) => room.id === config.roomId)).toBe(false);
   });
 
-  it("keeps Sample and Local selections independent after authoritative migration", () => {
-    const config = reconcileLocalWorkspaceConfig(null, workspace);
-    const localState = resolveLocalRoomsDataSourceState(workspace, config);
-    const secondSample = roomsSampleDataSource.rooms[1]!;
-    const selected = { sample: secondSample.id, local: workspace.room.id, shared: null };
-
-    expect(resolveSelectedSourceRoom(roomsSampleDataSource, selected, null)?.id).toBe(
-      secondSample.id,
-    );
-    expect(resolveSelectedSourceRoom(localState, selected, null)?.id).toBe(workspace.room.id);
-    expect(resolveSelectedSourceRoom(roomsSampleDataSource, selected, null)?.id).toBe(
-      secondSample.id,
-    );
-  });
-
-  it("preserves a pre-M6B Sample and Local selection with no shared authority", () => {
+  it("discards retired Sample identity while preserving old Local selection", () => {
     expect(decodeSelectedRooms({ sample: "sample-room", local: "local-room" })).toEqual({
-      sample: "sample-room",
       local: "local-room",
       shared: null,
     });
@@ -77,7 +52,6 @@ describe("Rooms data source boundary", () => {
 
   it("strips human credentials from the only persisted shared-room selection", () => {
     const persisted = decodeSelectedRooms({
-      sample: null,
       local: null,
       shared: "room:0198f7e2-1234-789a-8abc-123456789abc",
       bearer: "never-persist-bearer",
@@ -86,7 +60,6 @@ describe("Rooms data source boundary", () => {
     });
 
     expect(persisted).toEqual({
-      sample: null,
       local: null,
       shared: "room:0198f7e2-1234-789a-8abc-123456789abc",
     });
@@ -135,11 +108,8 @@ describe("Rooms data source boundary", () => {
     const localState = resolveLocalRoomsDataSourceState(workspace, config);
 
     expect(
-      resolveSelectedSourceRoom(
-        localState,
-        { sample: null, local: "room:local:stale-shell-id", shared: null },
-        null,
-      )?.id,
+      resolveSelectedSourceRoom(localState, { local: "room:local:stale-shell-id", shared: null })
+        ?.id,
     ).toBe(workspace.room.id);
     expect(findSourceRoomBySlug(localState, workspace.room.slug)?.id).toBe(workspace.room.id);
     expect(roomsRoutePath(workspace.room.slug, { kind: "dashboard" })).toBe(
@@ -179,10 +149,20 @@ describe("Rooms data source boundary", () => {
     expect(resolveLocalRoomsDataSourceState(populated, config).channelState).toBe("populated");
   });
 
-  it("accepts the three versioned source mode values", () => {
-    expect(decodeRoomsDataSourceMode("sample")).toBe("sample");
+  it("accepts only the supported product source modes", () => {
+    expect(() => decodeRoomsDataSourceMode("sample")).toThrow();
     expect(decodeRoomsDataSourceMode("local")).toBe("local");
     expect(decodeRoomsDataSourceMode("shared")).toBe("shared");
     expect(() => decodeRoomsDataSourceMode("fixture")).toThrow();
+  });
+
+  it("normalizes retired and invalid source preferences into the existing Shared flow", () => {
+    expect(normalizeRoomsDataSourceMode("sample")).toBe("shared");
+    expect(normalizeRoomsDataSourceMode("unknown")).toBe("shared");
+    expect(normalizeRoomsDataSourceMode("shared")).toBe("shared");
+    expect(normalizeRoomsDataSourceMode("local")).toBe("local");
+    expect(
+      decodeSelectedRooms({ sample: "sample-room", local: "local-room", shared: "shared-room" }),
+    ).toEqual({ local: "local-room", shared: "shared-room" });
   });
 });

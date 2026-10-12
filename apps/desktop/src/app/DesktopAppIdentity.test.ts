@@ -143,6 +143,55 @@ const withIdentity = <A, E, R>(
 };
 
 describe("DesktopAppIdentity", () => {
+  it.effect(
+    "identifies the packaged ThreadSpace build without relying on its bundle filename",
+    () => {
+      const calls: ElectronAppCalls = {
+        setAboutPanelOptions: [],
+        setDockIcon: [],
+        setName: [],
+      };
+      return withIdentity(
+        Effect.gen(function* () {
+          const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
+          yield* identity.configure;
+          assert.deepEqual(calls.setAboutPanelOptions, [
+            {
+              applicationName: "ThreadSpace (Alpha)",
+              applicationVersion: "0.0.38-pr41-44-ed7e7a9",
+              version: "ed7e7a9803af",
+            },
+          ]);
+        }),
+        {
+          calls,
+          environment: {
+            brand: "threadspace",
+            appVersion: "0.0.38-pr41-44-ed7e7a9",
+            appPath: "/test/ThreadSpace PR41-44 Test.app/Contents/Resources/app.asar",
+          },
+          packageJson: '{"t3codeCommitHash":"ed7e7a9803afa11a5dba3ad4325aef268f1e99be"}',
+        },
+      );
+    },
+  );
+
+  it.effect("does not claim a build commit when packaged metadata is invalid", () => {
+    const calls: ElectronAppCalls = {
+      setAboutPanelOptions: [],
+      setDockIcon: [],
+      setName: [],
+    };
+    return withIdentity(
+      Effect.gen(function* () {
+        const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
+        yield* identity.configure;
+        assert.equal(calls.setAboutPanelOptions[0]?.version, "unknown");
+      }),
+      { calls, packageJson: '{"t3codeCommitHash":"not-a-commit"}' },
+    );
+  });
+
   it.effect("does not reuse T3 Alpha's existing browser profile for ThreadSpace", () =>
     withIdentity(
       Effect.gen(function* () {

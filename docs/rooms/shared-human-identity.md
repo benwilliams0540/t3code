@@ -1,7 +1,8 @@
 # Shared Rooms human identity
 
 Shared Rooms is the authenticated, server-backed multiplayer source in the Version 3 sidebar. It
-is additive to the certified Sample source and the explicit development-only Local fallback. It
+is available alongside the explicit development-only Local fallback. Certified workspace
+fixtures remain test/reference data rather than a selectable product source. Shared Rooms
 does not change T3 Connect managed Relay minting or native T3 thread ownership.
 
 ## Immutable producer contract
