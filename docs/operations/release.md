@@ -5,10 +5,9 @@ This document covers the unified release workflow for stable and nightly desktop
 ## What the workflow does
 
 - Workflow: `.github/workflows/release.yml`
-- Triggers:
-  - push tag matching `v*.*.*` for stable releases
-  - scheduled nightly check every three hours
-  - manual `workflow_dispatch` for either channel
+- Trigger: manual `workflow_dispatch` for either channel. Select **Actions → Release → Run workflow**, choose the branch and channel, and supply a version for a stable release. Pushing a tag or updating `main` does not launch publication.
+- This inherited recipe publishes desktop artifacts, npm, hosted web and release announcements. Run it only for an authorized release; a private ThreadSpace development build uses the [ThreadSpace delivery runbook](threadspace-delivery.md).
+- Runner labels, signing configuration and existing `production` environment gates remain as configured. The fork's inherited Blacksmith labels need a separate setup decision before this manual recipe can execute; removing automatic triggers does not make those runners available.
 - Runs quality gates first: lint, typecheck, test.
 - Reads the shared production T3 Connect relay URL and Clerk client configuration before packaging clients.
 - Builds four artifacts in parallel for both channels:
@@ -36,7 +35,10 @@ The relay is a shared control plane versioned separately from client releases. S
 client builds must point at the same relay so users see the same linked environments when switching
 release channels.
 
-`.github/workflows/deploy-relay.yml` deploys Alchemy stage `prod` on every push to `main`. The
+`.github/workflows/deploy-relay.yml` deploys Alchemy stage `prod` only through
+**Actions → Deploy T3 Connect relay → Run workflow**. Select the intended branch
+for an authorized deployment; pushes to `main` do not deploy. Its existing
+`production` environment gate and runner configuration are preserved. The
 release workflow reads the relay URL and Clerk client configuration from the existing `production`
 GitHub Actions environment before building desktop, CLI, or hosted web artifacts.
 
@@ -154,10 +156,8 @@ One-time Vercel dashboard setup:
 ## Nightly builds
 
 - Workflow: `.github/workflows/release.yml`
-- Triggers:
-  - scheduled check every three hours
-  - manual `workflow_dispatch` with `channel=nightly`
-- Runs the same desktop quality gates and artifact matrix as the tagged release flow.
+- Trigger: manual `workflow_dispatch` with `channel=nightly`.
+- Runs the same desktop quality gates and artifact matrix as the manual stable release flow.
 - Publishes a GitHub prerelease only:
   - tag format: `nightly-vX.Y.Z-nightly.YYYYMMDD.<run_number>`
   - release name includes the short commit SHA
