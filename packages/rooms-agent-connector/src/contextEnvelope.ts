@@ -136,6 +136,7 @@ export function sanitizeInboundEvent(event: InboundChannelEvent): InboundChannel
       "roomId",
       "channelId",
       "sourceMessageId",
+      "conversationId",
       "sourceSequence",
       "authorPrincipalId",
       "mentioned",
@@ -178,6 +179,9 @@ export function sanitizeInboundEvent(event: InboundChannelEvent): InboundChannel
     roomId: assertNonEmptyString(event.roomId, "event.roomId"),
     channelId: assertNonEmptyString(event.channelId, "event.channelId"),
     sourceMessageId: assertNonEmptyString(event.sourceMessageId, "event.sourceMessageId"),
+    ...(event.conversationId === undefined
+      ? {}
+      : { conversationId: assertNonEmptyString(event.conversationId, "event.conversationId") }),
     sourceSequence: event.sourceSequence,
     authorPrincipalId: assertNonEmptyString(event.authorPrincipalId, "event.authorPrincipalId"),
     mentioned: event.mentioned,

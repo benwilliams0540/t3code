@@ -1,3 +1,8 @@
+import conversationProjection from "../../../../../../packages/client-runtime/src/rooms/fixtures/conversations-v2.json";
+import conversationList from "../../../../../../packages/client-runtime/src/rooms/fixtures/conversations-v2-list.json";
+import conversationCreated from "../../../../../../packages/client-runtime/src/rooms/fixtures/conversations-v2-created.json";
+import conversationMessage from "../../../../../../packages/client-runtime/src/rooms/fixtures/conversation-message-v2.json";
+import conversationFeed from "../../../../../../packages/client-runtime/src/rooms/fixtures/conversation-feed-v2.json";
 import { describe, expect, it } from "vite-plus/test";
 
 import { RoomsAuthenticationError } from "~/cloud/roomsAuth";
@@ -21,6 +26,80 @@ function response(body: unknown, status = 200, headers: Record<string, string> =
 }
 
 describe("authenticated shared Rooms client", () => {
+  it("consumes v2 conversation reads/start/follow-up through the shared wire client", async () => {
+    const { room_id: room, channel_id: channel, id } = conversationProjection.conversation;
+    const paths: string[] = [];
+    const bodyFor = (path: string, method: string) =>
+      method === "POST"
+        ? path.endsWith("/messages")
+          ? conversationMessage
+          : conversationCreated
+        : path.endsWith("/conversations")
+          ? conversationList
+          : path.includes("/messages?")
+            ? conversationFeed
+            : conversationProjection;
+    const client = createRoomsHumanClient(
+      "https://rooms.example.test",
+      async () => "fixture-token",
+      () => ({
+        request: async (request) => {
+          paths.push(request.path);
+          return response(bodyFor(request.path, request.method));
+        },
+      }),
+    );
+    await expect(client.conversations.list(room, channel)).resolves.toEqual(conversationList);
+    await expect(client.conversations.read(room, channel, id)).resolves.toEqual(
+      conversationProjection,
+    );
+    await client.conversations.create(
+      room,
+      channel,
+      "0198f7e2-1234-789a-8abc-123456789abc",
+      "Build plan",
+    );
+    await client.conversations.send(
+      room,
+      channel,
+      id,
+      "0198f7e2-1234-789a-8abc-123456789abd",
+      conversationMessage.item.payload.body_markdown,
+    );
+    await expect(client.conversations.feed(room, channel, id, { limit: 100 })).resolves.toEqual(
+      conversationFeed,
+    );
+    expect(paths).toHaveLength(5);
+    expect(paths.every((path) => path.startsWith("/rooms/human/v2/rooms/"))).toBe(true);
+  });
+
+  it("does not issue a write if the source changes during a pending token read", async () => {
+    let release!: (token: string) => void;
+    const token = new Promise<string>((resolve) => {
+      release = resolve;
+    });
+    const requests: unknown[] = [];
+    let current = true;
+    const client = createRoomsHumanClient(
+      "https://rooms.example.test",
+      () => token,
+      () => ({
+        request: async (request) => {
+          requests.push(request);
+          return response({});
+        },
+      }),
+      () => {
+        if (!current) throw new Error("Source changed.");
+      },
+    );
+    const pending = client.createRoom({ name: "Captured room", requestId: "same-request" });
+    current = false;
+    release("new-server-token");
+    await expect(pending).rejects.toBeDefined();
+    expect(requests).toEqual([]);
+  });
+
   it.each(["top-level", "details"])(
     "preserves cursor details when the Shared server rejects an ahead cursor (%s)",
     async (shape) => {

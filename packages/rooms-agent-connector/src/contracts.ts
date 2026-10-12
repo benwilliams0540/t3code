@@ -57,6 +57,7 @@ export interface InboundChannelEvent {
   readonly roomId: string;
   readonly channelId: string;
   readonly sourceMessageId: string;
+  readonly conversationId?: string;
   readonly sourceSequence: number;
   readonly authorPrincipalId: string;
   readonly mentioned: boolean;
@@ -89,6 +90,13 @@ export interface ResidentAgentContextMessage {
   readonly occurredAt: string;
 }
 
+export interface OpenClawSessionBinding {
+  readonly bindingId: string;
+  readonly conversationId: string;
+  readonly sessionKey: string;
+  readonly sessionId: string;
+}
+
 export interface ResidentAgentInvocation {
   readonly contract: {
     readonly id: typeof RESIDENT_AGENT_INVOCATION_CONTRACT;
@@ -104,6 +112,7 @@ export interface ResidentAgentInvocation {
     };
   };
   readonly invocationId: string;
+  readonly runtimeBinding?: OpenClawSessionBinding;
   readonly roomId: string;
   readonly channelId: string;
   readonly sourceMention: {
@@ -178,6 +187,7 @@ export type ConnectorHandlingOutcome =
   | { readonly kind: "ignored_non_human_author" }
   | { readonly kind: "disabled" }
   | { readonly kind: "already_running"; readonly invocationId: string }
+  | { readonly kind: "uncertain"; readonly invocationId: string }
   | { readonly kind: "terminal"; readonly result: ResidentAgentResult }
   | { readonly kind: "completed"; readonly result: ResidentAgentResult };
 

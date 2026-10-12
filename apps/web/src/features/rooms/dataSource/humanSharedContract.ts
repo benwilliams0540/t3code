@@ -1,3 +1,10 @@
+import { RoomsHumanFeed } from "@t3tools/client-runtime/rooms/human-wire";
+export {
+  RoomsHumanFeedContract,
+  RoomsHumanFeed,
+  RoomsHumanFeedItem,
+  RoomsHumanAgentInvocationUpdate,
+} from "@t3tools/client-runtime/rooms/human-wire";
 import * as Schema from "effect/Schema";
 
 import {
@@ -21,12 +28,6 @@ export const RoomsHumanContract = Schema.Struct({
   id: Schema.Literal(ROOMS_HUMAN_CONTRACT_ID),
   version: Schema.Literal(ROOMS_HUMAN_CONTRACT_VERSION),
   schema_uri: Schema.Literal(ROOMS_HUMAN_SCHEMA_URI),
-});
-
-export const RoomsHumanFeedContract = Schema.Struct({
-  id: Schema.Literal(ROOMS_HUMAN_CONTRACT_ID),
-  version: Schema.Literal(ROOMS_HUMAN_FEED_CONTRACT_VERSION),
-  schema_uri: Schema.Literal(ROOMS_HUMAN_FEED_SCHEMA_URI),
 });
 
 export const RoomsHumanRole = Schema.Literals(["observer", "operator", "admin"]);
@@ -126,59 +127,6 @@ export const RoomsHumanMembershipRedemption = Schema.Struct({
   principal: RoomsHumanMemberPrincipal,
 });
 export type RoomsHumanMembershipRedemption = typeof RoomsHumanMembershipRedemption.Type;
-
-export const RoomsHumanAgentInvocationUpdate = Schema.Struct({
-  id: Schema.String,
-  room_id: Schema.String,
-  channel_id: Schema.String,
-  kind: Schema.Literal("agent_invocation_update"),
-  occurred_at: Schema.String,
-  summary: Schema.String,
-  source_event: RoomsLocalSourceEvent,
-  attribution: Schema.Struct({
-    mode: Schema.Literal("explicit_principal"),
-    writer_principal_id: Schema.String,
-    actor_principal_id: Schema.String,
-  }),
-  payload: Schema.Struct({
-    invocation_id: Schema.String,
-    triggering_message: RoomsLocalSourceEvent,
-    status: Schema.Literals(["running", "succeeded", "failed"]),
-    safe_error_code: Schema.NullOr(
-      Schema.Literals([
-        "connector_cancelled",
-        "connector_internal",
-        "provider_rate_limited",
-        "provider_request_rejected",
-        "provider_timeout",
-        "provider_unavailable",
-      ]),
-    ),
-    reply_source_event: Schema.NullOr(RoomsLocalSourceEvent),
-  }),
-});
-export type RoomsHumanAgentInvocationUpdate = typeof RoomsHumanAgentInvocationUpdate.Type;
-
-export const RoomsHumanFeedItem = Schema.Union([
-  RoomsLocalFeedItem,
-  RoomsHumanAgentInvocationUpdate,
-]);
-export type RoomsHumanFeedItem = typeof RoomsHumanFeedItem.Type;
-
-export const RoomsHumanFeed = Schema.Struct({
-  contract: RoomsHumanFeedContract,
-  room_id: Schema.String,
-  channel_id: Schema.String,
-  page_info: Schema.Struct({
-    after_seq: Schema.Int,
-    limit: Schema.Int,
-    snapshot_head_seq: Schema.Int,
-    next_cursor: Schema.Int,
-    has_more: Schema.Boolean,
-  }),
-  items: Schema.Array(RoomsHumanFeedItem),
-});
-export type RoomsHumanFeed = typeof RoomsHumanFeed.Type;
 
 export const RoomsHumanChangeResponse = Schema.Struct({
   contract: RoomsHumanContract,

@@ -1,8 +1,9 @@
+import { RoomsConversations } from "@t3tools/client-runtime/rooms/conversations";
 import { AuthView } from "@clerk/expo/native";
 import { useAuth } from "@clerk/expo";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,23 +12,13 @@ import { AppText as Text } from "../../components/AppText";
 import { EmptyState } from "../../components/EmptyState";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
 import { uuidv7 } from "../../lib/uuid";
-import {
-  hasRoomsPublicConfig,
-  resolveCloudPublicConfig,
-  resolveRoomsClerkTokenOptions,
-} from "../cloud/publicConfig";
+import { hasRoomsPublicConfig } from "../cloud/publicConfig";
 import { WorkspaceSidebarToolbar } from "../layout/workspace-sidebar-toolbar";
-import { createRoomsMobileClient, RoomsMobileClientError } from "./client";
+import { RoomsMobileClientError } from "./client";
+import { useRoomsMobileConnection } from "./RoomsRealtimeCoordinator";
 import { setRoomsVisibleChannel, subscribeRoomsInvalidations } from "./realtimeBridge";
 import { loadRoomsUnread, markRoomsChannelRead, subscribeRoomsUnread } from "./realtimePersistence";
-import {
-  type RoomsHumanFeed,
-  type RoomsHumanSession,
-  type RoomsHumanStoriesResponse,
-  type RoomsHumanStory,
-  type RoomsHumanStoryV2,
-  type RoomsHumanWorkspace,
-} from "./contract";
+import { type RoomsHumanFeed, type RoomsHumanStory, type RoomsHumanStoryV2 } from "./contract";
 import { roomsApprovedEvidence, type RoomsMobileSection } from "./presentation";
 import { ThreadspaceRoomsSurface } from "./ThreadspaceRoomsSurface";
 
@@ -61,38 +52,48 @@ function ConfiguredRoomsRouteScreen() {
   const requestedChannelId = routeParams?.channelId ?? null;
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { getToken, isLoaded, isSignedIn, userId } = useAuth({ treatPendingAsSignedOut: false });
-  const config = resolveCloudPublicConfig();
-  const getTokenRef = useRef(getToken);
-  getTokenRef.current = getToken;
-  const accountIdRef = useRef(userId);
-  accountIdRef.current = userId;
-  const client = useMemo(() => {
-    const accountId = userId;
-    return createRoomsMobileClient({
-      baseUrl: config.rooms.apiUrl!,
-      // Clerk may return a new getToken function as auth state settles. Read
-      // the latest function through a ref so that routine renders do not
-      // recreate the client and retrigger the focused-screen refresh effect.
-      readToken: () => getTokenRef.current(resolveRoomsClerkTokenOptions()),
-      assertCurrent: () => {
-        if (accountIdRef.current !== accountId) {
-          throw new RoomsMobileClientError(
-            "rooms_account_changed",
-            "The signed-in account changed while Threadspace was loading.",
-          );
-        }
-      },
-    });
-  }, [config.rooms.apiUrl, userId]);
-  const [session, setSession] = useState<RoomsHumanSession | null>(null);
-  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
-  const selectedRoomIdRef = useRef<string | null>(null);
+  const { isLoaded, isSignedIn, userId } = useAuth({ treatPendingAsSignedOut: false });
+  const { connection, clientFor, identity, snapshot } = useRoomsMobileConnection();
+  const session = connection.matches(identity) ? snapshot.session : null;
+  const selectedRoomId = connection.matches(identity) ? snapshot.selectedRoomId : null;
+  const workspace = connection.matches(identity) ? (snapshot.workspace?.workspace ?? null) : null;
+  const storiesResponse = connection.matches(identity)
+    ? (snapshot.workspace?.stories ?? null)
+    : null;
+  const selectedRoomIdRef = useRef(selectedRoomId);
   selectedRoomIdRef.current = selectedRoomId;
-  const [workspace, setWorkspace] = useState<RoomsHumanWorkspace | null>(null);
-  const workspaceRoomIdRef = useRef<string | null>(null);
-  workspaceRoomIdRef.current = workspace?.room.id ?? null;
-  const [storiesResponse, setStoriesResponse] = useState<RoomsHumanStoriesResponse | null>(null);
+  const identityRef = useRef(identity);
+  identityRef.current = identity;
+  const conversations = useMemo(
+    () =>
+      new RoomsConversations({
+        clientFor: (request) => clientFor(request).conversations,
+        isCurrent: (request) =>
+          connection.isCurrent(request) && connection.matches(identityRef.current),
+        createRequestId: uuidv7,
+      }),
+    [connection, clientFor],
+  );
+  const conversation = useSyncExternalStore(conversations.subscribe, conversations.getSnapshot);
+  const identityKey = JSON.stringify([identity.server, identity.accountId, selectedRoomId]);
+  const client = useMemo(() => {
+    // Each operation captures the current owner generation, while this rendered
+    // callback remains tied to its account/server. A late token cannot retarget it.
+    const scoped = () => {
+      const request = connection.accessRequest();
+      connection.assertCurrent(request, identity);
+      return clientFor(request);
+    };
+    return {
+      getFeed: (roomId: string, channelId: string) => scoped().getFeed(roomId, channelId),
+      createMessage: (roomId: string, channelId: string, requestId: string, body: string) =>
+        scoped().createMessage(roomId, channelId, requestId, body),
+      transitionStory: (...args: Parameters<ReturnType<typeof clientFor>["transitionStory"]>) =>
+        scoped().transitionStory(...args),
+      reviewStory: (...args: Parameters<ReturnType<typeof clientFor>["reviewStory"]>) =>
+        scoped().reviewStory(...args),
+    };
+  }, [connection, clientFor, identity.server, identity.accountId, identity.authenticationStatus]);
   const [section, setSection] = useState<RoomsMobileSection>("room");
   const [childScreen, setChildScreen] = useState<"channel" | "story" | null>(
     requestedChannelId ? "channel" : null,
@@ -106,15 +107,15 @@ function ConfiguredRoomsRouteScreen() {
   const [feedLoading, setFeedLoading] = useState(false);
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
   const [draft, setDraft] = useState("");
-  const [loading, setLoading] = useState(true);
+  const loading = snapshot.status === "connecting" || snapshot.status === "authenticating";
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ readonly code: string; readonly message: string } | null>(
     null,
   );
   const requestIds = useRef(new Map<string, string>());
-  const loadGenerationRef = useRef(0);
   const feedLoadGenerationRef = useRef(0);
+  const commandGenerationRef = useRef(0);
 
   const readRequestId = useCallback((key: string) => {
     const existing = requestIds.current.get(key);
@@ -125,130 +126,75 @@ function ConfiguredRoomsRouteScreen() {
   }, []);
 
   const loadRoom = useCallback(
-    async (
-      roomId: string,
-      options: {
-        readonly asRefresh?: boolean;
-        readonly generation?: number;
-        readonly throwOnError?: boolean;
-      } = {},
-    ) => {
-      const generation = options.generation ?? ++loadGenerationRef.current;
-      const asRefresh = options.asRefresh === true;
-      const preserveReadyState = workspaceRoomIdRef.current === roomId;
-      if (asRefresh) setRefreshing(true);
-      else if (!preserveReadyState) {
-        setLoading(true);
-        setWorkspace(null);
-        setStoriesResponse(null);
-      }
-      setError(null);
+    async (roomId: string) => {
+      const request = connection.capture();
       try {
-        const [nextWorkspace, nextStories] = await Promise.all([
-          client.getWorkspace(roomId),
-          client.getStories(roomId),
-        ]);
-        if (generation !== loadGenerationRef.current) return;
-        setWorkspace(nextWorkspace);
-        setStoriesResponse(nextStories);
-        const currentChannelId = selectedChannelIdRef.current;
-        const nextChannelId =
-          requestedRoomId === roomId &&
-          requestedChannelId &&
-          nextWorkspace.channels.some((channel) => channel.id === requestedChannelId)
-            ? requestedChannelId
-            : currentChannelId &&
-                nextWorkspace.channels.some((channel) => channel.id === currentChannelId)
-              ? currentChannelId
-              : (nextWorkspace.channels[0]?.id ?? null);
-        selectedChannelIdRef.current = nextChannelId;
-        setSelectedChannelId(nextChannelId);
-        if (nextChannelId) setFeedLoading(true);
-        setFeedRefreshKey((current) => current + 1);
+        await connection.loadWorkspace(roomId);
       } catch (cause) {
-        if (generation === loadGenerationRef.current) {
-          setError(errorPresentation(cause));
-          if (options.throwOnError) throw cause;
-        }
-      } finally {
-        if (generation === loadGenerationRef.current) {
-          setLoading(false);
-          setRefreshing(false);
-        }
+        if (connection.isCurrent(request)) setError(errorPresentation(cause));
       }
     },
-    [client, requestedChannelId, requestedRoomId],
+    [connection],
   );
 
   const loadSession = useCallback(
     async (asRefresh = false) => {
-      const generation = ++loadGenerationRef.current;
+      const request = connection.capture();
       if (asRefresh) setRefreshing(true);
-      else if (!workspaceRoomIdRef.current) setLoading(true);
       setError(null);
       try {
-        const nextSession = await client.getSession();
-        if (generation !== loadGenerationRef.current) return;
-        setSession(nextSession);
-        const currentRoomId = selectedRoomIdRef.current;
-        const roomId =
-          requestedRoomId && nextSession.rooms.some((room) => room.id === requestedRoomId)
-            ? requestedRoomId
-            : currentRoomId && nextSession.rooms.some((room) => room.id === currentRoomId)
-              ? currentRoomId
-              : (nextSession.rooms[0]?.id ?? null);
-        if (roomId !== currentRoomId) {
-          feedLoadGenerationRef.current += 1;
-          setChildScreen(null);
-          setSelectedStoryId(null);
-          selectedChannelIdRef.current = null;
-          setSelectedChannelId(null);
-          setFeed(null);
-          setFeedLoading(false);
-          setDraft("");
+        const current = connection.getSnapshot();
+        if (asRefresh || current.status !== "ready")
+          await connection.refresh(requestedRoomId, asRefresh);
+        else if (
+          requestedRoomId &&
+          current.rooms.some((room) => room.id === requestedRoomId) &&
+          current.selectedRoomId !== requestedRoomId
+        ) {
+          await connection.selectRoom(requestedRoomId);
+          return;
         }
-        selectedRoomIdRef.current = roomId;
-        setSelectedRoomId(roomId);
-        if (roomId) {
-          await loadRoom(roomId, { asRefresh, generation });
-        } else if (generation === loadGenerationRef.current) {
-          setWorkspace(null);
-          setStoriesResponse(null);
-          setSelectedStoryId(null);
-          setSelectedChannelId(null);
-          setFeed(null);
-          setFeedLoading(false);
-        }
+        if (!connection.isCurrent(request)) return;
+        const roomId = connection.getSnapshot().selectedRoomId;
+        if (roomId) await connection.loadWorkspace(roomId);
       } catch (cause) {
-        if (generation === loadGenerationRef.current) setError(errorPresentation(cause));
+        if (connection.isCurrent(request)) setError(errorPresentation(cause));
       } finally {
-        if (generation === loadGenerationRef.current) {
-          setLoading(false);
-          setRefreshing(false);
-        }
+        if (connection.isCurrent(request)) setRefreshing(false);
       }
     },
-    [client, loadRoom, requestedRoomId],
+    [connection, requestedRoomId],
   );
 
   useFocusEffect(
     useCallback(() => {
-      if (isLoaded && isSignedIn) void loadSession();
-      return () => {
-        loadGenerationRef.current += 1;
-      };
-    }, [isLoaded, isSignedIn, loadSession, userId]),
+      if (isLoaded && isSignedIn && snapshot.status === "ready") void loadSession();
+    }, [isLoaded, isSignedIn, loadSession, userId, snapshot.status]),
   );
 
   useEffect(
     () =>
       subscribeRoomsInvalidations((roomId) => {
-        if (roomId === selectedRoomIdRef.current) {
-          void loadRoom(roomId, { generation: loadGenerationRef.current });
-        }
+        if (roomId === selectedRoomIdRef.current) void loadRoom(roomId);
       }),
     [loadRoom],
   );
+
+  useEffect(() => {
+    if (!workspace) return;
+    const current = selectedChannelIdRef.current;
+    const next =
+      requestedRoomId === workspace.room.id &&
+      requestedChannelId &&
+      workspace.channels.some((channel) => channel.id === requestedChannelId)
+        ? requestedChannelId
+        : current && workspace.channels.some((channel) => channel.id === current)
+          ? current
+          : (workspace.channels[0]?.id ?? null);
+    selectedChannelIdRef.current = next;
+    setSelectedChannelId(next);
+    setFeedRefreshKey((value) => value + 1);
+  }, [workspace, requestedRoomId, requestedChannelId]);
 
   useEffect(() => {
     const refresh = () => void loadRoomsUnread().then(setUnread);
@@ -276,30 +222,41 @@ function ConfiguredRoomsRouteScreen() {
   }, [requestedChannelId]);
 
   useEffect(() => {
-    if (isSignedIn) return;
-    loadGenerationRef.current += 1;
     feedLoadGenerationRef.current += 1;
+    commandGenerationRef.current += 1;
     requestIds.current.clear();
-    selectedRoomIdRef.current = null;
     selectedChannelIdRef.current = null;
-    setSession(null);
-    setSelectedRoomId(null);
-    setWorkspace(null);
-    setStoriesResponse(null);
-    setChildScreen(null);
+    setChildScreen(requestedChannelId ? "channel" : null);
     setSelectedStoryId(null);
     setSelectedChannelId(null);
     setFeed(null);
     setFeedLoading(false);
     setDraft("");
+    setBusy(false);
     setRefreshing(false);
     setError(null);
-  }, [isSignedIn, userId]);
+  }, [identityKey]);
+
+  const hasConversations = workspace?.capabilities["channel.read"] === true;
+  useEffect(() => {
+    if (!hasConversations || !selectedRoomId || !selectedChannelId) return;
+    conversations.configure(selectedRoomId, selectedChannelId, connection.capture());
+    return () => conversations.stop();
+  }, [
+    conversations,
+    connection,
+    hasConversations,
+    selectedRoomId,
+    selectedChannelId,
+    snapshot.identity?.generation,
+  ]);
 
   useEffect(() => {
     if (!selectedRoomId || !selectedChannelId || childScreen !== "channel") return;
     let active = true;
     const generation = ++feedLoadGenerationRef.current;
+    if (hasConversations) void conversations.refresh();
+    if (conversation.selectedId) return;
     setFeedLoading(true);
     void client
       .getFeed(selectedRoomId, selectedChannelId)
@@ -317,22 +274,35 @@ function ConfiguredRoomsRouteScreen() {
     return () => {
       active = false;
     };
-  }, [childScreen, client, feedRefreshKey, selectedChannelId, selectedRoomId]);
+  }, [
+    childScreen,
+    client,
+    feedRefreshKey,
+    selectedChannelId,
+    selectedRoomId,
+    conversation.selectedId,
+    conversations,
+    hasConversations,
+  ]);
 
-  const replaceStory = useCallback((next: RoomsHumanStory) => {
-    setStoriesResponse((current) =>
-      current
-        ? {
-            ...current,
-            stories: current.stories.map((story) => (story.id === next.id ? next : story)),
-          }
-        : current,
-    );
-  }, []);
+  const replaceStory = useCallback(
+    (next: RoomsHumanStory) => {
+      const request = connection.capture();
+      connection.updateWorkspace(request, (current) => ({
+        ...current,
+        stories: {
+          ...current.stories,
+          stories: current.stories.stories.map((story) => (story.id === next.id ? next : story)),
+        },
+      }));
+    },
+    [connection],
+  );
 
   const transitionStory = useCallback(
     async (story: RoomsHumanStoryV2, to: string) => {
       if (!selectedRoomId || busy) return;
+      const request = connection.readyRequest(selectedRoomId);
       const roomId = selectedRoomId;
       const key = `transition:${story.id}:${to}:${story.scope_head_seq}`;
       setBusy(true);
@@ -344,20 +314,23 @@ function ConfiguredRoomsRouteScreen() {
           to,
           evidence: [],
         });
+        connection.assertCurrent(request);
         requestIds.current.delete(key);
         if (selectedRoomIdRef.current === roomId) replaceStory(next);
       } catch (cause) {
-        if (selectedRoomIdRef.current === roomId) setError(errorPresentation(cause));
+        if (connection.isCurrent(request) && selectedRoomIdRef.current === roomId)
+          setError(errorPresentation(cause));
       } finally {
-        setBusy(false);
+        if (connection.isCurrent(request)) setBusy(false);
       }
     },
-    [busy, client, readRequestId, replaceStory, selectedRoomId],
+    [busy, client, connection, readRequestId, replaceStory, selectedRoomId],
   );
 
   const approveAndComplete = useCallback(
     async (story: RoomsHumanStoryV2) => {
       if (!selectedRoomId || !story.gate || busy) return;
+      const request = connection.readyRequest(selectedRoomId);
       const roomId = selectedRoomId;
       setBusy(true);
       setError(null);
@@ -370,6 +343,7 @@ function ConfiguredRoomsRouteScreen() {
             expectedHeadSeq: story.scope_head_seq,
             evidence: story.gate.eligible_evidence,
           });
+          connection.assertCurrent(request);
           requestIds.current.delete(reviewKey);
           if (selectedRoomIdRef.current === roomId) replaceStory(approved);
         }
@@ -389,47 +363,77 @@ function ConfiguredRoomsRouteScreen() {
           to: "done",
           evidence: roomsApprovedEvidence(approved),
         });
+        connection.assertCurrent(request);
         requestIds.current.delete(completionKey);
         if (selectedRoomIdRef.current === roomId) replaceStory(completed);
       } catch (cause) {
-        if (selectedRoomIdRef.current === roomId) setError(errorPresentation(cause));
+        if (connection.isCurrent(request) && selectedRoomIdRef.current === roomId)
+          setError(errorPresentation(cause));
       } finally {
-        setBusy(false);
+        if (connection.isCurrent(request)) setBusy(false);
       }
     },
-    [busy, client, readRequestId, replaceStory, selectedRoomId],
+    [busy, client, connection, readRequestId, replaceStory, selectedRoomId],
   );
 
   const sendMessage = useCallback(async () => {
     if (!selectedRoomId || !selectedChannelId || !draft.trim() || busy) return;
+    const request = connection.readyRequest(selectedRoomId);
     const roomId = selectedRoomId;
     const channelId = selectedChannelId;
     const payload = draft.trim();
-    const key = `message:${channelId}:${payload}`;
+    const conversationId = conversation.selectedId;
+    const key = `message:${channelId}:${conversationId ?? "channel"}:${payload}`;
     const generation = ++feedLoadGenerationRef.current;
+    const commandGeneration = commandGenerationRef.current;
     setBusy(true);
     setError(null);
     try {
-      await client.createMessage(roomId, channelId, readRequestId(key), payload);
+      if (conversationId) await conversations.send(payload);
+      else await client.createMessage(roomId, channelId, readRequestId(key), payload);
+      connection.assertCurrent(request);
+      if (
+        commandGeneration !== commandGenerationRef.current ||
+        conversations.getSnapshot().selectedId !== conversationId
+      )
+        return;
       requestIds.current.delete(key);
       setDraft("");
+      if (conversationId) return;
       const nextFeed = await client.getFeed(roomId, channelId);
       if (
         generation === feedLoadGenerationRef.current &&
+        commandGeneration === commandGenerationRef.current &&
         selectedRoomIdRef.current === roomId &&
         selectedChannelIdRef.current === channelId
       ) {
         setFeed(nextFeed);
       }
     } catch (cause) {
-      if (selectedRoomIdRef.current === roomId && selectedChannelIdRef.current === channelId) {
+      if (
+        connection.isCurrent(request) &&
+        commandGeneration === commandGenerationRef.current &&
+        selectedRoomIdRef.current === roomId &&
+        selectedChannelIdRef.current === channelId
+      ) {
         setError(errorPresentation(cause));
       }
     } finally {
       if (generation === feedLoadGenerationRef.current) setFeedLoading(false);
-      setBusy(false);
+      if (connection.isCurrent(request) && commandGeneration === commandGenerationRef.current)
+        setBusy(false);
     }
-  }, [busy, client, draft, readRequestId, selectedChannelId, selectedRoomId]);
+  }, [
+    busy,
+    client,
+    connection,
+    conversation.selectedId,
+    conversations,
+    draft,
+    readRequestId,
+    selectedChannelId,
+    selectedRoomId,
+  ]);
 
   const openStory = useCallback((storyId: string) => {
     setSelectedStoryId(storyId);
@@ -479,8 +483,29 @@ function ConfiguredRoomsRouteScreen() {
           childScreen={childScreen}
           draft={draft}
           error={error}
-          feed={feed}
-          feedLoading={feedLoading}
+          feed={conversation.selectedId ? conversation.feed : feed}
+          feedLoading={conversation.selectedId ? conversation.loading : feedLoading}
+          conversation={
+            hasConversations && conversation.capabilities
+              ? {
+                  choices: conversation.conversations,
+                  selectedId: conversation.selectedId,
+                  projection: conversation.projection,
+                  pending: conversation.pending,
+                  error: conversation.error instanceof Error ? conversation.error.message : null,
+                  canCreate: conversation.capabilities["conversations.create"],
+                  canMessage: conversation.capabilities["conversations.message"],
+                  onSelect: (id) => {
+                    feedLoadGenerationRef.current += 1;
+                    commandGenerationRef.current += 1;
+                    setDraft("");
+                    setBusy(false);
+                    void conversations.select(id);
+                  },
+                  onCreate: (title) => conversations.create(title).then(() => undefined),
+                }
+              : undefined
+          }
           onApproveAndComplete={(story) => void approveAndComplete(story)}
           onBack={() => {
             setChildScreen(null);
@@ -494,11 +519,13 @@ function ConfiguredRoomsRouteScreen() {
           onOpenChannel={(channelId) => {
             if (channelId !== selectedChannelIdRef.current) {
               feedLoadGenerationRef.current += 1;
+              commandGenerationRef.current += 1;
               selectedChannelIdRef.current = channelId;
               setSelectedChannelId(channelId);
               setFeed(null);
               setFeedLoading(true);
               setDraft("");
+              setBusy(false);
             }
             setSection("room");
             setChildScreen("channel");
@@ -509,25 +536,26 @@ function ConfiguredRoomsRouteScreen() {
           onSelectChannel={(channelId) => {
             if (channelId === selectedChannelIdRef.current) return;
             feedLoadGenerationRef.current += 1;
+            commandGenerationRef.current += 1;
             selectedChannelIdRef.current = channelId;
             setSelectedChannelId(channelId);
             setFeed(null);
             setFeedLoading(true);
             setDraft("");
+            setBusy(false);
           }}
           onSelectRoom={(roomId) => {
             if (roomId === selectedRoomIdRef.current) return;
             feedLoadGenerationRef.current += 1;
-            selectedRoomIdRef.current = roomId;
+            commandGenerationRef.current += 1;
             selectedChannelIdRef.current = null;
-            setSelectedRoomId(roomId);
             setChildScreen(null);
             setSelectedStoryId(null);
             setSelectedChannelId(null);
             setFeed(null);
             setFeedLoading(false);
             setDraft("");
-            void loadRoom(roomId);
+            void connection.selectRoom(roomId).catch((cause) => setError(errorPresentation(cause)));
           }}
           onSelectSection={(nextSection) => {
             setChildScreen(null);

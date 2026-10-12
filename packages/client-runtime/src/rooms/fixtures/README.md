@@ -1,0 +1,1 @@
+These v2 human conversation documents were emitted by the current Rooms service in a disposable rollback transaction for this refactor. They exercise the paired decoder and scoped commands. Agent runtime receipts/session references in this fixture are synthetic; they are not evidence of a live Gateway or device session. The producer keeps legacy v1 fixtures unchanged.

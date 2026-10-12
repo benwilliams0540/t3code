@@ -14,8 +14,8 @@ export const RoomsLocalAuthContract = Schema.Struct({
   schema_uri: Schema.Literal(ROOMS_LOCAL_AUTH_SCHEMA_URI),
 });
 
-export const RoomsAuthProviderName = Schema.Literals(["clerk", "local"]);
-export type RoomsAuthProviderName = typeof RoomsAuthProviderName.Type;
+export { RoomsAuthProviderName } from "@t3tools/client-runtime/rooms/server-profile";
+import { RoomsAuthProviderName } from "@t3tools/client-runtime/rooms/server-profile";
 
 const RoomsLocalAuthServer = Schema.Struct({ id: Schema.String });
 

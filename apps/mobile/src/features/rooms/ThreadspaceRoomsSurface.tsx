@@ -1,3 +1,13 @@
+import { roomsLegacyChannelHistoryItems } from "@t3tools/client-runtime/rooms/agent-turns";
+import {
+  roomsConversationHistoryItems,
+  roomsConversationBindingLabel,
+  roomsConversationTurnLabel,
+} from "@t3tools/client-runtime/rooms/conversation-status";
+import type {
+  RoomsConversation,
+  RoomsConversationProjection,
+} from "@t3tools/client-runtime/rooms/human-wire";
 import { Image } from "expo-image";
 import { BlurView } from "expo-blur";
 import { type ReactNode, useState } from "react";
@@ -1182,7 +1192,85 @@ function ChannelComposer(props: {
   );
 }
 
+interface HumanConversationControls {
+  readonly choices: readonly RoomsConversation[];
+  readonly selectedId: string | null;
+  readonly projection: RoomsConversationProjection | null;
+  readonly pending: boolean;
+  readonly error: string | null;
+  readonly canCreate: boolean;
+  readonly canMessage: boolean;
+  readonly onSelect: (id: string | null) => void;
+  readonly onCreate: (title: string) => Promise<void>;
+}
+function ConversationControls({ value }: { readonly value: HumanConversationControls }) {
+  const [title, setTitle] = useState("");
+  return (
+    <View className="mb-3 gap-2 border border-[#aeb7ba] p-3 dark:border-[#303943]">
+      <Text className={`text-sm font-t3-bold ${inkClass}`}>Conversations</Text>
+      <ScrollView horizontal>
+        <Pressable onPress={() => value.onSelect(null)} className="mr-3 p-2">
+          <Text className={mutedClass}>
+            {value.selectedId === null ? "• " : ""}All channel messages
+          </Text>
+        </Pressable>
+        {value.choices.map((conversation) => (
+          <Pressable
+            key={conversation.id}
+            onPress={() => value.onSelect(conversation.id)}
+            className="mr-3 p-2"
+          >
+            <Text className={inkClass}>
+              {value.selectedId === conversation.id ? "• " : ""}
+              {conversation.title}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+      {value.canCreate ? (
+        <View className="flex-row items-center gap-2">
+          <AppTextInput
+            accessibilityLabel="New conversation title"
+            className={`min-w-0 flex-1 border border-[#aeb7ba] p-2 ${inkClass}`}
+            maxLength={100}
+            editable={!value.pending}
+            value={title}
+            onChangeText={setTitle}
+            placeholder="Conversation title"
+          />
+          <Pressable
+            accessibilityRole="button"
+            disabled={value.pending || !title.trim()}
+            onPress={() =>
+              void value
+                .onCreate(title.trim())
+                .then(() => setTitle(""))
+                .catch(() => undefined)
+            }
+          >
+            <Text className={mutedClass}>Start</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {value.projection ? (
+        <Text accessibilityLiveRegion="polite" className={`text-xs ${mutedClass}`}>
+          {value.projection.bindings
+            .map((binding) => `Agent: ${roomsConversationBindingLabel(binding)}`)
+            .join(" · ")}
+          {value.projection.invocations
+            .map(
+              (turn) => ` · Turn ${turn.turn_ordinal ?? ""}: ${roomsConversationTurnLabel(turn)}`,
+            )
+            .join("")}
+        </Text>
+      ) : null}
+      {value.error ? <Text className="text-sm text-[#a64635]">{value.error}</Text> : null}
+    </View>
+  );
+}
+
 function ChannelDestination(props: {
+  readonly conversation?: HumanConversationControls;
   readonly workspace: RoomsHumanWorkspace;
   readonly channelId: string | null;
   readonly feed: RoomsHumanFeed | null;
@@ -1202,6 +1290,7 @@ function ChannelDestination(props: {
           <RefreshControl refreshing={props.refreshing} onRefresh={props.onRefresh} />
         }
       >
+        {props.conversation ? <ConversationControls value={props.conversation} /> : null}
         {props.workspace.channels.length === 0 ? (
           <EmptyState
             variant="card"
@@ -1225,12 +1314,21 @@ function ChannelDestination(props: {
             detail={channel?.purpose ?? "Start the durable discussion below."}
           />
         ) : (
-          props.feed.items.map((item) => {
+          (props.conversation?.selectedId
+            ? roomsConversationHistoryItems(props.feed.items)
+            : roomsLegacyChannelHistoryItems(props.feed.items)
+          ).map((item) => {
             const writer = props.workspace.principals.find(
               (principal) => principal.id === item.attribution.writer_principal_id,
             );
             const writerName = writer?.display_name ?? item.attribution.writer_principal_id;
             const isAgent = writer?.type === "agent";
+            if (item.kind === "agent_invocation_update")
+              return (
+                <View key={item.id} className="my-2 border-l-2 border-[#126f77] p-3">
+                  <Text className={`text-xs ${mutedClass}`}>{item.summary}</Text>
+                </View>
+              );
             if (item.kind === "unknown_schema") {
               return (
                 <View
@@ -1757,6 +1855,7 @@ function PrimaryNavigation(props: {
 }
 
 export interface ThreadspaceRoomsSurfaceProps {
+  readonly conversation?: HumanConversationControls;
   readonly session: RoomsHumanSession;
   readonly workspace: RoomsHumanWorkspace;
   readonly storiesResponse: RoomsHumanStoriesResponse;
@@ -1835,6 +1934,7 @@ export function ThreadspaceRoomsSurface(props: ThreadspaceRoomsSurfaceProps) {
       <View className="flex-1">
         {props.childScreen === "channel" ? (
           <ChannelDestination
+            conversation={props.conversation}
             channelId={props.selectedChannelId}
             feed={props.feed}
             feedLoading={props.feedLoading}

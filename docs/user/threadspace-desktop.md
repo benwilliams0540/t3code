@@ -1,6 +1,6 @@
 # ThreadSpace desktop Alpha
 
-ThreadSpace can be built as a separate desktop app for Rooms development. Install it alongside T3 Code to try a change in a recognizable app while keeping the two apps' browser profiles and local backend state separate. The default build remains T3 Code.
+Threadspace is the product; this fork builds its desktop client alongside upstream T3 Code. Install it alongside T3 Code to try a change in a recognizable app while keeping the two apps' browser profiles and local backend state separate. The upstream-compatible build remains available; select the Threadspace brand for this product.
 
 ## Build on macOS
 
@@ -20,13 +20,15 @@ This produces **ThreadSpace (Alpha).app**, using the existing ThreadSpace artwor
 
 On macOS the packaged app uses:
 
-| Data                            | Location                                                           |
-| ------------------------------- | ------------------------------------------------------------------ |
-| Browser profile                 | `~/Library/Application Support/threadspace-alpha`                  |
-| Backend home                    | `~/Library/Application Support/threadspace-alpha/runtime`          |
-| Backend state and Clerk session | `~/Library/Application Support/threadspace-alpha/runtime/userdata` |
+| Data                                   | Location                                                           |
+| -------------------------------------- | ------------------------------------------------------------------ |
+| Browser profile                        | `~/Library/Application Support/threadspace-alpha`                  |
+| Local coding runtime home              | `~/Library/Application Support/threadspace-alpha/runtime`          |
+| Coding runtime state and Clerk session | `~/Library/Application Support/threadspace-alpha/runtime/userdata` |
 
-The packaged app ignores `T3CODE_HOME`. An explicit `THREADSPACE_HOME` overrides its backend home. Development builds retain the dev runner's worktree-specific `T3CODE_HOME` unless `THREADSPACE_HOME` is set. ThreadSpace does not migrate T3 Code profiles, databases, or sign-in sessions. The backend selects an available local port and identifies its process as `ThreadSpace Backend`.
+The packaged app ignores `T3CODE_HOME`. An explicit `THREADSPACE_HOME` overrides its local coding runtime home. Development builds retain the dev runner's worktree-specific `T3CODE_HOME` unless `THREADSPACE_HOME` is set. ThreadSpace does not migrate T3 Code profiles, databases, or sign-in sessions. The local coding runtime selects an available local port and identifies its process as `ThreadSpace Backend`.
+
+The process display name refers to the embedded coding runtime. The durable Rooms backend is a separate Rails/PostgreSQL process.
 
 Isolation covers app state, not a separate copy of project files or provider credentials. Selecting the same project directory still opens the same files on disk. Shared Rooms accounts and server data remain shared after sign-in.
 

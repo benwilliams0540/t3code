@@ -43,9 +43,9 @@ A user-visible log item attached to a thread. In [the contracts][1], activities 
 
 ### Rooms workspace
 
-The [Rooms direction](../rooms/README.md) introduces these target concepts. The
-conversation/binding contract is planned; current one-shot invocations do not
-implement it yet.
+The [Threadspace product direction](../product/threadspace.md) uses these concepts.
+Rooms owns their durable records through the v2 conversation contract. Historical
+one-shot invocations remain readable without invented conversation bindings.
 
 - **Room conversation:** a durable, selectable shared work conversation inside a
   room/channel. It can contain many turns and survives client reconnects.

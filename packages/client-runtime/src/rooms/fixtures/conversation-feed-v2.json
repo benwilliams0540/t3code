@@ -1,0 +1,171 @@
+{
+  "room_id": "room:01a13157-d35a-7103-ab50-fc27a027e341",
+  "channel_id": "channel:01a13157-d37b-766e-90a4-6d682d044bb1",
+  "page_info": {
+    "after_seq": 0,
+    "limit": 50,
+    "snapshot_head_seq": 17,
+    "next_cursor": 17,
+    "has_more": false
+  },
+  "items": [
+    {
+      "id": "feed-item:01a13157-d393-70bd-bc66-630e245e8c31",
+      "room_id": "room:01a13157-d35a-7103-ab50-fc27a027e341",
+      "channel_id": "channel:01a13157-d37b-766e-90a4-6d682d044bb1",
+      "occurred_at": "2026-10-12T18:20:01.811Z",
+      "source_event": {
+        "seq": 11,
+        "event_id": "01a13157-d393-70bd-bc66-630e245e8c31",
+        "type": "message.created",
+        "schema": 2
+      },
+      "attribution": {
+        "mode": "explicit_principal",
+        "writer_principal_id": "h:01a13157-d34f-78be-9b3c-0c1f26e9f571",
+        "actor_principal_id": "h:01a13157-d34f-78be-9b3c-0c1f26e9f571"
+      },
+      "kind": "human_message",
+      "summary": "@Claw continue",
+      "payload": {
+        "body_markdown": "@Claw continue",
+        "conversation_id": "conversation:01a13157-d386-768f-88c0-6c3a073deabe"
+      }
+    },
+    {
+      "id": "feed-item:01a13157-d396-7091-9c2c-823fa53abf65",
+      "room_id": "room:01a13157-d35a-7103-ab50-fc27a027e341",
+      "channel_id": "channel:01a13157-d37b-766e-90a4-6d682d044bb1",
+      "occurred_at": "2026-10-12T18:20:01.814Z",
+      "source_event": {
+        "seq": 12,
+        "event_id": "01a13157-d396-7091-9c2c-823fa53abf65",
+        "type": "agent.invocation-started",
+        "schema": 2
+      },
+      "attribution": {
+        "mode": "explicit_principal",
+        "writer_principal_id": "a:019fc590-5b80-7ff0-bd8c-850a72e4761e",
+        "actor_principal_id": "a:019fc590-5b80-7ff0-bd8c-850a72e4761e"
+      },
+      "kind": "agent_invocation_update",
+      "summary": "Agent invocation running",
+      "payload": {
+        "invocation_id": "invocation:01a13157-d396-7122-97f5-a864fd5f4f55",
+        "triggering_message": {
+          "seq": 11,
+          "event_id": "01a13157-d393-70bd-bc66-630e245e8c31",
+          "type": "message.created",
+          "schema": 2
+        },
+        "status": "running",
+        "safe_error_code": null,
+        "reply_source_event": null,
+        "conversation_id": "conversation:01a13157-d386-768f-88c0-6c3a073deabe",
+        "binding_id": "binding:01a13157-d38d-7e64-baa0-5f8df91c5668",
+        "turn_ordinal": 1
+      }
+    },
+    {
+      "id": "feed-item:01a13157-d3a7-7f49-a4a7-16de49041161",
+      "room_id": "room:01a13157-d35a-7103-ab50-fc27a027e341",
+      "channel_id": "channel:01a13157-d37b-766e-90a4-6d682d044bb1",
+      "occurred_at": "2026-10-12T18:20:01.830Z",
+      "source_event": {
+        "seq": 15,
+        "event_id": "01a13157-d3a7-7f49-a4a7-16de49041161",
+        "type": "agent.invocation-finished",
+        "schema": 2
+      },
+      "attribution": {
+        "mode": "explicit_principal",
+        "writer_principal_id": "a:019fc590-5b80-7ff0-bd8c-850a72e4761e",
+        "actor_principal_id": "a:019fc590-5b80-7ff0-bd8c-850a72e4761e"
+      },
+      "kind": "agent_invocation_update",
+      "summary": "Agent invocation replied",
+      "payload": {
+        "invocation_id": "invocation:01a13157-d396-7122-97f5-a864fd5f4f55",
+        "triggering_message": {
+          "seq": 11,
+          "event_id": "01a13157-d393-70bd-bc66-630e245e8c31",
+          "type": "message.created",
+          "schema": 2
+        },
+        "status": "succeeded",
+        "safe_error_code": null,
+        "reply_source_event": null,
+        "conversation_id": "conversation:01a13157-d386-768f-88c0-6c3a073deabe",
+        "binding_id": "binding:01a13157-d38d-7e64-baa0-5f8df91c5668",
+        "turn_ordinal": 1
+      }
+    },
+    {
+      "id": "feed-item:01a13157-d3a7-7a8a-9a38-681fb4b71aba",
+      "room_id": "room:01a13157-d35a-7103-ab50-fc27a027e341",
+      "channel_id": "channel:01a13157-d37b-766e-90a4-6d682d044bb1",
+      "occurred_at": "2026-10-12T18:20:01.830Z",
+      "source_event": {
+        "seq": 16,
+        "event_id": "01a13157-d3a7-7a8a-9a38-681fb4b71aba",
+        "type": "message.created",
+        "schema": 2
+      },
+      "attribution": {
+        "mode": "explicit_principal",
+        "writer_principal_id": "a:019fc590-5b80-7ff0-bd8c-850a72e4761e",
+        "actor_principal_id": "a:019fc590-5b80-7ff0-bd8c-850a72e4761e"
+      },
+      "kind": "human_message",
+      "summary": "Durable result",
+      "payload": {
+        "body_markdown": "Durable result",
+        "conversation_id": "conversation:01a13157-d386-768f-88c0-6c3a073deabe"
+      }
+    },
+    {
+      "id": "feed-item:01a13157-d3a8-724a-a2c2-a0a31b3bd5de",
+      "room_id": "room:01a13157-d35a-7103-ab50-fc27a027e341",
+      "channel_id": "channel:01a13157-d37b-766e-90a4-6d682d044bb1",
+      "occurred_at": "2026-10-12T18:20:01.830Z",
+      "source_event": {
+        "seq": 17,
+        "event_id": "01a13157-d3a8-724a-a2c2-a0a31b3bd5de",
+        "type": "agent.delivery-receipt-recorded",
+        "schema": 2
+      },
+      "attribution": {
+        "mode": "explicit_principal",
+        "writer_principal_id": "a:019fc590-5b80-7ff0-bd8c-850a72e4761e",
+        "actor_principal_id": "a:019fc590-5b80-7ff0-bd8c-850a72e4761e"
+      },
+      "kind": "agent_invocation_update",
+      "summary": "Agent invocation replied",
+      "payload": {
+        "invocation_id": "invocation:01a13157-d396-7122-97f5-a864fd5f4f55",
+        "triggering_message": {
+          "seq": 11,
+          "event_id": "01a13157-d393-70bd-bc66-630e245e8c31",
+          "type": "message.created",
+          "schema": 2
+        },
+        "status": "succeeded",
+        "safe_error_code": null,
+        "reply_source_event": {
+          "seq": 16,
+          "event_id": "01a13157-d3a7-7a8a-9a38-681fb4b71aba",
+          "type": "message.created",
+          "schema": 2
+        },
+        "conversation_id": "conversation:01a13157-d386-768f-88c0-6c3a073deabe",
+        "binding_id": "binding:01a13157-d38d-7e64-baa0-5f8df91c5668",
+        "turn_ordinal": 1
+      }
+    }
+  ],
+  "contract": {
+    "id": "rooms.human-shared",
+    "version": 2,
+    "schema_uri": "contracts/rooms/human-shared/v2/schema.json"
+  }
+}

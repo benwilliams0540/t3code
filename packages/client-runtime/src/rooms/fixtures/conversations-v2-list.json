@@ -1,0 +1,25 @@
+{
+  "contract": {
+    "id": "rooms.conversations",
+    "version": 2,
+    "schema_uri": "contracts/rooms/conversations/v2/schema.json"
+  },
+  "room_id": "room:01a13157-d35a-7103-ab50-fc27a027e341",
+  "channel_id": "channel:01a13157-d37b-766e-90a4-6d682d044bb1",
+  "capabilities": {
+    "conversations.read": true,
+    "conversations.create": true,
+    "conversations.message": true
+  },
+  "conversations": [
+    {
+      "id": "conversation:01a13157-d386-768f-88c0-6c3a073deabe",
+      "room_id": "room:01a13157-d35a-7103-ab50-fc27a027e341",
+      "channel_id": "channel:01a13157-d37b-766e-90a4-6d682d044bb1",
+      "title": "Build plan",
+      "created_by": "h:01a13157-d34f-78be-9b3c-0c1f26e9f571",
+      "created_at": "2026-10-12T18:20:01.798Z",
+      "status": "active"
+    }
+  ]
+}

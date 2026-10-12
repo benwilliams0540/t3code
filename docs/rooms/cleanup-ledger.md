@@ -1,6 +1,6 @@
 # Rooms cleanup ledger
 
-Read [current direction](README.md) and [architecture](../architecture/rooms.md)
+Read [current direction](../product/threadspace.md) and [architecture](../architecture/threadspace.md)
 before selecting work. This ledger contains historical source/runtime observations;
 revalidate them before use. Current status and priority belong to the linked issues
 and board. The September 29 audit did not re-deploy or re-test staging.

@@ -1,9 +1,9 @@
 # ThreadSpace product and architecture review
 
 Historical review: its source findings remain useful, but the 2026-09-29
-[current direction](README.md) and [architecture decision](../architecture/rooms.md)
-supersede its recovery-first sequencing. Use [next-task guidance](cloud-next-task.md)
-for new assignments. Implementation claims below are dated to this review.
+[current direction](../docs/product/threadspace.md) and [architecture](../docs/architecture/threadspace.md)
+supersede its recovery-first sequencing. Use the current roadmap for assignments.
+Implementation claims below are dated to this review.
 
 Status: reviewed cloud design for [#26](https://github.com/benwilliams0540/t3code/issues/26), written 2026-09-25. It is not an implementation, deployment, or change to branch defaults.
 
@@ -21,7 +21,7 @@ The client findings were rechecked at the source revision above. The report is u
 - Do not copy all server accounts, passwords or sessions into an ordinary room member's recovery copy. Define room participant continuity, explicit recovery privileges, and reauthentication separately.
 - A stable invite request ID prevents accidental duplicate issuance only if the UI handles the server's replay semantics honestly. Confirm whether a lost credential response can be recovered before promising a successful transparent retry.
 - Keep this public report anchored to public client source. The private backend companion is tracked in t3rooms#8; private implementation findings remain there.
-- The next design assignment and a smaller independent client assignment are in [cloud-next-task.md](cloud-next-task.md).
+- The task packet referenced at this revision has since been retired; current assignments live in the roadmap.
 
 Evidence labels: **[src]** implemented in source · **[test]** fixture or fake test · **[hist]** docs or reports only · **[none]** not found.
 
@@ -174,4 +174,4 @@ Open: trusted recovery devices, stale-host fencing while partitioned, host runti
 - **D4. Visibility.** Should room members see the whole T3 thread a mention starts, or only the reply, the lifecycle and a link?
 - **D5.** Implement #21 with an explicit preference migration: Shared is the ThreadSpace entry target, while existing preferences and generic T3 defaults remain respected.
 
-Next-task prompt: use [cloud-next-task.md](cloud-next-task.md). It prioritizes the hosting/recovery decision and offers a narrowly scoped client reliability task without requiring a desktop runtime in cloud.
+Historical next-task sequencing is superseded by the current product direction and roadmap.

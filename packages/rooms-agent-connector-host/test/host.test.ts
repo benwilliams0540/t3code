@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { ResidentHostConfig } from "../src/config.ts";
 import { DeliveryCursorStore } from "../src/cursorStore.ts";
 import { parseAgentDeliveryPage, type AgentDeliveryPage } from "../src/deliveryClient.ts";
-import { processDeliveryPage } from "../src/host.ts";
+import { processDeliveryPage, scanDeliveryPages } from "../src/host.ts";
 
 const directories: string[] = [];
 
@@ -205,4 +205,228 @@ describe("resident delivery page processing", () => {
       }),
     ).rejects.toMatchObject({ code: "delivery_binding_mismatch" });
   });
+});
+
+it("v2 delivery grouping does not let an uncertain A starve B and host stop uses detach", async () => {
+  const next = config();
+  const v2: ResidentHostConfig = { ...next, contract: { ...next.contract, version: 2 } };
+  const original = page();
+  const first = original.deliveries[0]!;
+  const batch: AgentDeliveryPage = {
+    ...original,
+    deliveries: [
+      { ...first, conversationId: "conversation:a", mentionedAgent: true },
+      {
+        ...first,
+        sourceSequence: 42,
+        sourceMessageId: "message:a2",
+        conversationId: "conversation:a",
+        mentionedAgent: true,
+      },
+      {
+        ...first,
+        sourceSequence: 43,
+        sourceMessageId: "message:b1",
+        conversationId: "conversation:b",
+        mentionedAgent: true,
+      },
+    ],
+  };
+  const called: string[] = [];
+  await expect(
+    processDeliveryPage({
+      config: v2,
+      page: batch,
+      expectedCursor: 40,
+      consumer: {
+        handleInbound: async (input) => {
+          expect(input.abortMode).toBe("detach");
+          called.push(input.event.conversationId!);
+          if (input.event.conversationId === "conversation:a")
+            return {
+              kind: "deferred",
+              serverInvocationId: "invocation:a",
+              connector: { kind: "uncertain", invocationId: "turn:a" },
+            };
+          return { kind: "ignored", connector: { kind: "recorded_non_mention" } };
+        },
+      },
+    }),
+  ).resolves.toMatchObject({ deferredAt: 41 });
+  expect(called).toEqual(["conversation:a", "conversation:b"]);
+});
+
+it("scans B on a later global page while retaining A's retry checkpoint", async () => {
+  const next = config();
+  const v2: ResidentHostConfig = { ...next, contract: { ...next.contract, version: 2 } };
+  const original = page();
+  const a = {
+    ...original.deliveries[0]!,
+    sourceSequence: 41,
+    conversationId: "conversation:a",
+    mentionedAgent: true,
+  };
+  const b = {
+    ...a,
+    sourceSequence: 150,
+    sourceMessageId: "message:b",
+    conversationId: "conversation:b",
+  };
+  const first: AgentDeliveryPage = {
+    ...original,
+    page: { afterSeq: 40, nextCursor: 140, sourceHeadSeq: 150, hasMore: true, reason: "advanced" },
+    deliveries: [a],
+  };
+  const second: AgentDeliveryPage = {
+    ...original,
+    page: {
+      afterSeq: 140,
+      nextCursor: 150,
+      sourceHeadSeq: 150,
+      hasMore: false,
+      reason: "advanced",
+    },
+    deliveries: [b],
+  };
+  const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "rooms-host-scan-"));
+  directories.push(directory);
+  const store = new DeliveryCursorStore(NodePath.join(directory, "cursor.sqlite"));
+  store.initialize(40);
+  const waits: number[] = [];
+  const runtimeCalls: string[] = [];
+  let bSettled = false;
+  const consumer = {
+    handleInbound: async (
+      input: Parameters<Parameters<typeof scanDeliveryPages>[0]["consumer"]["handleInbound"]>[0],
+    ) => {
+      if (input.event.conversationId === "conversation:a")
+        return {
+          kind: "deferred" as const,
+          serverInvocationId: "invocation:a",
+          connector: { kind: "uncertain" as const, invocationId: "turn:a" },
+        };
+      if (!bSettled) {
+        runtimeCalls.push("B");
+        bSettled = true;
+      }
+      return { kind: "ignored" as const, connector: { kind: "recorded_non_mention" as const } };
+    },
+  };
+  const scan = () =>
+    scanDeliveryPages({
+      config: v2,
+      cursor: store.peek()!,
+      consumer,
+      wait: async (after) => {
+        waits.push(after);
+        return after === 40 ? first : second;
+      },
+      checkpoint: (expected, cursor) => store.checkpoint(expected, cursor),
+    });
+  try {
+    expect(await scan()).toMatchObject({ cursor: 40, deferred: true, delivered: 1 });
+    expect(store.peek()).toBe(40);
+    expect(waits).toEqual([40, 140]);
+    expect(runtimeCalls).toEqual(["B"]);
+    expect(await scan()).toMatchObject({ cursor: 40, deferred: true, delivered: 1 });
+    expect(runtimeCalls).toEqual(["B"]);
+    expect(waits).toEqual([40, 140, 40, 140]);
+  } finally {
+    store.close();
+  }
+});
+
+it("failed later-page read cannot leave an unreturned checkpoint ahead of host retry state", async () => {
+  const next = config();
+  const v2: ResidentHostConfig = { ...next, contract: { ...next.contract, version: 2 } };
+  const first = {
+    ...page(),
+    page: {
+      afterSeq: 40,
+      nextCursor: 140,
+      sourceHeadSeq: 150,
+      hasMore: true,
+      reason: "advanced" as const,
+    },
+    deliveries: [],
+  };
+  const checkpoints: number[] = [];
+  await expect(
+    scanDeliveryPages({
+      config: v2,
+      cursor: 40,
+      consumer: {
+        handleInbound: async () => ({
+          kind: "ignored",
+          connector: { kind: "recorded_non_mention" },
+        }),
+      },
+      wait: async (after) => {
+        if (after === 40) return first;
+        throw new Error("lost later page");
+      },
+      checkpoint: (_expected, next) => {
+        checkpoints.push(next);
+        return next;
+      },
+    }),
+  ).rejects.toThrow(/lost later page/);
+  expect(checkpoints).toEqual([]);
+});
+
+it("conversation-only host counts historical unsupported mentions and continues new conversations", async () => {
+  const { nativeT3: _legacy, ...base } = config();
+  const v2: ResidentHostConfig = { ...base, contract: { ...base.contract, version: 2 } };
+  const original = page();
+  const historical = { ...original.deliveries[0]!, mentionedAgent: true };
+  const current = {
+    ...historical,
+    sourceSequence: 43,
+    sourceMessageId: "message:conversation",
+    conversationId: "conversation:a",
+  };
+  const calls: string[] = [];
+  const result = await processDeliveryPage({
+    config: v2,
+    page: { ...original, deliveries: [historical, current] },
+    expectedCursor: 40,
+    consumer: {
+      handleInbound: async (input) => {
+        calls.push(input.event.sourceMessageId);
+        expect(input.environmentId).toBeUndefined();
+        return { kind: "ignored", connector: { kind: "recorded_non_mention" } };
+      },
+    },
+  });
+  expect(result).toMatchObject({ nextCursor: 43, delivered: 1, ignored: 1, unsupported: 1 });
+  expect(calls).toEqual(["message:conversation"]);
+});
+
+it("missing-session outcome holds its source checkpoint and lets other conversations finish", async () => {
+  const next = config();
+  const v2: ResidentHostConfig = { ...next, contract: { ...next.contract, version: 2 } };
+  const original = page();
+  const a = { ...original.deliveries[0]!, mentionedAgent: true, conversationId: "conversation:a" };
+  const b = {
+    ...a,
+    sourceSequence: 43,
+    sourceMessageId: "message:b",
+    conversationId: "conversation:b",
+  };
+  const seen: string[] = [];
+  const handled = await processDeliveryPage({
+    config: v2,
+    page: { ...original, deliveries: [a, b] },
+    expectedCursor: 40,
+    consumer: {
+      handleInbound: async (input) => {
+        seen.push(input.event.conversationId!);
+        return input.event.conversationId === "conversation:a"
+          ? { kind: "blocked", code: "runtime_session_missing", bindingId: "binding:a" }
+          : { kind: "ignored", connector: { kind: "recorded_non_mention" } };
+      },
+    },
+  });
+  expect(handled).toMatchObject({ deferredAt: 41, delivered: 1 });
+  expect(seen).toEqual(["conversation:a", "conversation:b"]);
 });

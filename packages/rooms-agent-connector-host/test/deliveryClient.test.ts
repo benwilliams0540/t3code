@@ -1,3 +1,5 @@
+// @effect-diagnostics nodeBuiltinImport:off - Local producer fixture validates the standalone delivery boundary.
+import * as NodeFS from "node:fs";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -113,4 +115,22 @@ describe("rooms.agent-deliveries v1 client", () => {
     controller.abort();
     await expect(pending).rejects.toMatchObject({ code: "delivery_cancelled" });
   });
+});
+
+it("reads the service-produced v2 conversation deliveries and preserves source identity", () => {
+  const fixture = JSON.parse(
+    NodeFS.readFileSync(
+      new URL(
+        "../../rooms-agent-connector/test/fixtures/conversation-runtime-v2.json",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
+  const page = parseAgentDeliveryPage(fixture.deliveries);
+  expect(page.deliveries[0]?.conversationId).toBe(fixture.binding.binding.conversation_id);
+  expect(toInboundEvent(page.deliveries[0]!, "claw").conversationId).toBe(
+    fixture.binding.binding.conversation_id,
+  );
+  expect(page.deliveries[1]?.mentionedAgent).toBe(false);
 });

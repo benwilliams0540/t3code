@@ -1,6 +1,11 @@
-# Architecture
+# Coding runtime architecture
 
-T3 Code runs as a **Node.js WebSocket server** that wraps `codex app-server` (JSON-RPC over stdio) and serves a React web app.
+Threadspace's [product architecture](threadspace.md) separates shared Rooms
+backend state, client state and runtime execution. This document describes the
+existing T3 coding runtime inside that product.
+
+The coding runtime runs as a **Node.js WebSocket server** that wraps provider
+processes such as `codex app-server` (JSON-RPC over stdio) and serves a React web app.
 
 ```
 ┌─────────────────────────────────┐

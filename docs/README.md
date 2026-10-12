@@ -1,9 +1,10 @@
-# Documentation
+# Threadspace documentation
 
+- [Product direction](./product/threadspace.md)
 - [Getting started](./getting-started/quick-start.md)
 - Architecture
   - [Overview](./architecture/overview.md)
-  - [ThreadSpace Rooms architecture](./architecture/rooms.md)
+  - [Threadspace ownership and contracts](./architecture/threadspace.md)
   - [Connection runtime](./architecture/connection-runtime.md)
   - [Remote environments](./architecture/remote.md)
   - [Server updates](./architecture/server-updates.md)
@@ -11,13 +12,12 @@
   - [Background service](./user/background-service.md)
   - [Rooms](./user/rooms.md)
   - [Remote access](./user/remote-access.md)
-  - [Keeping T3 Code in sync](./user/server-updates.md)
+  - [Keeping the coding runtime in sync](./user/server-updates.md)
   - [Keybindings](./user/keybindings.md)
 - [T3 Connect](./cloud/t3-connect-clerk.md)
 - [Shared Rooms human identity](./rooms/shared-human-identity.md)
-- [ThreadSpace Rooms vision and work order](./rooms/README.md)
 - [Integrations](./integrations/source-control-providers.md)
-- [Mobile](./mobile/app.md)
+- [Mobile development](../apps/mobile/README.md)
 - Operations
   - [CI](./operations/ci.md)
   - [Release](./operations/release.md)

@@ -1,3 +1,4 @@
+import { RoomsHumanFeed as RoomsHumanFeedV2 } from "@t3tools/client-runtime/rooms/human-wire";
 import * as Schema from "effect/Schema";
 
 export const ROOMS_HUMAN_CONTRACT_ID = "rooms.human-shared" as const;
@@ -132,7 +133,7 @@ const RoomsUnknownFeedItem = Schema.Struct({
 export const RoomsHumanFeedItem = Schema.Union([RoomsHumanMessage, RoomsUnknownFeedItem]);
 export type RoomsHumanFeedItem = typeof RoomsHumanFeedItem.Type;
 
-export const RoomsHumanFeed = Schema.Struct({
+const RoomsHumanFeedV1 = Schema.Struct({
   contract: RoomsHumanContract,
   room_id: Schema.String,
   channel_id: Schema.String,
@@ -145,6 +146,7 @@ export const RoomsHumanFeed = Schema.Struct({
   }),
   items: Schema.Array(RoomsHumanFeedItem),
 });
+export const RoomsHumanFeed = Schema.Union([RoomsHumanFeedV1, RoomsHumanFeedV2]);
 export type RoomsHumanFeed = typeof RoomsHumanFeed.Type;
 
 export const RoomsRealtimeEvent = Schema.Struct({

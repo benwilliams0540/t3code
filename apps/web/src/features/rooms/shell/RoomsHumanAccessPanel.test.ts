@@ -29,7 +29,7 @@ describe("shared Rooms access state copy", () => {
     expect(roomsHumanAccessCopy(state("invited"))[0]).toContain("Invitation");
     expect(roomsHumanAccessCopy(state("expired"))[0]).toContain("expired");
     expect(roomsHumanAccessCopy(state("authorization-failure"))[0]).toContain("authorization");
-    expect(roomsHumanAccessCopy(state("invalid-configuration"))[0]).toContain("not configured");
+    expect(roomsHumanAccessCopy(state("invalid-configuration"))[0]).toBe("Choose a room server");
     expect(roomsHumanAccessCopy(state("error"))[0]).toContain("unavailable");
   });
 

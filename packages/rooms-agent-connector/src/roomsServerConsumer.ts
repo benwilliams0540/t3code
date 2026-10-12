@@ -18,7 +18,10 @@ import {
   type ContextCandidateMessage,
   type InboundChannelEvent,
   type ResidentAgentResult,
+  type OpenClawSessionBinding,
 } from "./contracts.ts";
+import { deriveInvocationId } from "./invocationId.ts";
+import type { ResidentAgentGatewayTransport } from "./gatewayTransport.ts";
 import { SqliteInvocationStore } from "./sqliteInvocationStore.ts";
 
 export const ROOMS_INVOCATIONS_CONTRACT = {
@@ -51,11 +54,22 @@ export interface RoomsServerInvocation {
   };
   readonly roomId: string;
   readonly channelId: string;
+  readonly conversationId?: string;
+  readonly bindingId?: string;
+  readonly turnOrdinal?: number;
+  readonly turnState?: "queued" | "ready" | "dispatching" | "accepted" | "uncertain" | "terminal";
+  readonly runtimeRunId?: string | null;
+  readonly runtimeTarget?: {
+    readonly kind: "openclaw";
+    readonly hostId: string;
+    readonly agentId: string;
+    readonly sessionKey: string;
+  };
   readonly invokingThread: {
     readonly environmentId: string;
     readonly projectId: string;
     readonly threadId: string;
-  };
+  } | null;
   readonly context: {
     readonly cutoffSequence: number;
     readonly sourceHeadSequence: number;
@@ -72,7 +86,8 @@ export interface RoomsServerInvocation {
 }
 
 export interface RoomsInvocationResponse {
-  readonly contract: typeof ROOMS_INVOCATIONS_CONTRACT;
+  readonly contract: { readonly id: "rooms.agent-invocations"; readonly version: 1 | 2 };
+  readonly dispatchAllowed?: boolean;
   readonly invocation: RoomsServerInvocation;
   readonly replayed?: boolean;
 }
@@ -98,6 +113,68 @@ export interface RoomsInvocationFinishInput {
   readonly status: RoomsTerminalStatus;
   readonly safeErrorCode: RoomsSafeFailureCode | null;
   readonly replyMarkdown: string | null;
+}
+
+export interface RoomsConversationBinding {
+  readonly id: string;
+  readonly conversationId: string;
+  readonly roomId: string;
+  readonly channelId: string;
+  readonly agentPrincipalId: string;
+  readonly machinePrincipalId: string;
+  readonly initializationState: "initializing" | "ready" | "missing";
+  readonly target: {
+    readonly kind: "openclaw";
+    readonly hostId: string;
+    readonly agentId: string;
+    readonly sessionKey: string;
+  };
+  readonly reference: { readonly sessionKey: string; readonly sessionId: string } | null;
+}
+
+export interface RoomsConversationClient {
+  reserve(input: {
+    readonly conversationId: string;
+    readonly connectorId: string;
+    readonly configurationEpoch: number;
+    readonly hostId: string;
+    readonly agentId: string;
+  }): Promise<RoomsConversationBinding>;
+  initialize(input: {
+    readonly bindingId: string;
+    readonly connectorId: string;
+    readonly configurationEpoch: number;
+    readonly receiptId: string;
+    readonly reference: OpenClawSessionBinding;
+  }): Promise<RoomsConversationBinding>;
+  missing(input: {
+    readonly bindingId: string;
+    readonly connectorId: string;
+    readonly configurationEpoch: number;
+  }): Promise<void>;
+  startTurn(
+    input: Omit<RoomsInvocationStartInput, "environmentId" | "projectId" | "threadId"> & {
+      readonly bindingId: string;
+    },
+  ): Promise<RoomsInvocationResponse>;
+  getTurn(
+    invocationId: string,
+    scope: { readonly connectorId: string; readonly configurationEpoch: number },
+  ): Promise<RoomsInvocationResponse>;
+  dispatch(input: {
+    readonly invocationId: string;
+    readonly connectorId: string;
+    readonly configurationEpoch: number;
+  }): Promise<RoomsInvocationResponse>;
+  runtime(input: {
+    readonly invocationId: string;
+    readonly connectorId: string;
+    readonly configurationEpoch: number;
+    readonly state: "accepted" | "uncertain";
+    readonly runtimeRunId: string | null;
+  }): Promise<RoomsInvocationResponse>;
+  finishTurn(input: RoomsInvocationFinishInput): Promise<RoomsInvocationResponse>;
+  context(invocation: RoomsServerInvocation): Promise<readonly ContextCandidateMessage[]>;
 }
 
 export interface RoomsInvocationClient {
@@ -209,12 +286,90 @@ const safeFailureCode = (value: unknown): RoomsSafeFailureCode | null => {
   });
 };
 
+const parseTurnState = (value: unknown): NonNullable<RoomsServerInvocation["turnState"]> => {
+  if (
+    !["queued", "ready", "dispatching", "accepted", "uncertain", "terminal"].includes(String(value))
+  )
+    throw new RoomsServerClientError({
+      code: "rooms_server_contract_drift",
+      status: 502,
+      message: "Invalid conversation turn state.",
+    });
+  return value as NonNullable<RoomsServerInvocation["turnState"]>;
+};
+const parseConversationContract = (value: unknown): void => {
+  const contract = record(value, "conversation contract");
+  if (
+    contract.id !== "rooms.conversations" ||
+    contract.version !== 2 ||
+    contract.schema_uri !== "contracts/rooms/conversations/v2/schema.json"
+  )
+    throw new RoomsServerClientError({
+      code: "rooms_server_contract_drift",
+      status: 502,
+      message: "Unsupported conversation contract.",
+    });
+};
+const parseConversationBinding = (value: unknown): RoomsConversationBinding => {
+  const body = record(value, "binding response");
+  parseConversationContract(body.contract);
+  const binding = record(body.binding, "conversation binding");
+  const target = record(binding.runtime_target, "binding target");
+  if (
+    target.kind !== "openclaw" ||
+    !["initializing", "ready", "missing"].includes(String(binding.initialization_state))
+  )
+    throw new RoomsServerClientError({
+      code: "rooms_runtime_unsupported",
+      status: 422,
+      message: "Unsupported runtime binding.",
+    });
+  const reference =
+    binding.runtime_reference === null
+      ? null
+      : record(binding.runtime_reference, "binding reference");
+  const parsed: RoomsConversationBinding = {
+    id: textValue(binding.id, "binding ID"),
+    conversationId: textValue(binding.conversation_id, "binding conversation"),
+    roomId: textValue(binding.room_id, "binding room"),
+    channelId: textValue(binding.channel_id, "binding channel"),
+    agentPrincipalId: textValue(binding.agent_principal_id, "binding agent"),
+    machinePrincipalId: textValue(binding.machine_principal_id, "binding machine"),
+    initializationState:
+      binding.initialization_state as RoomsConversationBinding["initializationState"],
+    target: {
+      kind: "openclaw",
+      hostId: textValue(target.host_id, "binding host", 128),
+      agentId: textValue(target.agent_id, "binding runtime agent", 128),
+      sessionKey: textValue(target.session_key, "binding planned session"),
+    },
+    reference: reference
+      ? {
+          sessionKey: textValue(reference.session_key, "bound session key"),
+          sessionId: textValue(reference.session_id, "bound session ID", 128),
+        }
+      : null,
+  };
+  if (
+    (parsed.initializationState === "ready" && !parsed.reference) ||
+    (parsed.reference && parsed.reference.sessionKey !== parsed.target.sessionKey)
+  )
+    throw new RoomsServerClientError({
+      code: "rooms_server_contract_drift",
+      status: 502,
+      message: "Binding receipt does not match its reservation.",
+    });
+  return parsed;
+};
+
 const parseInvocationResponse = (value: unknown): RoomsInvocationResponse => {
   const body = record(value, "response");
   const contract = record(body.contract, "contract");
   if (
     contract.id !== ROOMS_INVOCATIONS_CONTRACT.id ||
-    contract.version !== ROOMS_INVOCATIONS_CONTRACT.version
+    (contract.version !== 1 && contract.version !== 2) ||
+    (contract.version === 2 &&
+      contract.schema_uri !== "contracts/rooms/agent-invocations/v2/schema.json")
   ) {
     throw new RoomsServerClientError({
       code: "rooms_server_contract_drift",
@@ -222,10 +377,25 @@ const parseInvocationResponse = (value: unknown): RoomsInvocationResponse => {
       message: "Rooms invocation contract version drifted.",
     });
   }
+  if (body.dispatch_allowed !== undefined && typeof body.dispatch_allowed !== "boolean")
+    throw new RoomsServerClientError({
+      code: "rooms_server_contract_drift",
+      status: 502,
+      message: "Dispatch receipt is not boolean.",
+    });
   const invocation = record(body.invocation, "invocation");
   const connector = record(invocation.connector, "invocation connector");
   const agent = record(invocation.agent, "invocation agent");
-  const invokingThread = record(invocation.invoking_thread, "invoking thread");
+  const invokingThread =
+    contract.version === 1 ? record(invocation.invoking_thread, "invoking thread") : null;
+  const runtimeTarget =
+    contract.version === 2 ? record(invocation.runtime_target, "runtime target") : null;
+  if (runtimeTarget && runtimeTarget.kind !== "openclaw")
+    throw new RoomsServerClientError({
+      code: "rooms_runtime_unsupported",
+      status: 422,
+      message: "This connector cannot execute a native T3 conversation target.",
+    });
   const context = record(invocation.context, "invocation context");
   const status = invocation.status;
   if (status !== "running" && status !== "succeeded" && status !== "failed") {
@@ -287,7 +457,10 @@ const parseInvocationResponse = (value: unknown): RoomsInvocationResponse => {
     });
   }
   return {
-    contract: ROOMS_INVOCATIONS_CONTRACT,
+    contract: { id: ROOMS_INVOCATIONS_CONTRACT.id, version: contract.version },
+    ...(body.dispatch_allowed === undefined
+      ? {}
+      : { dispatchAllowed: body.dispatch_allowed === true }),
     invocation: {
       id: textValue(invocation.id, "invocation ID", 64),
       status,
@@ -305,11 +478,31 @@ const parseInvocationResponse = (value: unknown): RoomsInvocationResponse => {
       },
       roomId: textValue(invocation.room_id, "room ID", 64),
       channelId: textValue(invocation.channel_id, "channel ID", 64),
-      invokingThread: {
-        environmentId: textValue(invokingThread.environment_id, "environment ID"),
-        projectId: textValue(invokingThread.project_id, "project ID"),
-        threadId: textValue(invokingThread.thread_id, "thread ID"),
-      },
+      invokingThread: invokingThread
+        ? {
+            environmentId: textValue(invokingThread.environment_id, "environment ID"),
+            projectId: textValue(invokingThread.project_id, "project ID"),
+            threadId: textValue(invokingThread.thread_id, "thread ID"),
+          }
+        : null,
+      ...(runtimeTarget
+        ? {
+            conversationId: textValue(invocation.conversation_id, "conversation ID"),
+            bindingId: textValue(invocation.binding_id, "binding ID"),
+            turnOrdinal: integer(invocation.turn_ordinal, "turn ordinal", 1),
+            turnState: parseTurnState(invocation.turn_state),
+            runtimeRunId:
+              invocation.runtime_run_id === null
+                ? null
+                : textValue(invocation.runtime_run_id, "runtime run ID", 128),
+            runtimeTarget: {
+              kind: "openclaw" as const,
+              hostId: textValue(runtimeTarget.host_id, "runtime host ID", 128),
+              agentId: textValue(runtimeTarget.agent_id, "runtime agent ID", 128),
+              sessionKey: textValue(runtimeTarget.session_key, "runtime session key"),
+            },
+          }
+        : {}),
       context: {
         cutoffSequence: integer(context.cutoff_seq, "context cutoff sequence", 0),
         sourceHeadSequence: integer(context.source_head_seq, "source head sequence", 0),
@@ -349,7 +542,7 @@ const parseServerError = (status: number, value: unknown): RoomsServerClientErro
   });
 };
 
-export class RoomsInvocationHttpClient implements RoomsInvocationClient {
+export class RoomsInvocationHttpClient implements RoomsInvocationClient, RoomsConversationClient {
   readonly #baseUrl: string;
   readonly #bearerToken: string;
   readonly #fetch: typeof globalThis.fetch;
@@ -406,7 +599,198 @@ export class RoomsInvocationHttpClient implements RoomsInvocationClient {
     });
   }
 
+  #headers(input: {
+    readonly connectorId: string;
+    readonly configurationEpoch: number;
+  }): Record<string, string> {
+    return {
+      "x-rooms-connector-id": input.connectorId,
+      "x-rooms-configuration-epoch": String(input.configurationEpoch),
+    };
+  }
+
+  async reserve(
+    input: Parameters<RoomsConversationClient["reserve"]>[0],
+  ): Promise<RoomsConversationBinding> {
+    return parseConversationBinding(
+      await this.#requestRaw(
+        `/agent/v2/conversations/${encodeURIComponent(input.conversationId)}/bindings`,
+        {
+          method: "POST",
+          headers: this.#headers(input),
+          body: JSON.stringify({
+            runtime_target: { kind: "openclaw", host_id: input.hostId, agent_id: input.agentId },
+          }),
+        },
+      ),
+    );
+  }
+  async initialize(
+    input: Parameters<RoomsConversationClient["initialize"]>[0],
+  ): Promise<RoomsConversationBinding> {
+    return parseConversationBinding(
+      await this.#requestRaw(
+        `/agent/v2/bindings/${encodeURIComponent(input.bindingId)}/initialization`,
+        {
+          method: "POST",
+          headers: this.#headers(input),
+          body: JSON.stringify({
+            receipt_id: input.receiptId,
+            runtime_reference: {
+              session_key: input.reference.sessionKey,
+              session_id: input.reference.sessionId,
+            },
+          }),
+        },
+      ),
+    );
+  }
+  async missing(input: Parameters<RoomsConversationClient["missing"]>[0]): Promise<void> {
+    await this.#requestRaw(`/agent/v2/bindings/${encodeURIComponent(input.bindingId)}/missing`, {
+      method: "POST",
+      headers: this.#headers(input),
+      body: "{}",
+    });
+  }
+  startTurn(
+    input: Parameters<RoomsConversationClient["startTurn"]>[0],
+  ): Promise<RoomsInvocationResponse> {
+    return this.#request("/agent/v2/invocations", {
+      method: "POST",
+      headers: { ...this.#headers(input), "x-rooms-delivery-id": input.deliveryId },
+      body: JSON.stringify({
+        binding_id: input.bindingId,
+        channel_id: input.channelId,
+        context_cutoff_seq: input.contextCutoffSequence,
+        source_head_seq: input.sourceHeadSequence,
+      }),
+    });
+  }
+  getTurn(
+    invocationId: string,
+    scope: { readonly connectorId: string; readonly configurationEpoch: number },
+  ): Promise<RoomsInvocationResponse> {
+    return this.#request(`/agent/v2/invocations/${encodeURIComponent(invocationId)}`, {
+      method: "GET",
+      headers: this.#headers(scope),
+    });
+  }
+  dispatch(
+    input: Parameters<RoomsConversationClient["dispatch"]>[0],
+  ): Promise<RoomsInvocationResponse> {
+    return this.#request(
+      `/agent/v2/invocations/${encodeURIComponent(input.invocationId)}/dispatch`,
+      { method: "POST", headers: this.#headers(input), body: "{}" },
+    );
+  }
+  runtime(
+    input: Parameters<RoomsConversationClient["runtime"]>[0],
+  ): Promise<RoomsInvocationResponse> {
+    return this.#request(
+      `/agent/v2/invocations/${encodeURIComponent(input.invocationId)}/runtime`,
+      {
+        method: "POST",
+        headers: this.#headers(input),
+        body: JSON.stringify({ state: input.state, runtime_run_id: input.runtimeRunId }),
+      },
+    );
+  }
+  finishTurn(input: RoomsInvocationFinishInput): Promise<RoomsInvocationResponse> {
+    return this.#request(`/agent/v2/invocations/${encodeURIComponent(input.invocationId)}/result`, {
+      method: "POST",
+      headers: {
+        ...this.#headers(input),
+        "x-rooms-result-id": input.resultId,
+        "x-rooms-receipt-id": input.receiptId,
+      },
+      body: JSON.stringify({
+        status: input.status,
+        safe_error_code: input.safeErrorCode,
+        reply_markdown: input.replyMarkdown,
+      }),
+    });
+  }
+  async context(invocation: RoomsServerInvocation): Promise<readonly ContextCandidateMessage[]> {
+    const messages: ContextCandidateMessage[] = [];
+    let after = 0;
+    for (;;) {
+      const query = new URLSearchParams({
+        context_cutoff_seq: String(invocation.context.cutoffSequence),
+        source_head_seq: String(invocation.context.sourceHeadSequence),
+        after_seq: String(after),
+        limit: "50",
+      });
+      const body = record(
+        await this.#requestRaw(
+          `/agent/v2/conversations/${encodeURIComponent(invocation.conversationId!)}/context?${query}`,
+          { method: "GET" },
+        ),
+        "conversation context",
+      );
+      parseConversationContract(body.contract);
+      const conversation = record(body.conversation, "context conversation");
+      const context = record(body.context, "context bounds");
+      const feed = record(body.feed, "context feed");
+      const page = record(feed.page_info, "context page");
+      if (
+        conversation.id !== invocation.conversationId ||
+        conversation.room_id !== invocation.roomId ||
+        conversation.channel_id !== invocation.channelId ||
+        context.cutoff_seq !== invocation.context.cutoffSequence ||
+        context.source_head_seq !== invocation.context.sourceHeadSequence ||
+        page.snapshot_head_seq !== invocation.context.cutoffSequence ||
+        !Array.isArray(feed.items)
+      )
+        throw new RoomsServerClientError({
+          code: "rooms_server_contract_drift",
+          status: 502,
+          message: "Conversation context scope or bounds changed.",
+        });
+      for (const raw of feed.items) {
+        const item = record(raw, "conversation message");
+        const source = record(item.source_event, "message source");
+        const payload = record(item.payload, "message payload");
+        if (item.kind !== "human_message" || payload.conversation_id !== invocation.conversationId)
+          continue;
+        const seq = integer(source.seq, "message sequence", 1);
+        if (seq <= after || seq > invocation.context.cutoffSequence)
+          throw new RoomsServerClientError({
+            code: "rooms_server_contract_drift",
+            status: 502,
+            message: "Conversation message is outside pinned context.",
+          });
+        messages.push({
+          roomId: invocation.roomId,
+          channelId: invocation.channelId,
+          sourceMessageId: textValue(source.event_id, "message ID", 64),
+          sequence: seq,
+          authorPrincipalId: textValue(
+            record(item.attribution, "message attribution").actor_principal_id,
+            "message author",
+            64,
+          ),
+          bodyMarkdown: textValue(payload.body_markdown, "message Markdown", 10000),
+          occurredAt: textValue(item.occurred_at, "message instant", 64),
+        });
+      }
+      // Keep only the context budget, while draining the pinned feed to its actual head.
+      if (messages.length > 20) messages.splice(0, messages.length - 20);
+      if (page.has_more === false) return messages;
+      const next = integer(page.next_cursor, "context cursor", 1);
+      if (next <= after || next > invocation.context.cutoffSequence)
+        throw new RoomsServerClientError({
+          code: "rooms_server_contract_drift",
+          status: 502,
+          message: "Conversation context cursor did not advance safely.",
+        });
+      after = next;
+    }
+  }
+
   async #request(path: string, init: RequestInit): Promise<RoomsInvocationResponse> {
+    return parseInvocationResponse(await this.#requestRaw(path, init));
+  }
+  async #requestRaw(path: string, init: RequestInit): Promise<unknown> {
     let response: Response;
     try {
       response = await this.#fetch(`${this.#baseUrl}${path}`, {
@@ -437,7 +821,7 @@ export class RoomsInvocationHttpClient implements RoomsInvocationClient {
       });
     }
     if (!response.ok) throw parseServerError(response.status, body);
-    return parseInvocationResponse(body);
+    return body;
   }
 }
 
@@ -610,6 +994,8 @@ const recognizedRateLimitCodes = new Set([
 const recognizedRequestRejectionCodes = new Set([
   "gateway_protocol_mismatch",
   "gateway_request_rejected",
+  "gateway_scope_required",
+  "gateway_authentication_failed",
 ]);
 
 export const normalizeRoomsFailure = (result: ResidentAgentResult): RoomsSafeFailureCode => {
@@ -688,6 +1074,11 @@ const candidateMessages = (
 };
 
 export type RoomsResidentConsumerOutcome =
+  | {
+      readonly kind: "blocked";
+      readonly code: "runtime_session_missing";
+      readonly bindingId: string;
+    }
   | { readonly kind: "ignored"; readonly connector: ConnectorHandlingOutcome }
   | { readonly kind: "server_terminal"; readonly invocation: RoomsServerInvocation }
   | {
@@ -707,6 +1098,8 @@ export class RoomsResidentAgentConsumer {
   readonly #connectorStore: SqliteInvocationStore;
   readonly #connector: RoomsResidentAgentConnector;
   readonly #roomsClientFactory: RoomsAgentClientFactory;
+  readonly #conversations: RoomsConversationClient | undefined;
+  readonly #transport: ResidentAgentGatewayTransport | undefined;
 
   constructor(input: {
     readonly invocations: RoomsInvocationClient;
@@ -714,21 +1107,26 @@ export class RoomsResidentAgentConsumer {
     readonly connectorStore: SqliteInvocationStore;
     readonly connector: RoomsResidentAgentConnector;
     readonly roomsClientFactory: RoomsAgentClientFactory;
+    readonly conversations?: RoomsConversationClient;
+    readonly transport?: ResidentAgentGatewayTransport;
   }) {
     this.#invocations = input.invocations;
     this.#mappingStore = input.mappingStore;
     this.#connectorStore = input.connectorStore;
     this.#connector = input.connector;
     this.#roomsClientFactory = input.roomsClientFactory;
+    this.#conversations = input.conversations;
+    this.#transport = input.transport;
   }
 
   async handleInbound(input: {
     readonly event: InboundChannelEvent;
-    readonly environmentId: string;
-    readonly projectId: string;
-    readonly threadId: string;
+    readonly environmentId?: string;
+    readonly projectId?: string;
+    readonly threadId?: string;
     readonly sourceHeadSequence: number;
     readonly signal?: AbortSignal;
+    readonly abortMode?: "cancel" | "detach";
   }): Promise<RoomsResidentConsumerOutcome> {
     const event = sanitizeInboundEvent(input.event);
     const binding = this.#connectorStore.getBinding(event.connectorId);
@@ -741,6 +1139,18 @@ export class RoomsResidentAgentConsumer {
         connector: await this.#connector.handleInbound({ event, context: [] }),
       };
     }
+    if (event.conversationId) return this.#handleConversation({ ...input, event });
+    if (!input.environmentId || !input.projectId || !input.threadId)
+      throw new ConnectorContractError(
+        "native_target_required",
+        "Legacy one-shot delivery requires its real native T3 target.",
+      );
+    const native = {
+      environmentId: input.environmentId,
+      projectId: input.projectId,
+      threadId: input.threadId,
+      sourceHeadSequence: input.sourceHeadSequence,
+    };
     const deliveryId = deriveRoomsDeliveryId(event);
     let response: RoomsInvocationResponse;
     const acknowledged = this.#mappingStore.get(deliveryId);
@@ -770,7 +1180,7 @@ export class RoomsResidentAgentConsumer {
         binding.connectorId,
         binding.configVersion,
         event,
-        input,
+        native,
       );
       this.#mappingStore.acknowledge(deliveryId, {
         serverInvocationId: response.invocation.id,
@@ -831,6 +1241,239 @@ export class RoomsResidentAgentConsumer {
     );
   }
 
+  async #handleConversation(input: {
+    readonly event: InboundChannelEvent;
+    readonly sourceHeadSequence: number;
+    readonly signal?: AbortSignal;
+    readonly abortMode?: "cancel" | "detach";
+  }): Promise<RoomsResidentConsumerOutcome> {
+    const api = this.#conversations;
+    const initialize = this.#transport?.initializeSession;
+    if (!api || !initialize)
+      throw new ConnectorContractError(
+        "conversation_runtime_unsupported",
+        "Persistent conversation execution is not configured.",
+      );
+    const event = input.event;
+    const connectorBinding = this.#connectorStore.getBinding(event.connectorId)!;
+    const scope = {
+      connectorId: connectorBinding.connectorId,
+      configurationEpoch: connectorBinding.configVersion,
+    };
+    let binding = await api.reserve({
+      ...scope,
+      conversationId: event.conversationId!,
+      hostId: connectorBinding.openClawHostId,
+      agentId: connectorBinding.openClawAgentId,
+    });
+    const assertBinding = (): void => {
+      if (
+        binding.conversationId !== event.conversationId ||
+        binding.roomId !== event.roomId ||
+        binding.channelId !== event.channelId ||
+        binding.agentPrincipalId !== connectorBinding.agentPrincipalId ||
+        binding.target.hostId !== connectorBinding.openClawHostId ||
+        binding.target.agentId !== connectorBinding.openClawAgentId
+      )
+        throw new ConnectorContractError(
+          "conversation_binding_mismatch",
+          "Conversation binding differs from the authenticated connector scope.",
+        );
+    };
+    assertBinding();
+    if (binding.initializationState === "missing")
+      return { kind: "blocked", code: "runtime_session_missing", bindingId: binding.id };
+    if (binding.initializationState === "initializing") {
+      const reference = await initialize.call(this.#transport, {
+        bindingId: binding.id,
+        conversationId: binding.conversationId,
+        sessionKey: binding.target.sessionKey,
+      });
+      binding = await api.initialize({
+        ...scope,
+        bindingId: binding.id,
+        receiptId: `rooms:initialization:${sha256Hex(binding.id)}`,
+        reference,
+      });
+      assertBinding();
+    }
+    if (binding.initializationState !== "ready" || !binding.reference)
+      throw new ConnectorContractError(
+        "binding_not_ready",
+        "Runtime initialization has no durable receipt.",
+      );
+    const runtimeBinding = {
+      bindingId: binding.id,
+      conversationId: binding.conversationId,
+      ...binding.reference,
+    };
+    const deliveryId = deriveRoomsDeliveryId(event);
+    const acknowledged = this.#mappingStore.get(deliveryId);
+    let response = acknowledged
+      ? await api.getTurn(acknowledged.serverInvocationId, scope)
+      : await api.startTurn({
+          ...scope,
+          deliveryId,
+          bindingId: binding.id,
+          channelId: event.channelId,
+          contextCutoffSequence: event.sourceSequence,
+          sourceHeadSequence: event.sourceSequence,
+        });
+    if (acknowledged) this.#assertAcknowledged(response.invocation, acknowledged);
+    const assertTurn = (): void => {
+      const turn = response.invocation;
+      if (
+        response.contract.version !== 2 ||
+        turn.conversationId !== binding.conversationId ||
+        turn.bindingId !== binding.id ||
+        turn.roomId !== event.roomId ||
+        turn.channelId !== event.channelId ||
+        turn.agent.principalId !== binding.agentPrincipalId ||
+        turn.agent.hostMachinePrincipalId !== binding.machinePrincipalId ||
+        turn.connector.id !== scope.connectorId ||
+        turn.connector.configurationEpoch !== scope.configurationEpoch ||
+        turn.context.cutoffSequence !== event.sourceSequence ||
+        turn.context.sourceHeadSequence !== event.sourceSequence ||
+        canonicalJson(turn.runtimeTarget) !== canonicalJson(binding.target)
+      )
+        throw new ConnectorContractError(
+          "conversation_turn_mismatch",
+          "Durable turn differs from its delivery and runtime binding.",
+        );
+    };
+    assertTurn();
+    if (!acknowledged)
+      this.#mappingStore.acknowledge(deliveryId, {
+        serverInvocationId: response.invocation.id,
+        ...scope,
+      });
+    if (response.invocation.status !== "running")
+      return { kind: "server_terminal", invocation: response.invocation };
+    const deferred = (uncertain = false): RoomsResidentConsumerOutcome => ({
+      kind: "deferred",
+      serverInvocationId: response.invocation.id,
+      connector: {
+        kind: uncertain ? "uncertain" : "already_running",
+        invocationId: deriveInvocationId(event.connectorId, event.sourceMessageId),
+      },
+    });
+    if (!connectorBinding.enabled && ["queued", "ready"].includes(response.invocation.turnState!))
+      return this.#finish(response.invocation, deliveryId, cancelledTerminalInput());
+    const cached = this.#connectorStore.getInvocation(
+      deriveInvocationId(event.connectorId, event.sourceMessageId),
+    );
+    if (
+      cached &&
+      canonicalJson(cached.invocation.runtimeBinding ?? null) !== canonicalJson(runtimeBinding)
+    )
+      throw new ConnectorContractError(
+        "runtime_binding_mismatch",
+        "Cached invocation belongs to a different durable runtime binding.",
+      );
+    if (
+      cached?.gatewayRunId &&
+      response.invocation.runtimeRunId &&
+      cached.gatewayRunId !== response.invocation.runtimeRunId
+    )
+      throw new ConnectorContractError(
+        "runtime_run_mismatch",
+        "Cached and durable run receipts disagree.",
+      );
+    if (cached?.result) {
+      if (cached.result.failure?.code === "gateway_session_missing") {
+        await api.missing({ bindingId: binding.id, ...scope });
+        return { kind: "blocked", code: "runtime_session_missing", bindingId: binding.id };
+      }
+      const runId = response.invocation.runtimeRunId ?? cached.gatewayRunId;
+      if (runId && response.invocation.turnState !== "accepted")
+        response = await api.runtime({
+          invocationId: response.invocation.id,
+          ...scope,
+          state: "accepted",
+          runtimeRunId: runId,
+        });
+      if (response.invocation.turnState === "uncertain") return deferred(true);
+      return this.#finish(response.invocation, deliveryId, terminalInput(cached.result), {
+        kind: "terminal",
+        result: cached.result,
+      });
+    }
+    // Fetch bounded context before the side-effect claim: failed reads can retry safely.
+    const context = await api.context(response.invocation);
+    response = await api.dispatch({ invocationId: response.invocation.id, ...scope });
+    assertTurn();
+    if (response.invocation.status !== "running")
+      return { kind: "server_terminal", invocation: response.invocation };
+    let resumeRunId = response.invocation.runtimeRunId ?? cached?.gatewayRunId ?? undefined;
+    if (!response.dispatchAllowed && !resumeRunId) {
+      if (["dispatching", "uncertain"].includes(response.invocation.turnState!)) {
+        await api.runtime({
+          invocationId: response.invocation.id,
+          ...scope,
+          state: "uncertain",
+          runtimeRunId: null,
+        });
+        return deferred(true);
+      }
+      return deferred();
+    }
+    if (
+      !response.dispatchAllowed &&
+      resumeRunId &&
+      (response.invocation.runtimeRunId !== resumeRunId ||
+        response.invocation.turnState !== "accepted")
+    )
+      response = await api.runtime({
+        invocationId: response.invocation.id,
+        ...scope,
+        state: "accepted",
+        runtimeRunId: resumeRunId,
+      });
+    const outcome = await this.#connector.handleInbound({
+      event,
+      context,
+      runtimeBinding,
+      ...(resumeRunId ? { resumeRunId } : {}),
+      ...(input.signal ? { signal: input.signal } : {}),
+      ...(input.abortMode ? { abortMode: input.abortMode } : {}),
+      onAccepted: async (runtimeRunId) => {
+        await api.runtime({
+          invocationId: response.invocation.id,
+          ...scope,
+          state: "accepted",
+          runtimeRunId,
+        });
+      },
+    });
+    if (outcome.kind === "uncertain") {
+      const run =
+        this.#connectorStore.getInvocation(
+          deriveInvocationId(event.connectorId, event.sourceMessageId),
+        )?.gatewayRunId ??
+        response.invocation.runtimeRunId ??
+        resumeRunId ??
+        null;
+      await api.runtime({
+        invocationId: response.invocation.id,
+        ...scope,
+        state: "uncertain",
+        runtimeRunId: run,
+      });
+      return deferred(true);
+    }
+    if (outcome.kind === "already_running") return deferred();
+    if (outcome.kind !== "completed" && outcome.kind !== "terminal")
+      throw new ConnectorContractError(
+        "conversation_outcome_invalid",
+        "Conversation turn did not provide an execution outcome.",
+      );
+    if (outcome.result.failure?.code === "gateway_session_missing") {
+      await api.missing({ bindingId: binding.id, ...scope });
+      return { kind: "blocked", code: "runtime_session_missing", bindingId: binding.id };
+    }
+    return this.#finish(response.invocation, deliveryId, terminalInput(outcome.result), outcome);
+  }
+
   #assertAcknowledged(
     invocation: RoomsServerInvocation,
     mapping: RoomsServerInvocationMapping,
@@ -866,9 +1509,9 @@ export class RoomsResidentAgentConsumer {
       invocation.channelId !== event.channelId ||
       invocation.context.cutoffSequence !== event.sourceSequence ||
       invocation.context.sourceHeadSequence !== input.sourceHeadSequence ||
-      invocation.invokingThread.environmentId !== input.environmentId ||
-      invocation.invokingThread.projectId !== input.projectId ||
-      invocation.invokingThread.threadId !== input.threadId
+      invocation.invokingThread?.environmentId !== input.environmentId ||
+      invocation.invokingThread?.projectId !== input.projectId ||
+      invocation.invokingThread?.threadId !== input.threadId
     ) {
       throw new ConnectorContractError(
         "server_invocation_binding_mismatch",
@@ -884,7 +1527,10 @@ export class RoomsResidentAgentConsumer {
     connector?: ConnectorHandlingOutcome,
   ): Promise<RoomsResidentConsumerOutcome> {
     const ids = deriveRoomsSettlementIds(invocation.id, deliveryId);
-    const settled = await this.#invocations.finish({
+    const finish = invocation.bindingId
+      ? this.#conversations!.finishTurn.bind(this.#conversations)
+      : this.#invocations.finish.bind(this.#invocations);
+    const settled = await finish({
       invocationId: invocation.id,
       connectorId: invocation.connector.id,
       configurationEpoch: invocation.connector.configurationEpoch,

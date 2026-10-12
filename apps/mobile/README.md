@@ -1,19 +1,23 @@
-# T3 Code Mobile
+# Threadspace mobile development
 
 > [!WARNING]
-> T3 Code Mobile is currently in development and is not distributed yet. If you want to try it out, you can build it from source.
+> Threadspace mobile is a prototype built from this checkout. Its native builds and installed behavior have their own delivery evidence.
 
 ## Quickstart
 
 > [!NOTE]
 > Uses native modules so using Expo Go is not supported. You need to use the Expo Dev Client.
 
-This app has four variants:
+The app retains upstream development/release variants and fork-owned room clients:
 
 - `development`: Expo dev client, installable side-by-side as `T3 Code Dev`
 - `preview`: persistent internal preview build, installable side-by-side as `T3 Code Preview`
 - `production`: store/release build as `T3 Code`
-- `rooms`: self-contained Rooms dogfood build as `T3 Code Rooms`
+- `rooms`: self-contained earlier dogfood build as `T3 Code Rooms`
+- `threadspace-alpha`: Threadspace Alpha with its own signing/push configuration
+
+All room clients use the same Rooms backend and shared client state. See the
+[product architecture](../../docs/architecture/threadspace.md) for ownership.
 
 Run commands from `apps/mobile`.
 
