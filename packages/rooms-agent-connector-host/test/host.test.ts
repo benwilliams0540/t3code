@@ -401,3 +401,32 @@ it("conversation-only host counts historical unsupported mentions and continues 
   expect(result).toMatchObject({ nextCursor: 43, delivered: 1, ignored: 1, unsupported: 1 });
   expect(calls).toEqual(["message:conversation"]);
 });
+
+it("missing-session outcome holds its source checkpoint and lets other conversations finish", async () => {
+  const next = config();
+  const v2: ResidentHostConfig = { ...next, contract: { ...next.contract, version: 2 } };
+  const original = page();
+  const a = { ...original.deliveries[0]!, mentionedAgent: true, conversationId: "conversation:a" };
+  const b = {
+    ...a,
+    sourceSequence: 43,
+    sourceMessageId: "message:b",
+    conversationId: "conversation:b",
+  };
+  const seen: string[] = [];
+  const handled = await processDeliveryPage({
+    config: v2,
+    page: { ...original, deliveries: [a, b] },
+    expectedCursor: 40,
+    consumer: {
+      handleInbound: async (input) => {
+        seen.push(input.event.conversationId!);
+        return input.event.conversationId === "conversation:a"
+          ? { kind: "blocked", code: "runtime_session_missing", bindingId: "binding:a" }
+          : { kind: "ignored", connector: { kind: "recorded_non_mention" } };
+      },
+    },
+  });
+  expect(handled).toMatchObject({ deferredAt: 41, delivered: 1 });
+  expect(seen).toEqual(["conversation:a", "conversation:b"]);
+});

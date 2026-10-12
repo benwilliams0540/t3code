@@ -1065,6 +1065,11 @@ const candidateMessages = (
 };
 
 export type RoomsResidentConsumerOutcome =
+  | {
+      readonly kind: "blocked";
+      readonly code: "runtime_session_missing";
+      readonly bindingId: string;
+    }
   | { readonly kind: "ignored"; readonly connector: ConnectorHandlingOutcome }
   | { readonly kind: "server_terminal"; readonly invocation: RoomsServerInvocation }
   | {
@@ -1268,12 +1273,7 @@ export class RoomsResidentAgentConsumer {
     };
     assertBinding();
     if (binding.initializationState === "missing")
-      throw new RoomsServerClientError({
-        code: "binding_not_ready",
-        status: 409,
-        message: "The bound runtime session is missing; deliberate reconciliation is required.",
-        retryable: false,
-      });
+      return { kind: "blocked", code: "runtime_session_missing", bindingId: binding.id };
     if (binding.initializationState === "initializing") {
       const reference = await initialize.call(this.#transport, {
         bindingId: binding.id,
