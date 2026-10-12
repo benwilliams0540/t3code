@@ -1,6 +1,7 @@
 // @effect-diagnostics globalDate:off - Wall-clock access is injected for tests at this standalone adapter boundary.
 import * as NodeCrypto from "node:crypto";
 
+import { canonicalJson } from "./canonicalJson.ts";
 import { buildResidentAgentInvocation, sanitizeInboundEvent } from "./contextEnvelope.ts";
 import {
   ConnectorContractError,
@@ -10,6 +11,7 @@ import {
   type ContextCandidateMessage,
   type InboundChannelEvent,
   type InvocationRecord,
+  type OpenClawSessionBinding,
   type ResidentAgentFailure,
   type ResidentAgentResult,
   type ResidentAgentResultStatus,
@@ -60,6 +62,9 @@ const CONNECTOR_OWNED_TRANSPORT_ERROR_CODES = new Set([
   "gateway_target_mismatch",
   "gateway_unavailable",
   "gateway_wait_invalid",
+  "gateway_session_missing",
+  "gateway_continuation_unsupported",
+  "gateway_session_scope_mismatch",
   "invalid_gateway_target",
   "invalid_gateway_url",
   "invocation_cancelled",
@@ -176,6 +181,10 @@ export class RoomsResidentAgentConnector {
     readonly event: InboundChannelEvent;
     readonly context: readonly ContextCandidateMessage[];
     readonly signal?: AbortSignal;
+    readonly runtimeBinding?: OpenClawSessionBinding;
+    readonly resumeRunId?: string;
+    readonly onAccepted?: (runId: string) => Promise<void>;
+    readonly abortMode?: "cancel" | "detach";
   }): Promise<ConnectorHandlingOutcome> {
     const event = sanitizeInboundEvent(input.event);
     const binding = this.#store.getBinding(event.connectorId);
@@ -196,17 +205,31 @@ export class RoomsResidentAgentConnector {
     if (!record) {
       if (!binding.enabled) return { kind: "disabled" };
       const now = this.#now();
-      const invocation = buildResidentAgentInvocation({
-        binding,
-        event,
-        candidates: input.context,
-        createdAt: iso(now),
-        deadline: iso(now + this.#invocationTimeoutMs),
-      });
+      const invocation = {
+        ...buildResidentAgentInvocation({
+          binding,
+          event,
+          candidates: input.context,
+          createdAt: iso(now),
+          deadline: iso(now + this.#invocationTimeoutMs),
+        }),
+        ...(input.runtimeBinding ? { runtimeBinding: input.runtimeBinding } : {}),
+      };
       record = this.#store.getOrCreateInvocation(invocation).record;
     }
 
+    if (
+      canonicalJson(record.invocation.runtimeBinding ?? null) !==
+      canonicalJson(input.runtimeBinding ?? null)
+    ) {
+      throw new ConnectorContractError(
+        "runtime_binding_mismatch",
+        "Invocation runtime binding changed.",
+      );
+    }
     if (record.result) return { kind: "terminal", result: record.result };
+    if (!binding.enabled && record.invocation.runtimeBinding && record.state === "running")
+      return { kind: "uncertain", invocationId: record.invocation.invocationId };
     if (!binding.enabled) return this.#settleDisabled(record);
     if (record.state === "running") {
       const leaseExpiresAt =
@@ -219,7 +242,8 @@ export class RoomsResidentAgentConnector {
       const reclaimed = this.#claim(record.invocation.invocationId, true);
       if (!reclaimed)
         return { kind: "already_running", invocationId: record.invocation.invocationId };
-      if (!reclaimed.gatewayRunId) {
+      if (!reclaimed.gatewayRunId && !input.resumeRunId) {
+        if (input.runtimeBinding) return { kind: "uncertain", invocationId };
         const result = this.#resultFromOutcome(reclaimed, {
           status: "unavailable",
           failure: {
@@ -235,7 +259,13 @@ export class RoomsResidentAgentConnector {
         );
         return { kind: "completed", result: completed.result! };
       }
-      return this.#runClaimed(reclaimed, input.signal, reclaimed.gatewayRunId);
+      return this.#runClaimed(
+        reclaimed,
+        input.signal,
+        reclaimed.gatewayRunId ?? input.resumeRunId,
+        input.onAccepted,
+        input.abortMode,
+      );
     }
     if (record.state !== "pending") {
       throw new ConnectorContractError(
@@ -245,7 +275,13 @@ export class RoomsResidentAgentConnector {
     }
     const claimed = this.#claim(record.invocation.invocationId, false);
     if (!claimed) return { kind: "already_running", invocationId: record.invocation.invocationId };
-    return this.#runClaimed(claimed, input.signal);
+    return this.#runClaimed(
+      claimed,
+      input.signal,
+      input.resumeRunId,
+      input.onAccepted,
+      input.abortMode,
+    );
   }
 
   #claim(invocationId: string, reclaim: boolean): InvocationRecord | null {
@@ -309,24 +345,28 @@ export class RoomsResidentAgentConnector {
     record: InvocationRecord,
     signal?: AbortSignal,
     resumeRunId?: string,
+    onAccepted?: (runId: string) => Promise<void>,
+    abortMode?: "cancel" | "detach",
   ): Promise<ConnectorHandlingOutcome> {
     const claimToken = this.#requiredClaimToken(record);
     try {
       const outcome = resumeRunId
-        ? await this.#transport.resume(
-            record.invocation,
-            resumeRunId,
-            signal ? { signal } : undefined,
-          )
+        ? await this.#transport.resume(record.invocation, resumeRunId, {
+            ...(signal ? { signal } : {}),
+            ...(abortMode ? { abortMode } : {}),
+          })
         : await this.#transport.invoke(record.invocation, {
             ...(signal ? { signal } : {}),
-            onAccepted: (runId) =>
+            ...(abortMode ? { abortMode } : {}),
+            onAccepted: async (runId) => {
               this.#store.recordGatewayAccepted(
                 record.invocation.invocationId,
                 claimToken,
                 runId,
                 iso(this.#now()),
-              ),
+              );
+              await onAccepted?.(runId);
+            },
           });
       const result = this.#resultFromOutcome(record, outcome);
       const completed = this.#store.completeInvocation(
@@ -346,6 +386,9 @@ export class RoomsResidentAgentConnector {
               retryable: false,
               cause: error,
             });
+      if (record.invocation.runtimeBinding && transportError.kind === "uncertain") {
+        return { kind: "uncertain", invocationId: record.invocation.invocationId };
+      }
       const result = this.#resultFromOutcome(record, failureFromTransport(transportError));
       const completed = this.#store.completeInvocation(
         record.invocation.invocationId,

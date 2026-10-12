@@ -8,7 +8,7 @@ export const HOST_CONFIG_CONTRACT = {
 } as const;
 
 export interface ResidentHostConfig {
-  readonly contract: typeof HOST_CONFIG_CONTRACT;
+  readonly contract: { readonly id: typeof HOST_CONFIG_CONTRACT.id; readonly version: 1 | 2 };
   readonly connector: {
     readonly id: string;
     readonly version: number;
@@ -22,7 +22,7 @@ export interface ResidentHostConfig {
     readonly agentPrincipalId: string;
     readonly hostMachinePrincipalId: string;
   };
-  readonly nativeT3: {
+  readonly nativeT3?: {
     readonly environmentId: string;
     readonly projectId: string;
     readonly threadId: string;
@@ -137,14 +137,22 @@ export const parseResidentHostConfig = (value: unknown): ResidentHostConfig => {
   const root = record(value, "configuration");
   exact(
     root,
-    ["contract", "connector", "rooms", "nativeT3", "openClaw", "stateDirectory", "delivery"],
+    [
+      "contract",
+      "connector",
+      "rooms",
+      ...(root.nativeT3 === undefined ? [] : ["nativeT3"]),
+      "openClaw",
+      "stateDirectory",
+      "delivery",
+    ],
     "configuration",
   );
   const contract = record(root.contract, "configuration.contract");
   exact(contract, ["id", "version"], "configuration.contract");
   if (
     contract.id !== HOST_CONFIG_CONTRACT.id ||
-    contract.version !== HOST_CONFIG_CONTRACT.version
+    (contract.version !== 1 && contract.version !== 2)
   ) {
     throw new HostConfigurationError(
       "configuration_contract_unsupported",
@@ -166,15 +174,22 @@ export const parseResidentHostConfig = (value: unknown): ResidentHostConfig => {
     ],
     "configuration.rooms",
   );
-  const nativeT3 = record(root.nativeT3, "configuration.nativeT3");
-  exact(nativeT3, ["environmentId", "projectId", "threadId"], "configuration.nativeT3");
+  const nativeT3 =
+    root.nativeT3 === undefined ? undefined : record(root.nativeT3, "configuration.nativeT3");
+  if (contract.version === 1 && !nativeT3)
+    throw new HostConfigurationError(
+      "configuration_invalid",
+      "Legacy configuration requires the real nativeT3 target.",
+    );
+  if (nativeT3)
+    exact(nativeT3, ["environmentId", "projectId", "threadId"], "configuration.nativeT3");
   const openClaw = record(root.openClaw, "configuration.openClaw");
   exact(openClaw, ["gatewayUrl", "configFile", "hostId", "agentId"], "configuration.openClaw");
   const delivery = record(root.delivery, "configuration.delivery");
   exact(delivery, ["initialCursor", "timeoutMs", "retryDelayMs"], "configuration.delivery");
 
   return {
-    contract: HOST_CONFIG_CONTRACT,
+    contract: { id: HOST_CONFIG_CONTRACT.id, version: contract.version },
     connector: {
       id: text(connector.id, "connector.id", 128),
       version: integer(connector.version, "connector.version", 1, 2_147_483_647),
@@ -201,11 +216,15 @@ export const parseResidentHostConfig = (value: unknown): ResidentHostConfig => {
         /^m:[0-9a-f-]{36}$/u,
       ),
     },
-    nativeT3: {
-      environmentId: text(nativeT3.environmentId, "nativeT3.environmentId"),
-      projectId: text(nativeT3.projectId, "nativeT3.projectId"),
-      threadId: text(nativeT3.threadId, "nativeT3.threadId"),
-    },
+    ...(nativeT3
+      ? {
+          nativeT3: {
+            environmentId: text(nativeT3.environmentId, "nativeT3.environmentId"),
+            projectId: text(nativeT3.projectId, "nativeT3.projectId"),
+            threadId: text(nativeT3.threadId, "nativeT3.threadId"),
+          },
+        }
+      : {}),
     openClaw: {
       gatewayUrl: loopbackUrl(openClaw.gatewayUrl, "ws:", "openClaw.gatewayUrl"),
       configFile: absolutePath(openClaw.configFile, "openClaw.configFile"),

@@ -812,3 +812,375 @@ describe("OpenClaw Gateway RPC transport", () => {
     expect(String(largeError)).not.toContain(secret);
   });
 });
+
+const continuedInvocation = (
+  input: { readonly conversation?: "a" | "b"; readonly turn?: number } = {},
+) => {
+  const turn = input.turn ?? 1;
+  const suffix = input.conversation === "b" ? "000000000002" : "000000000001";
+  return {
+    ...buildResidentAgentInvocation({
+      binding,
+      event: {
+        ...source,
+        sourceMessageId: `message:${input.conversation ?? "a"}:${turn}`,
+        sourceSequence: turn,
+      },
+      candidates: [],
+      createdAt: "2026-08-02T00:00:01.000Z",
+      deadline: "2026-08-02T00:02:01.000Z",
+    }),
+    runtimeBinding: {
+      bindingId: `binding:019fc9d0-0000-7000-8000-${suffix}`,
+      conversationId: `conversation:${input.conversation ?? "a"}`,
+      sessionKey: `agent:rooms:rooms:019fc9d0-0000-7000-8000-${suffix}`,
+      sessionId: `session-${input.conversation ?? "a"}`,
+    },
+  };
+};
+const continuationMethods = [
+  "agent",
+  "agent.wait",
+  "chat.history",
+  "sessions.abort",
+  "sessions.create",
+  "sessions.resolve",
+];
+const respond = (socket: FakeWebSocket, frame: Frame, payload: unknown) =>
+  socket.emit({ type: "res", id: frame.id, ok: true, payload });
+
+describe("persistent OpenClaw sessions", () => {
+  it("creates/adopts the reserved key with a real receipt without executing work", async () => {
+    const requests: Frame[] = [];
+    const transport = createTransport({
+      server: (frame, socket) => {
+        requests.push(frame);
+        if (frame.method === "connect") socket.emit(hello(frame.id!, continuationMethods));
+        else if (frame.method === "sessions.create") {
+          expect(frame.params).toEqual({
+            key: continuedInvocation().runtimeBinding.sessionKey,
+            agentId: "rooms",
+            emitCommandHooks: false,
+          });
+          respond(socket, frame, {
+            ok: true,
+            key: frame.params?.key,
+            sessionId: "session-a",
+            runStarted: false,
+          });
+        }
+      },
+    });
+    const { sessionId: _ignored, ...planned } = continuedInvocation().runtimeBinding;
+    expect(await transport.initializeSession(planned)).toEqual({
+      ...planned,
+      sessionId: "session-a",
+    });
+    expect(await transport.initializeSession(planned)).toEqual({
+      ...planned,
+      sessionId: "session-a",
+    });
+    expect(requests.map((frame) => frame.method)).toEqual([
+      "connect",
+      "sessions.create",
+      "connect",
+      "sessions.create",
+    ]);
+  });
+
+  it("continues A with distinct turn IDs and isolates B under the host tool policy", async () => {
+    const calls: Readonly<Record<string, unknown>>[] = [];
+    const transport = createTransport({
+      server: (frame, socket) => {
+        if (frame.method === "connect") socket.emit(hello(frame.id!, continuationMethods));
+        else if (frame.method === "sessions.resolve") {
+          expect(frame.params).not.toHaveProperty("key");
+          expect(frame.params).toMatchObject({ agentId: "rooms", allowMissing: true });
+          respond(socket, frame, {
+            ok: true,
+            key: continuedInvocation({
+              conversation: frame.params?.sessionId === "session-b" ? "b" : "a",
+            }).runtimeBinding.sessionKey,
+          });
+        } else if (frame.method === "agent") {
+          calls.push(frame.params!);
+          for (const key of [
+            "modelRun",
+            "promptMode",
+            "bootstrapContextMode",
+            "sessionEffects",
+            "disableMessageTool",
+            "sourceReplyDeliveryMode",
+          ])
+            expect(frame.params).not.toHaveProperty(key);
+          respond(socket, frame, {
+            runId: String(frame.params?.idempotencyKey),
+            status: "accepted",
+          });
+          socket.emit({
+            type: "res",
+            id: frame.id,
+            ok: true,
+            payload: {
+              runId: String(frame.params?.idempotencyKey),
+              status: "ok",
+              result: { payloads: [{ text: `reply-${calls.length}` }] },
+            },
+          });
+        } else if (frame.method === "agent.wait")
+          respond(socket, frame, { runId: frame.params?.runId, status: "ok" });
+        else if (frame.method === "chat.history")
+          respond(socket, frame, {
+            messages: [{ role: "assistant", content: "stale prior turn" }],
+          });
+      },
+    });
+    for (const input of [{ turn: 1 }, { turn: 2 }, { conversation: "b" as const, turn: 1 }])
+      expect(
+        (await transport.invoke(continuedInvocation(input), { onAccepted: () => undefined }))
+          .status,
+      ).toBe("completed");
+    expect(calls[0]?.sessionKey).toBe(calls[1]?.sessionKey);
+    expect(calls[2]?.sessionKey).not.toBe(calls[0]?.sessionKey);
+    expect(new Set(calls.map((call) => call.idempotencyKey)).size).toBe(3);
+  });
+
+  it("resumes the exact accepted run after a transport restart using its transcript window", async () => {
+    const methods: string[] = [];
+    const turn = continuedInvocation();
+    const transport = createTransport({
+      server: (frame, socket) => {
+        methods.push(frame.method!);
+        if (frame.method === "connect") socket.emit(hello(frame.id!, continuationMethods));
+        else if (frame.method === "sessions.resolve")
+          respond(socket, frame, { ok: true, key: turn.runtimeBinding.sessionKey });
+        else if (frame.method === "agent.wait")
+          respond(socket, frame, {
+            runId: "run-before-restart",
+            status: "ok",
+            startedAt: 100,
+            endedAt: 200,
+          });
+        else if (frame.method === "chat.history")
+          respond(socket, frame, {
+            sessionId: turn.runtimeBinding.sessionId,
+            sessionKey: turn.runtimeBinding.sessionKey,
+            messages: [
+              { role: "assistant", content: "old", timestamp: 50 },
+              { role: "assistant", content: "Recovered current turn.", timestamp: 150 },
+            ],
+          });
+      },
+    });
+    expect(await transport.resume(turn, "run-before-restart")).toMatchObject({
+      status: "completed",
+      replyMarkdown: "Recovered current turn.",
+    });
+    expect(methods).toEqual(["connect", "sessions.resolve", "agent.wait", "chat.history"]);
+  });
+
+  it("never reuses A1's reply when A2 completion has no correlated reply", async () => {
+    const turn = continuedInvocation({ turn: 2 });
+    const transport = createTransport({
+      server: (frame, socket) => {
+        if (frame.method === "connect") socket.emit(hello(frame.id!, continuationMethods));
+        else if (frame.method === "sessions.resolve")
+          respond(socket, frame, { ok: true, key: turn.runtimeBinding.sessionKey });
+        else if (frame.method === "agent.wait")
+          respond(socket, frame, { runId: "run-a2", status: "ok", startedAt: 100, endedAt: 200 });
+        else if (frame.method === "chat.history")
+          respond(socket, frame, {
+            sessionId: turn.runtimeBinding.sessionId,
+            sessionKey: turn.runtimeBinding.sessionKey,
+            messages: [{ role: "assistant", content: "A1 reply", timestamp: 50 }],
+          });
+      },
+    });
+    await expect(transport.resume(turn, "run-a2")).rejects.toMatchObject({ kind: "uncertain" });
+  });
+
+  it("refuses missing/reset sessions and unsupported methods without creating a replacement", async () => {
+    const methods: string[] = [];
+    const transport = createTransport({
+      server: (frame, socket) => {
+        methods.push(frame.method!);
+        if (frame.method === "connect") socket.emit(hello(frame.id!, continuationMethods));
+        else if (frame.method === "sessions.resolve") respond(socket, frame, { ok: false });
+      },
+    });
+    await expect(
+      transport.invoke(continuedInvocation(), { onAccepted: () => undefined }),
+    ).rejects.toMatchObject({ code: "gateway_session_missing" });
+    expect(methods).toEqual(["connect", "sessions.resolve"]);
+    const old = createTransport({
+      server: (frame, socket) => {
+        if (frame.method === "connect") socket.emit(hello(frame.id!));
+      },
+    });
+    await expect(old.initializeSession(continuedInvocation().runtimeBinding)).rejects.toMatchObject(
+      { code: "gateway_continuation_unsupported" },
+    );
+  });
+
+  it.each(["cancel", "timeout"] as const)(
+    "keeps failed %s abort uncertain and only names the active run",
+    async (mode) => {
+      const controller = new AbortController();
+      const aborted: unknown[] = [];
+      const transport = createTransport({
+        server: (frame, socket) => {
+          if (frame.method === "connect") socket.emit(hello(frame.id!, continuationMethods));
+          else if (frame.method === "sessions.resolve")
+            respond(socket, frame, {
+              ok: true,
+              key: continuedInvocation().runtimeBinding.sessionKey,
+            });
+          else if (frame.method === "agent")
+            respond(socket, frame, { runId: "run-active", status: "accepted" });
+          else if (frame.method === "agent.wait")
+            respond(socket, frame, { runId: "run-active", status: "timeout" });
+          else if (frame.method === "sessions.abort") {
+            aborted.push(frame.params);
+            socket.emit({ type: "res", id: frame.id, ok: false, error: { code: "UNAVAILABLE" } });
+          }
+        },
+      });
+      await expect(
+        transport.invoke(continuedInvocation(), {
+          signal: controller.signal,
+          onAccepted: () => {
+            if (mode === "cancel") controller.abort();
+          },
+        }),
+      ).rejects.toMatchObject({ kind: "uncertain" });
+      expect(aborted).toEqual([{ runId: "run-active", agentId: "rooms" }]);
+    },
+  );
+
+  it("keeps lost acceptance unknown, while an explicit provider rejection is terminal", async () => {
+    const make = (rejected: boolean) =>
+      createTransport({
+        server: (frame, socket) => {
+          if (frame.method === "connect") socket.emit(hello(frame.id!, continuationMethods));
+          else if (frame.method === "sessions.resolve")
+            respond(socket, frame, {
+              ok: true,
+              key: continuedInvocation().runtimeBinding.sessionKey,
+            });
+          else if (frame.method === "agent") {
+            if (rejected)
+              socket.emit({
+                type: "res",
+                id: frame.id,
+                ok: false,
+                error: { code: "INVALID_REQUEST" },
+              });
+            else respond(socket, frame, { status: "accepted" });
+          }
+        },
+      });
+    await expect(
+      make(false).invoke(continuedInvocation(), { onAccepted: () => undefined }),
+    ).rejects.toMatchObject({ kind: "uncertain" });
+    await expect(
+      make(true).invoke(continuedInvocation(), { onAccepted: () => undefined }),
+    ).rejects.toMatchObject({ kind: "failed", code: "gateway_request_rejected" });
+  });
+});
+
+describe("continued turn cancellation boundaries", () => {
+  it("cancellation while acceptance is in flight remains unknown", async () => {
+    const controller = new AbortController();
+    const methods: string[] = [];
+    const transport = createTransport({
+      server: (frame, socket) => {
+        methods.push(frame.method!);
+        if (frame.method === "connect") socket.emit(hello(frame.id!, continuationMethods));
+        else if (frame.method === "sessions.resolve")
+          respond(socket, frame, {
+            ok: true,
+            key: continuedInvocation().runtimeBinding.sessionKey,
+          });
+        else if (frame.method === "agent") controller.abort();
+      },
+    });
+    await expect(
+      transport.invoke(continuedInvocation(), {
+        signal: controller.signal,
+        onAccepted: () => undefined,
+      }),
+    ).rejects.toMatchObject({ kind: "uncertain" });
+    expect(methods).toEqual(["connect", "sessions.resolve", "agent"]);
+  });
+  it("post-acceptance wait rejection cannot settle an active turn", async () => {
+    const transport = createTransport({
+      server: (frame, socket) => {
+        if (frame.method === "connect") socket.emit(hello(frame.id!, continuationMethods));
+        else if (frame.method === "sessions.resolve")
+          respond(socket, frame, {
+            ok: true,
+            key: continuedInvocation().runtimeBinding.sessionKey,
+          });
+        else if (frame.method === "agent")
+          respond(socket, frame, { runId: "run-active", status: "accepted" });
+        else if (frame.method === "agent.wait")
+          socket.emit({ type: "res", id: frame.id, ok: false, error: { code: "INVALID_REQUEST" } });
+      },
+    });
+    await expect(
+      transport.invoke(continuedInvocation(), { onAccepted: () => undefined }),
+    ).rejects.toMatchObject({ kind: "uncertain" });
+  });
+  it("host stop detaches from an accepted run without sending sessions.abort", async () => {
+    const controller = new AbortController();
+    const methods: string[] = [];
+    const transport = createTransport({
+      server: (frame, socket) => {
+        methods.push(frame.method!);
+        if (frame.method === "connect") socket.emit(hello(frame.id!, continuationMethods));
+        else if (frame.method === "sessions.resolve")
+          respond(socket, frame, {
+            ok: true,
+            key: continuedInvocation().runtimeBinding.sessionKey,
+          });
+        else if (frame.method === "agent")
+          respond(socket, frame, { runId: "run-active", status: "accepted" });
+      },
+    });
+    await expect(
+      transport.invoke(continuedInvocation(), {
+        signal: controller.signal,
+        abortMode: "detach",
+        onAccepted: () => controller.abort(),
+      }),
+    ).rejects.toMatchObject({ kind: "uncertain" });
+    expect(methods).toEqual(["connect", "sessions.resolve", "agent"]);
+  });
+  it("confirmed cancellation names one run and returns a stopped receipt", async () => {
+    const controller = new AbortController();
+    const aborted: unknown[] = [];
+    const transport = createTransport({
+      server: (frame, socket) => {
+        if (frame.method === "connect") socket.emit(hello(frame.id!, continuationMethods));
+        else if (frame.method === "sessions.resolve")
+          respond(socket, frame, {
+            ok: true,
+            key: continuedInvocation().runtimeBinding.sessionKey,
+          });
+        else if (frame.method === "agent")
+          respond(socket, frame, { runId: "run-active", status: "accepted" });
+        else if (frame.method === "sessions.abort") {
+          aborted.push(frame.params);
+          respond(socket, frame, { ok: true, status: "aborted", abortedRunId: "run-active" });
+        }
+      },
+    });
+    await expect(
+      transport.invoke(continuedInvocation(), {
+        signal: controller.signal,
+        onAccepted: () => controller.abort(),
+      }),
+    ).rejects.toMatchObject({ kind: "cancelled", runStopped: true });
+    expect(aborted).toEqual([{ runId: "run-active", agentId: "rooms" }]);
+  });
+});

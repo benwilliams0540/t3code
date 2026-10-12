@@ -37,6 +37,7 @@ export interface SafeHostLog {
   readonly cursor?: number;
   readonly delivered?: number;
   readonly ignored?: number;
+  readonly unsupported?: number;
 }
 
 export type SafeLogger = (entry: SafeHostLog) => void;
@@ -44,11 +45,12 @@ export type SafeLogger = (entry: SafeHostLog) => void;
 interface ConsumerLike {
   handleInbound(input: {
     readonly event: ReturnType<typeof toInboundEvent>;
-    readonly environmentId: string;
-    readonly projectId: string;
-    readonly threadId: string;
+    readonly environmentId?: string;
+    readonly projectId?: string;
+    readonly threadId?: string;
     readonly sourceHeadSequence: number;
     readonly signal?: AbortSignal;
+    readonly abortMode?: "cancel" | "detach";
   }): Promise<RoomsResidentConsumerOutcome>;
 }
 
@@ -88,6 +90,8 @@ export const processDeliveryPage = async (input: {
   readonly nextCursor: number;
   readonly delivered: number;
   readonly ignored: number;
+  readonly unsupported?: number;
+  readonly deferredAt?: number;
 }> => {
   assertBinding(input.config, input.page);
   if (input.page.page.afterSeq !== input.expectedCursor) {
@@ -98,29 +102,130 @@ export const processDeliveryPage = async (input: {
   }
   let delivered = 0;
   let ignored = 0;
+  let unsupported = 0;
+  let deferredAt: number | undefined;
+  const groups = new Map<string, (typeof input.page.deliveries)[number][]>();
   for (const delivery of input.page.deliveries) {
     if (delivery.channelId !== input.config.rooms.channelId) {
       ignored += 1;
       continue;
     }
-    const outcome = await input.consumer.handleInbound({
-      event: toInboundEvent(delivery, input.config.connector.id),
-      environmentId: input.config.nativeT3.environmentId,
-      projectId: input.config.nativeT3.projectId,
-      threadId: input.config.nativeT3.threadId,
-      sourceHeadSequence: input.page.page.sourceHeadSeq,
+    if (
+      input.config.contract.version === 2 &&
+      !input.config.nativeT3 &&
+      !delivery.conversationId &&
+      delivery.mentionedAgent
+    ) {
+      // A historical mention is not a conversation and has no executable native target.
+      // Count the unsupported capability explicitly rather than forging IDs or blocking v2 work.
+      ignored += 1;
+      unsupported += 1;
+      continue;
+    }
+    const key =
+      input.config.contract.version === 2 ? (delivery.conversationId ?? "legacy") : "legacy";
+    const group = groups.get(key) ?? [];
+    group.push(delivery);
+    groups.set(key, group);
+  }
+  // A blocked conversation must not starve unrelated conversations. Within each group
+  // delivery order remains serial, while the backend owns the durable binding queue.
+  const results = await Promise.allSettled(
+    [...groups.values()].map(async (deliveries) => {
+      for (const delivery of deliveries) {
+        const outcome = await input.consumer.handleInbound({
+          event: toInboundEvent(delivery, input.config.connector.id),
+          ...input.config.nativeT3,
+          sourceHeadSequence: input.page.page.sourceHeadSeq,
+          ...(input.signal ? { signal: input.signal } : {}),
+          ...(input.config.contract.version === 2 ? { abortMode: "detach" as const } : {}),
+        });
+        if (outcome.kind === "deferred") {
+          if (input.config.contract.version === 1)
+            throw new ResidentHostError(
+              "delivery_deferred",
+              "A prior accepted invocation is still running.",
+              true,
+            );
+          deferredAt = Math.min(deferredAt ?? delivery.sourceSequence, delivery.sourceSequence);
+          break;
+        }
+        delivered += 1;
+      }
+    }),
+  );
+  const failure = results.find((result) => result.status === "rejected");
+  if (failure?.status === "rejected") throw failure.reason;
+  return {
+    nextCursor: input.page.page.nextCursor,
+    delivered,
+    ignored,
+    ...(unsupported ? { unsupported } : {}),
+    ...(deferredAt === undefined ? {} : { deferredAt }),
+  };
+};
+
+export const scanDeliveryPages = async (input: {
+  readonly config: ResidentHostConfig;
+  readonly cursor: number;
+  readonly consumer: ConsumerLike;
+  readonly wait: (
+    afterSeq: number,
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ) => Promise<AgentDeliveryPage>;
+  readonly checkpoint: (expected: number, next: number) => number;
+  readonly signal?: AbortSignal;
+}): Promise<{
+  readonly cursor: number;
+  readonly delivered: number;
+  readonly ignored: number;
+  readonly unsupported: number;
+  readonly deferred: boolean;
+}> => {
+  let cursor = input.cursor;
+  let scanCursor = input.cursor;
+  let scanHead: number | undefined;
+  let deferredAt: number | undefined;
+  let delivered = 0;
+  let ignored = 0;
+  let unsupported = 0;
+  const finish = () => ({
+    cursor: cursor > input.cursor ? input.checkpoint(input.cursor, cursor) : cursor,
+    delivered,
+    ignored,
+    unsupported,
+    deferred: deferredAt !== undefined,
+  });
+  for (;;) {
+    const page = await input.wait(
+      scanCursor,
+      scanCursor === input.cursor ? input.config.delivery.timeoutMs : 1000,
+      input.signal,
+    );
+    if (input.signal?.aborted) return finish();
+    scanHead ??= page.page.sourceHeadSeq;
+    const handled = await processDeliveryPage({
+      config: input.config,
+      page,
+      expectedCursor: scanCursor,
+      consumer: input.consumer,
       ...(input.signal ? { signal: input.signal } : {}),
     });
-    if (outcome.kind === "deferred") {
-      throw new ResidentHostError(
-        "delivery_deferred",
-        "A prior accepted invocation is still running.",
-        true,
-      );
-    }
-    delivered += 1;
+    delivered += handled.delivered;
+    ignored += handled.ignored;
+    unsupported += handled.unsupported ?? 0;
+    if (handled.deferredAt !== undefined)
+      deferredAt = Math.min(deferredAt ?? handled.deferredAt, handled.deferredAt);
+    const safeCursor =
+      deferredAt === undefined ? handled.nextCursor : Math.min(handled.nextCursor, deferredAt - 1);
+    if (safeCursor > cursor) cursor = safeCursor;
+    scanCursor = handled.nextCursor;
+    // The scan is transient and bounded by its initial observed head. A blocked
+    // conversation never becomes a second local queue or loses its retry cursor.
+    if (input.config.contract.version === 1 || !page.page.hasMore || scanCursor >= scanHead)
+      return finish();
   }
-  return { nextCursor: input.page.page.nextCursor, delivered, ignored };
 };
 
 const delay = (milliseconds: number, signal: AbortSignal): Promise<void> =>
@@ -215,6 +320,7 @@ export class ResidentConnectorHost {
     this.#deliveryClient = new AgentDeliveryHttpClient({
       baseUrl: input.config.rooms.baseUrl,
       bearerToken: this.#bearer,
+      version: input.config.contract.version,
       ...(input.fetch ? { fetch: input.fetch } : {}),
     });
     this.#transport = new OpenClawGatewayTransport({
@@ -241,6 +347,8 @@ export class ResidentConnectorHost {
     });
     this.#consumer = new RoomsResidentAgentConsumer({
       invocations,
+      conversations: invocations,
+      transport: this.#transport,
       mappingStore: this.#mappingStore,
       connectorStore: this.#connectorStore,
       connector,
@@ -271,6 +379,11 @@ export class ResidentConnectorHost {
     if (!health.available) {
       throw new ResidentHostError("gateway_unavailable", "OpenClaw Gateway is unavailable.", true);
     }
+    if (this.#config.contract.version === 2 && !health.continuationSupported)
+      throw new ResidentHostError(
+        "gateway_continuation_unsupported",
+        "OpenClaw does not advertise persistent session support.",
+      );
     return {
       ready: true,
       roomId: page.binding.roomId,
@@ -286,27 +399,37 @@ export class ResidentConnectorHost {
     let cursor = this.#cursorStore.initialize(this.#config.delivery.initialCursor);
     while (!signal.aborted) {
       try {
-        const page = await this.#deliveryClient.wait(
-          cursor,
-          this.#config.delivery.timeoutMs,
-          signal,
-        );
-        if (signal.aborted) break;
-        const handled = await processDeliveryPage({
+        const handled = await scanDeliveryPages({
           config: this.#config,
-          page,
-          expectedCursor: cursor,
+          cursor,
           consumer: this.#consumer,
+          wait: (after, timeout, signal) => this.#deliveryClient.wait(after, timeout, signal),
+          checkpoint: (expected, next) => this.#cursorStore.checkpoint(expected, next),
           signal,
         });
-        cursor = this.#cursorStore.checkpoint(cursor, handled.nextCursor);
+        cursor = handled.cursor;
         this.#logger({
           event: "delivery_cycle",
-          status: "ok",
+          status: handled.deferred ? "retry" : "ok",
           cursor,
           delivered: handled.delivered,
           ignored: handled.ignored,
+          ...(handled.unsupported ? { unsupported: handled.unsupported } : {}),
+          ...(handled.deferred
+            ? { code: "delivery_deferred" }
+            : handled.unsupported
+              ? { code: "native_target_required" }
+              : {}),
         });
+        if (handled.deferred) {
+          if (once)
+            throw new ResidentHostError(
+              "delivery_deferred",
+              "A conversation still needs runtime reconciliation.",
+              true,
+            );
+          await delay(this.#config.delivery.retryDelayMs, signal);
+        }
         if (once) return;
       } catch (error) {
         if (signal.aborted) break;
