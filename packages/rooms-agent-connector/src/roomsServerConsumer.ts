@@ -157,7 +157,10 @@ export interface RoomsConversationClient {
       readonly bindingId: string;
     },
   ): Promise<RoomsInvocationResponse>;
-  getTurn(invocationId: string): Promise<RoomsInvocationResponse>;
+  getTurn(
+    invocationId: string,
+    scope: { readonly connectorId: string; readonly configurationEpoch: number },
+  ): Promise<RoomsInvocationResponse>;
   dispatch(input: {
     readonly invocationId: string;
     readonly connectorId: string;
@@ -663,9 +666,13 @@ export class RoomsInvocationHttpClient implements RoomsInvocationClient, RoomsCo
       }),
     });
   }
-  getTurn(invocationId: string): Promise<RoomsInvocationResponse> {
+  getTurn(
+    invocationId: string,
+    scope: { readonly connectorId: string; readonly configurationEpoch: number },
+  ): Promise<RoomsInvocationResponse> {
     return this.#request(`/agent/v2/invocations/${encodeURIComponent(invocationId)}`, {
       method: "GET",
+      headers: this.#headers(scope),
     });
   }
   dispatch(
@@ -1301,7 +1308,7 @@ export class RoomsResidentAgentConsumer {
     const deliveryId = deriveRoomsDeliveryId(event);
     const acknowledged = this.#mappingStore.get(deliveryId);
     let response = acknowledged
-      ? await api.getTurn(acknowledged.serverInvocationId)
+      ? await api.getTurn(acknowledged.serverInvocationId, scope)
       : await api.startTurn({
           ...scope,
           deliveryId,
@@ -1370,11 +1377,25 @@ export class RoomsResidentAgentConsumer {
         "runtime_run_mismatch",
         "Cached and durable run receipts disagree.",
       );
-    if (cached?.result)
+    if (cached?.result) {
+      if (cached.result.failure?.code === "gateway_session_missing") {
+        await api.missing({ bindingId: binding.id, ...scope });
+        return { kind: "blocked", code: "runtime_session_missing", bindingId: binding.id };
+      }
+      const runId = response.invocation.runtimeRunId ?? cached.gatewayRunId;
+      if (runId && response.invocation.turnState !== "accepted")
+        response = await api.runtime({
+          invocationId: response.invocation.id,
+          ...scope,
+          state: "accepted",
+          runtimeRunId: runId,
+        });
+      if (response.invocation.turnState === "uncertain") return deferred(true);
       return this.#finish(response.invocation, deliveryId, terminalInput(cached.result), {
         kind: "terminal",
         result: cached.result,
       });
+    }
     // Fetch bounded context before the side-effect claim: failed reads can retry safely.
     const context = await api.context(response.invocation);
     response = await api.dispatch({ invocationId: response.invocation.id, ...scope });
@@ -1397,9 +1418,10 @@ export class RoomsResidentAgentConsumer {
     if (
       !response.dispatchAllowed &&
       resumeRunId &&
-      response.invocation.runtimeRunId !== resumeRunId
+      (response.invocation.runtimeRunId !== resumeRunId ||
+        response.invocation.turnState !== "accepted")
     )
-      await api.runtime({
+      response = await api.runtime({
         invocationId: response.invocation.id,
         ...scope,
         state: "accepted",
@@ -1425,7 +1447,10 @@ export class RoomsResidentAgentConsumer {
       const run =
         this.#connectorStore.getInvocation(
           deriveInvocationId(event.connectorId, event.sourceMessageId),
-        )?.gatewayRunId ?? null;
+        )?.gatewayRunId ??
+        response.invocation.runtimeRunId ??
+        resumeRunId ??
+        null;
       await api.runtime({
         invocationId: response.invocation.id,
         ...scope,
@@ -1440,8 +1465,10 @@ export class RoomsResidentAgentConsumer {
         "conversation_outcome_invalid",
         "Conversation turn did not provide an execution outcome.",
       );
-    if (outcome.result.failure?.code === "gateway_session_missing")
+    if (outcome.result.failure?.code === "gateway_session_missing") {
       await api.missing({ bindingId: binding.id, ...scope });
+      return { kind: "blocked", code: "runtime_session_missing", bindingId: binding.id };
+    }
     return this.#finish(response.invocation, deliveryId, terminalInput(outcome.result), outcome);
   }
 

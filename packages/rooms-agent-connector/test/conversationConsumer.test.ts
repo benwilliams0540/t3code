@@ -78,6 +78,7 @@ class ServiceHarness implements RoomsConversationClient, RoomsInvocationClient {
   loseDispatch = false;
   loseResult = false;
   loseAcceptance = false;
+  failResultBeforeCommit = false;
   async reserve(input: Parameters<RoomsConversationClient["reserve"]>[0]) {
     let binding = this.bindings.get(input.conversationId);
     if (!binding) {
@@ -175,6 +176,8 @@ class ServiceHarness implements RoomsConversationClient, RoomsInvocationClient {
   ): Promise<RoomsInvocationResponse> {
     this.runtimeReceipts.push(input);
     const turn = this.turns.get(input.invocationId)!;
+    if (turn.runtimeRunId && turn.runtimeRunId !== input.runtimeRunId)
+      throw new Error("runtime receipt changed known run ID");
     this.turns.set(turn.id, {
       ...turn,
       turnState: input.state,
@@ -189,6 +192,16 @@ class ServiceHarness implements RoomsConversationClient, RoomsInvocationClient {
   async finishTurn(input: RoomsInvocationFinishInput): Promise<RoomsInvocationResponse> {
     const turn = this.turns.get(input.invocationId)!;
     if (turn.status === "running") {
+      const safeCancel =
+        input.status === "failed" &&
+        input.safeErrorCode === "connector_cancelled" &&
+        ["queued", "ready"].includes(turn.turnState!);
+      if (turn.turnState !== "accepted" && !safeCancel)
+        throw new Error("runtime acceptance must be reconciled before finish");
+      if (this.failResultBeforeCommit) {
+        this.failResultBeforeCommit = false;
+        throw new Error("result response unavailable before commit");
+      }
       this.replies.push(input);
       this.turns.set(turn.id, {
         ...turn,
@@ -240,6 +253,7 @@ class RuntimeHarness implements ResidentAgentGatewayTransport {
   hold: ReturnType<typeof gate> | undefined;
   unknown = false;
   nextError: GatewayTransportError | undefined;
+  beforeAcceptanceError: GatewayTransportError | undefined;
   async health() {
     return { available: true };
   }
@@ -253,6 +267,7 @@ class RuntimeHarness implements ResidentAgentGatewayTransport {
     options: GatewayInvocationOptions,
   ): Promise<GatewayRunOutcome> {
     this.invoked.push(invocation);
+    if (this.beforeAcceptanceError) throw this.beforeAcceptanceError;
     if (this.unknown)
       throw new GatewayTransportError({
         kind: "uncertain",
@@ -516,5 +531,73 @@ it("a missing A session is explicitly blocked without stopping unrelated B", asy
     expect(h.runtime.sessions.size).toBe(1);
   } finally {
     h.close();
+  }
+});
+
+it("reconciles a cached terminal result from uncertain back to the same accepted run", async () => {
+  const h = make();
+  h.service.failResultBeforeCommit = true;
+  try {
+    await expect(handle(h)).rejects.toThrow(/before commit/);
+    const turn = [...h.service.turns.values()][0]!;
+    h.service.turns.set(turn.id, { ...turn, turnState: "uncertain" });
+    expect((await handle(h)).kind).toBe("settled");
+    expect(h.service.runtimeReceipts.at(-1)).toMatchObject({
+      state: "accepted",
+      runtimeRunId: turn.runtimeRunId,
+    });
+    expect(h.runtime.invoked).toHaveLength(1);
+    expect(h.runtime.resumed).toHaveLength(0);
+    expect(h.service.replies).toHaveLength(1);
+  } finally {
+    h.close();
+  }
+});
+
+it("a newly missing session before submission blocks A without invalid finish or B starvation", async () => {
+  const h = make();
+  h.runtime.beforeAcceptanceError = new GatewayTransportError({
+    kind: "unavailable",
+    code: "gateway_session_missing",
+    safeMessage: "Bound session disappeared.",
+    retryable: false,
+  });
+  try {
+    expect(await handle(h)).toMatchObject({ kind: "blocked", code: "runtime_session_missing" });
+    const turn = [...h.service.turns.values()][0]!;
+    expect(turn.turnState).toBe("dispatching");
+    expect(turn.runtimeRunId).toBeNull();
+    expect(h.service.replies).toHaveLength(0);
+    expect((await handle(h)).kind).toBe("blocked");
+    h.runtime.beforeAcceptanceError = undefined;
+    expect((await handle(h, event("b", 2))).kind).toBe("settled");
+    expect(h.service.replies).toHaveLength(1);
+  } finally {
+    h.close();
+  }
+});
+
+it("cache-loss resume uncertainty retains the real durable run ID", async () => {
+  const first = make();
+  first.runtime.nextError = new GatewayTransportError({
+    kind: "uncertain",
+    code: "gateway_run_detached",
+    safeMessage: "Accepted run paused.",
+    retryable: false,
+  });
+  expect((await handle(first)).kind).toBe("deferred");
+  const original = [...first.service.turns.values()][0]!;
+  first.close();
+  const restarted = make(first.service, first.runtime);
+  try {
+    expect((await handle(restarted)).kind).toBe("deferred");
+    expect(first.service.runtimeReceipts.at(-1)).toMatchObject({
+      state: "uncertain",
+      runtimeRunId: original.runtimeRunId,
+    });
+    expect(first.runtime.invoked).toHaveLength(1);
+    expect(first.runtime.resumed).toEqual([original.runtimeRunId]);
+  } finally {
+    restarted.close();
   }
 });
