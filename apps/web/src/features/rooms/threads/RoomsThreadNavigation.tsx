@@ -346,7 +346,7 @@ export function RoomsYourThreadsNavigation({
       {boundProjects.length === 0 ? (
         <div className="px-2 py-1.5">
           <p className="mb-2 text-xs leading-relaxed text-sidebar-muted-foreground">
-            Bind this local-only room to a real T3 project.
+            Connect a T3 project to use native coding threads.
           </p>
           <RoomsProjectBindingMenu compact={false} roomId={room.id} sourceMode={sourceMode} />
         </div>

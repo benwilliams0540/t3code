@@ -1,3 +1,8 @@
+import conversationProjection from "../../../../../packages/client-runtime/src/rooms/fixtures/conversations-v2.json";
+import conversationList from "../../../../../packages/client-runtime/src/rooms/fixtures/conversations-v2-list.json";
+import conversationCreated from "../../../../../packages/client-runtime/src/rooms/fixtures/conversations-v2-created.json";
+import conversationMessage from "../../../../../packages/client-runtime/src/rooms/fixtures/conversation-message-v2.json";
+import conversationFeed from "../../../../../packages/client-runtime/src/rooms/fixtures/conversation-feed-v2.json";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { createRoomsMobileClient, RoomsMobileClientError } from "./client";
@@ -19,6 +24,52 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe("Rooms native mobile client", () => {
+  it("consumes v2 conversation reads/start/follow-up through the shared wire client", async () => {
+    const { room_id: room, channel_id: channel, id } = conversationProjection.conversation;
+    const paths: string[] = [];
+    const bodyFor = (path: string, method: string) =>
+      method === "POST"
+        ? path.endsWith("/messages")
+          ? conversationMessage
+          : conversationCreated
+        : path.endsWith("/conversations")
+          ? conversationList
+          : path.includes("/messages?")
+            ? conversationFeed
+            : conversationProjection;
+    const client = createRoomsMobileClient({
+      baseUrl,
+      readToken: async () => "fixture-token",
+      fetch: async (url, init) => {
+        const path = new URL(url).pathname + new URL(url).search;
+        paths.push(path);
+        return jsonResponse(bodyFor(path, init.method!));
+      },
+    });
+    await expect(client.conversations.list(room, channel)).resolves.toEqual(conversationList);
+    await expect(client.conversations.read(room, channel, id)).resolves.toEqual(
+      conversationProjection,
+    );
+    await client.conversations.create(
+      room,
+      channel,
+      "0198f7e2-1234-789a-8abc-123456789abc",
+      "Build plan",
+    );
+    await client.conversations.send(
+      room,
+      channel,
+      id,
+      "0198f7e2-1234-789a-8abc-123456789abd",
+      conversationMessage.item.payload.body_markdown,
+    );
+    await expect(client.conversations.feed(room, channel, id, { limit: 100 })).resolves.toEqual(
+      conversationFeed,
+    );
+    expect(paths).toHaveLength(5);
+    expect(paths.every((path) => path.startsWith("/rooms/human/v2/rooms/"))).toBe(true);
+  });
+
   it("reads a fresh bearer and decodes the pinned session contract", async () => {
     const fetchRequest = vi.fn(async () =>
       jsonResponse({
@@ -175,6 +226,28 @@ describe("Rooms native mobile client", () => {
       });
     },
   );
+
+  it("does not issue a write if the account changes while its token is pending", async () => {
+    let release!: (token: string) => void;
+    const token = new Promise<string>((resolve) => {
+      release = resolve;
+    });
+    const fetchRequest = vi.fn();
+    let current = true;
+    const client = createRoomsMobileClient({
+      baseUrl,
+      readToken: () => token,
+      fetch: fetchRequest,
+      assertCurrent: () => {
+        if (!current) throw new RoomsMobileClientError("rooms_account_changed", "Account changed.");
+      },
+    });
+    const pending = client.createMessage(roomId, channelId, "same-request", "Keep this draft");
+    current = false;
+    release("new-account-token");
+    await expect(pending).rejects.toMatchObject({ code: "rooms_account_changed" });
+    expect(fetchRequest).not.toHaveBeenCalled();
+  });
 
   it("fails closed before fetch for an invalid origin or missing token", async () => {
     const fetchRequest = vi.fn();

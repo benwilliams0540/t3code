@@ -21,6 +21,7 @@ const platform = vi.hoisted(() => ({
 }));
 
 vi.mock("react", () => ({
+  createContext: () => ({}),
   useRef: (current: unknown) => {
     const index = platform.refIndex++;
     platform.refs[index] ??= { current };

@@ -30,6 +30,7 @@ const MAX_BEARER_BYTES = 16 * 1024;
 const UUID_V7 = "[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 const ROOM_ID = `room:${UUID_V7}`;
 const CHANNEL_ID = `channel:${UUID_V7}`;
+const CONVERSATION_ID = `conversation:${UUID_V7}`;
 const STORY_ID = `story:${UUID_V7}`;
 
 export function isRoomsLoopbackHostname(hostname: string): boolean {
@@ -87,7 +88,11 @@ function exactHumanRouteMethods(pathname: string): readonly ("GET" | "POST")[] {
   ) {
     return ["POST"];
   }
+  const conversations = `/rooms/human/v2/rooms/${ROOM_ID}/channels/${CHANNEL_ID}/conversations`;
   const routes: readonly [RegExp, readonly ("GET" | "POST")[]][] = [
+    [new RegExp(`^${conversations}$`), ["GET", "POST"]],
+    [new RegExp(`^${conversations}/${CONVERSATION_ID}$`), ["GET"]],
+    [new RegExp(`^${conversations}/${CONVERSATION_ID}/messages$`), ["GET", "POST"]],
     [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/workspace$`), ["GET"]],
     [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/invites$`), ["POST"]],
     [new RegExp(`^/rooms/human/v1/rooms/${ROOM_ID}/channels$`), ["POST"]],
@@ -112,11 +117,12 @@ function exactHumanRouteMethods(pathname: string): readonly ("GET" | "POST")[] {
 function hasValidHumanQuery(target: URL): boolean {
   if (target.search === "") return true;
   const decodedPath = decodeURIComponent(target.pathname);
-  const allowed = decodedPath.endsWith("/feed")
-    ? new Set(["after_seq", "limit", "snapshot_head_seq"])
-    : decodedPath.endsWith("/changes")
-      ? new Set(["after_seq", "timeout_ms", "realtime", "client_id"])
-      : new Set<string>();
+  const allowed =
+    decodedPath.endsWith("/feed") || /\/conversations\/[^/]+\/messages$/.test(decodedPath)
+      ? new Set(["after_seq", "limit", "snapshot_head_seq"])
+      : decodedPath.endsWith("/changes")
+        ? new Set(["after_seq", "timeout_ms", "realtime", "client_id"])
+        : new Set<string>();
   return [...target.searchParams.keys()].every((key) => allowed.has(key));
 }
 

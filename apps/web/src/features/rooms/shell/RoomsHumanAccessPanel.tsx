@@ -84,8 +84,8 @@ export function roomsHumanAccessCopy(
       ];
     case "invalid-configuration":
       return [
-        "Shared Threadspace is not configured",
-        "This build needs the dedicated Threadspace API origin and Clerk JWT template.",
+        "Choose a room server",
+        "Enter your room server address below and select Connect. Your server will offer its own sign-in.",
       ];
     case "error":
       return ["Shared Threadspace is unavailable", state.error?.message ?? "The request failed."];

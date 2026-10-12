@@ -322,13 +322,14 @@ function RootStackLayout(props: {
 
   return (
     <HardwareKeyboardCommandProvider pathname={pathname}>
-      <RoomsRealtimeCoordinator />
-      <ShowcaseCaptureCoordinator pathname={pathname} />
-      <ClerkSettingsSheetDetentProvider initiallyExpanded={false}>
-        <AdaptiveWorkspaceLayout pathname={workspacePathname}>
-          {props.children}
-        </AdaptiveWorkspaceLayout>
-      </ClerkSettingsSheetDetentProvider>
+      <RoomsRealtimeCoordinator>
+        <ShowcaseCaptureCoordinator pathname={pathname} />
+        <ClerkSettingsSheetDetentProvider initiallyExpanded={false}>
+          <AdaptiveWorkspaceLayout pathname={workspacePathname}>
+            {props.children}
+          </AdaptiveWorkspaceLayout>
+        </ClerkSettingsSheetDetentProvider>
+      </RoomsRealtimeCoordinator>
     </HardwareKeyboardCommandProvider>
   );
 }

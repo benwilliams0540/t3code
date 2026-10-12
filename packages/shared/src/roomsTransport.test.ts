@@ -45,6 +45,28 @@ describe("Shared Rooms request policy", () => {
     ...input,
   });
 
+  it("allows bounded human conversation commands and pinned reads, keeping other methods/queries closed", () => {
+    const conversation = "conversation:0198f7e2-1234-789a-8abc-123456789abc";
+    const root = `/rooms/human/v2/rooms/${room}/channels/${channel}/conversations`;
+    for (const path of [
+      root,
+      `${root}/${conversation}`,
+      `${root}/${conversation}/messages?after_seq=2&limit=20&snapshot_head_seq=8`,
+    ]) {
+      expect(resolveRoomsHumanRequestUrl(request({ path })).pathname).toBe(path.split("?")[0]);
+    }
+    for (const path of [root, `${root}/${conversation}/messages`])
+      expect(resolveRoomsHumanRequestUrl(request({ path, method: "POST" }))).toBeInstanceOf(URL);
+    expect(() =>
+      resolveRoomsHumanRequestUrl(request({ path: `${root}/${conversation}`, method: "POST" })),
+    ).toThrow();
+    expect(() =>
+      resolveRoomsHumanRequestUrl(
+        request({ path: `${root}/${conversation}/messages?runtime_target=host` }),
+      ),
+    ).toThrow();
+  });
+
   it("preserves the exact route, method, and query allow-list", () => {
     const allowed: readonly RoomsHumanHttpRequest[] = [
       request(),

@@ -1,3 +1,7 @@
+import {
+  createRoomsConversationClient,
+  type RoomsConversationClient,
+} from "@t3tools/client-runtime/rooms/conversation-client";
 import type { RoomsHumanHttpRequest, RoomsHumanHttpResponse } from "@t3tools/contracts";
 import { normalizeRoomsOrigin } from "@t3tools/shared/roomsTransport";
 import * as Schema from "effect/Schema";
@@ -43,6 +47,7 @@ export interface RoomsHumanTransport {
 }
 
 export interface RoomsHumanClient {
+  readonly conversations: RoomsConversationClient;
   readonly getSession: () => Promise<RoomsHumanSession>;
   readonly createRoom: (input: {
     readonly name: string;
@@ -264,7 +269,9 @@ export function createRoomsHumanClient(
   ): Promise<RoomsHumanHttpResponse> {
     if (normalizedBaseUrl === null) throw invalidConfiguration();
     try {
+      assertCurrent();
       const bearer = await readBearer();
+      assertCurrent();
       const response = await transportFactory().request({
         baseUrl: normalizedBaseUrl,
         path,
@@ -291,7 +298,9 @@ export function createRoomsHumanClient(
   ): Promise<RoomsHumanHttpResponse> {
     if (normalizedBaseUrl === null) throw invalidConfiguration();
     try {
+      assertCurrent();
       const bearer = await readBearer();
+      assertCurrent();
       const response = await transportFactory().request({
         baseUrl: normalizedBaseUrl,
         path: `/rooms/human/v1/rooms/${encodeURIComponent(roomId)}/cas`,
@@ -325,6 +334,9 @@ export function createRoomsHumanClient(
   };
 
   return {
+    conversations: createRoomsConversationClient(async (path, method, parser, body) =>
+      decode(await request(path, method, body), parser),
+    ),
     getSession: async () =>
       decode(await request("/rooms/human/v1/session", "GET"), decoders.session),
     redeemBootstrap: async (bootstrapToken) =>
