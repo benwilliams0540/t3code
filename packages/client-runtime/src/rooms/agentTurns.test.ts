@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   nextRoomsAgentTurnTransitionAt,
   projectRoomsAgentTurns,
+  ROOMS_AGENT_DELAY_MS,
   roomsAgentTurnAnnouncement,
   roomsAgentTurnCopy,
 } from "./agentTurns.ts";
@@ -49,13 +50,16 @@ const update = (
 
 describe("Rooms Agent turn projection", () => {
   it("folds lifecycle updates and the correlated reply into one attributed turn", () => {
-    const projected = projectRoomsAgentTurns([
-      message(1, "h:monroe", "@Claw status"),
-      update(2, "running"),
-      update(3, "succeeded"),
-      message(4, "a:claw", "All systems nominal."),
-      update(5, "succeeded", { replySeq: 4 }),
-    ]);
+    const projected = projectRoomsAgentTurns(
+      [
+        message(1, "h:monroe", "@Claw status"),
+        update(2, "running"),
+        update(3, "succeeded"),
+        message(4, "a:claw", "All systems nominal."),
+        update(5, "succeeded", { replySeq: 4 }),
+      ],
+      Date.parse("2026-09-04T12:01:00Z"),
+    );
     expect(projected).toHaveLength(2);
     expect(projected[1]).toMatchObject({
       kind: "agent_turn",
@@ -76,10 +80,10 @@ describe("Rooms Agent turn projection", () => {
       [update(2, "running")],
       Date.parse("2026-09-04T12:00:40Z"),
     );
-    const failed = projectRoomsAgentTurns([
-      update(2, "running"),
-      update(3, "failed", { error: "provider_request_rejected" }),
-    ]);
+    const failed = projectRoomsAgentTurns(
+      [update(2, "running"), update(3, "failed", { error: "provider_request_rejected" })],
+      Date.parse("2026-09-04T12:01:00Z"),
+    );
     if (
       running[0]?.kind !== "agent_turn" ||
       delayed[0]?.kind !== "agent_turn" ||
@@ -100,5 +104,40 @@ describe("Rooms Agent turn projection", () => {
     expect(nextRoomsAgentTurnTransitionAt([running[0].turn])).toBe(
       Date.parse("2026-09-04T12:00:32.000Z"),
     );
+  });
+
+  it("uses the supplied clock snapshot at the exact default delay boundary", () => {
+    const items = [update(2, "running")];
+    const startedAt = Date.parse(items[0]!.occurred_at);
+    const before = projectRoomsAgentTurns(items, startedAt + ROOMS_AGENT_DELAY_MS - 1);
+    const at = projectRoomsAgentTurns(items, startedAt + ROOMS_AGENT_DELAY_MS);
+    expect(before[0]).toMatchObject({ kind: "agent_turn", turn: { status: "running" } });
+    expect(at[0]).toMatchObject({ kind: "agent_turn", turn: { status: "delayed" } });
+    if (before[0]?.kind !== "agent_turn") throw new Error("Expected projected Agent turn");
+    expect(nextRoomsAgentTurnTransitionAt([before[0].turn])).toBe(startedAt + ROOMS_AGENT_DELAY_MS);
+    expect(projectRoomsAgentTurns(items, startedAt + ROOMS_AGENT_DELAY_MS - 1)).toEqual(before);
+  });
+
+  it("preserves custom delay boundaries and future or invalid event timestamps", () => {
+    const items = [update(2, "running")];
+    const startedAt = Date.parse(items[0]!.occurred_at);
+    expect(projectRoomsAgentTurns(items, startedAt + 249, 250)[0]).toMatchObject({
+      kind: "agent_turn",
+      turn: { status: "running" },
+    });
+    expect(projectRoomsAgentTurns(items, startedAt + 250, 250)[0]).toMatchObject({
+      kind: "agent_turn",
+      turn: { status: "delayed" },
+    });
+    expect(projectRoomsAgentTurns(items, startedAt - 1)[0]).toMatchObject({
+      kind: "agent_turn",
+      turn: { status: "running" },
+    });
+    expect(
+      projectRoomsAgentTurns([{ ...items[0]!, occurred_at: "invalid" }], startedAt)[0],
+    ).toMatchObject({
+      kind: "agent_turn",
+      turn: { status: "running" },
+    });
   });
 });

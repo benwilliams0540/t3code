@@ -92,10 +92,11 @@ function messageMarkdown(item: RoomsAgentFeedItemLike | undefined): string | nul
 /**
  * Folds the append-only invocation ledger into one stable conversational turn. The triggering
  * human message stays in the feed; correlated Agent reply messages are rendered by the turn.
+ * The caller supplies epoch milliseconds from the clock snapshot used to render the feed.
  */
 export function projectRoomsAgentTurns<T extends RoomsAgentFeedItemLike>(
   items: readonly T[],
-  nowMs: number = Date.now(),
+  nowMs: number,
   delayMs: number = ROOMS_AGENT_DELAY_MS,
 ): readonly RoomsProjectedFeedEntry<T>[] {
   const updatesByInvocation = new Map<string, RoomsAgentInvocationFeedUpdate[]>();
