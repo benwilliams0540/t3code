@@ -27,7 +27,9 @@ jobs:
         run: >-
           vp test run
           packages/shared/src/roomsTransport.test.ts
+          packages/client-runtime/src/rooms
           packages/rooms-agent-api
+          packages/rooms-agent-mcp
           packages/rooms-agent-connector
           packages/rooms-agent-connector-host
           apps/web/src/features/rooms
@@ -35,13 +37,16 @@ jobs:
           apps/web/src/cloud/publicConfig.test.ts
           apps/web/src/localApi.test.ts
           apps/desktop/src/ipc/methods/roomsHuman.test.ts
+          apps/desktop/src/ipc/methods/roomsLocal.test.ts
           apps/mobile/src/features/rooms
 
       - name: Rooms typechecks
         run: >-
           vp run
           --filter @t3tools/shared
+          --filter @t3tools/client-runtime
           --filter @t3tools/rooms-agent-api
+          --filter @t3tools/rooms-agent-mcp
           --filter @t3tools/rooms-agent-connector
           --filter @t3tools/rooms-agent-connector-host
           --filter @t3tools/desktop

@@ -36,10 +36,10 @@ Keep concrete unfinished areas here with an owning issue. In-code markers use
 
 ## Repository hygiene
 
-- **Upstream sync has no cadence yet.** Decision: track upstream closely, merge (never rebase) `main` into `integrate/rooms-current` on a schedule; recipe still to be written here.
+- **Upstream maintenance** is owned by [#18](https://github.com/benwilliams0540/t3code/issues/18). Use its current merge recipe and selected sync point; dated divergence reports are evidence to refresh.
 
-- **The main CI workflow cannot run on this fork** (Blacksmith runners). `rooms-focused.yml` is manual-only by Monroe's request; proof is local focused checks recorded in PR bodies.
+- **CI and Rooms Focused are manual** on GitHub-hosted runners. Use the [focused verification recipe](../operations/ci.md); ordinary changes record relevant local proof in their PRs.
 - **Draft #2 is superseded by the Threadspace stack** (#12, web/desktop slice, mobile slice). Close it with a link once the mobile slice merges.
-- **M7 cloud transport** (`feat/rooms-m7-cloud-transport`, both repos) stays unmerged until after human acceptance (benwilliams0540/t3code#6; map in `reports/rooms-m7-m6c-reconciliation-map.md` in Monroe's root checkout, untracked).
+- **M7 cloud transport** is deferred in [#6](https://github.com/benwilliams0540/t3code/issues/6). Port only the parts needed for a demonstrated transport gap; historical branches are candidates to inspect, not a wholesale merge prerequisite.
 - **Four pinned fixture JSONs** under `apps/web/src/features/rooms/fixtures/` fail `vp fmt`; do not format them, their boundary tests hash the bytes.
 - **Historical handoff branches** (`feat/rooms-agent-connector-contract`, `feat/rooms-m5-*`, `feat/rooms-m6b-*`, `feat/rooms-m6c-*`) are evidence, not integration targets.
