@@ -1345,7 +1345,7 @@ export const OPENCLAW_GATEWAY_PROTOCOL_EVIDENCE = Object.freeze({
   requestMethods: REQUIRED_METHODS,
   continuationMethods: ["sessions.create", "sessions.resolve"] as const,
   approvalSupport: "host policy only; no connector approval UI or auto-approval",
-  inspectedSourceVersion: "2026.7.1-2",
+  inspectedSourceVersion: "2026.7.1",
   inspectedSourceCommit: "0790d9f593ad30c940ed93b5872a8cf6d6f3cf8c",
   sourcePaths: [
     "packages/gateway-protocol/src/schema/frames.ts",
