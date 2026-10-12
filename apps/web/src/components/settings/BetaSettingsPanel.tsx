@@ -178,7 +178,7 @@ export function BetaSettingsPanel() {
   const { localConfig, mode, selectedBySource, selectedRoom, setMode, state } =
     useRoomsDataSource();
   const [resetRoomsOpen, setResetRoomsOpen] = useState(false);
-  const [sampleBindings] = useLocalStorage(
+  const [roomBindings] = useLocalStorage(
     ROOMS_PROJECT_BINDINGS_STORAGE_KEY,
     Object.freeze({}) as RoomsProjectBindingsType,
     RoomsProjectBindings,
@@ -302,17 +302,16 @@ export function BetaSettingsPanel() {
             </SettingsRow>
             <SettingsRow
               title="Threadspace content"
-              description="Sample is certified demonstration data. Local is the development-only fallback. Shared uses T3 Connect and server-backed human membership."
+              description="Local is the development-only fallback. Shared uses the selected server and server-backed human membership."
             >
               <RadioGroup
                 aria-label="Threadspace content"
-                className="grid gap-2 py-3 sm:grid-cols-3"
+                className="grid gap-2 py-3 sm:grid-cols-2"
                 onValueChange={(value) => setMode(value as RoomsDataSourceMode)}
                 value={mode}
               >
                 {(
                   [
-                    ["sample", "Sample workspace", "Certified Threadspace data for evaluation."],
                     ["local", "Local workspace", "Actual local T3 projects and threads only."],
                     [
                       "shared",
@@ -379,7 +378,7 @@ export function BetaSettingsPanel() {
                         selectedBySource,
                         selectedRoomId: selectedRoom?.id ?? null,
                         localConfig,
-                        sampleBindings,
+                        roomBindings,
                         lastRoomsRoute,
                         localApiBaseUrl: roomsLocalApiBaseUrl,
                       }),
@@ -395,7 +394,7 @@ export function BetaSettingsPanel() {
             />
             <SettingsRow
               title="Reset Threadspace beta settings"
-              description="Return Threadspace to Sample and clear only Threadspace source, selection, project-binding, and navigation preferences. T3 projects and threads are never removed."
+              description="Return to the Shared connection flow and clear only Threadspace source, selection, project-binding, and navigation preferences. T3 projects and threads are never removed."
               control={
                 <Button onClick={() => setResetRoomsOpen(true)} size="sm" variant="outline">
                   Reset Threadspace…
