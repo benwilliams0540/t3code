@@ -68,3 +68,16 @@ describe("resident host configuration", () => {
     expect(() => readRoomsBearer(rooms)).toThrowError(/mode-0600/u);
   });
 });
+
+it("v2 OpenClaw host needs no native T3 identifiers while legacy v1 still does", () => {
+  const next = { ...valid(), contract: { id: "rooms.resident-agent-host-config", version: 2 } };
+  delete (next as Record<string, unknown>).nativeT3;
+  expect(parseResidentHostConfig(next).nativeT3).toBeUndefined();
+  expect(parseResidentHostConfig(next).contract.version).toBe(2);
+  expect(() =>
+    parseResidentHostConfig({
+      ...next,
+      contract: { id: "rooms.resident-agent-host-config", version: 1 },
+    }),
+  ).toThrow(/real nativeT3/);
+});

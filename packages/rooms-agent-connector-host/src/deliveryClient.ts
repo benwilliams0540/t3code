@@ -23,6 +23,7 @@ export interface DeliveryBinding {
 export interface AgentDelivery {
   readonly sourceMessageId: string;
   readonly sourceSequence: number;
+  readonly conversationId?: string;
   readonly traceId: string;
   readonly roomId: string;
   readonly channelId: string;
@@ -131,8 +132,8 @@ export const parseAgentDeliveryPage = (value: unknown): AgentDeliveryPage => {
   exact(contract, ["id", "version", "schema_uri"], "contract");
   if (
     contract.id !== ROOMS_DELIVERIES_CONTRACT.id ||
-    contract.version !== ROOMS_DELIVERIES_CONTRACT.version ||
-    contract.schema_uri !== ROOMS_DELIVERIES_CONTRACT.schemaUri
+    (contract.version !== 1 && contract.version !== 2) ||
+    contract.schema_uri !== `contracts/rooms/agent-deliveries/v${contract.version}/schema.json`
   ) {
     return drift("contract");
   }
@@ -186,6 +187,7 @@ export const parseAgentDeliveryPage = (value: unknown): AgentDeliveryPage => {
         "trace_id",
         "room_id",
         "channel_id",
+        ...(contract.version === 2 ? ["conversation_id"] : []),
         "author",
         "mentioned_agent",
         "occurred_at",
@@ -237,6 +239,15 @@ export const parseAgentDeliveryPage = (value: unknown): AgentDeliveryPage => {
     return {
       sourceMessageId,
       sourceSequence,
+      ...(contract.version === 2 && delivery.conversation_id !== null
+        ? {
+            conversationId: identifier(
+              delivery.conversation_id,
+              "conversation ID",
+              /^conversation:[0-9a-f-]{36}$/u,
+            ),
+          }
+        : {}),
       traceId: text(delivery.trace_id, `delivery ${index} trace ID`, 128),
       roomId,
       channelId: identifier(
@@ -295,6 +306,7 @@ export const toInboundEvent = (
   channelId: delivery.channelId,
   sourceMessageId: delivery.sourceMessageId,
   sourceSequence: delivery.sourceSequence,
+  ...(delivery.conversationId ? { conversationId: delivery.conversationId } : {}),
   authorPrincipalId: delivery.author.principalId,
   mentioned: delivery.mentionedAgent,
   bodyMarkdown: delivery.bodyMarkdown,
@@ -308,15 +320,18 @@ export class AgentDeliveryHttpClient {
   readonly #baseUrl: string;
   readonly #bearer: string;
   readonly #fetch: typeof globalThis.fetch;
+  readonly #version: 1 | 2;
 
   constructor(input: {
     readonly baseUrl: string;
     readonly bearerToken: string;
     readonly fetch?: typeof globalThis.fetch;
+    readonly version?: 1 | 2;
   }) {
     this.#baseUrl = input.baseUrl.replace(/\/+$/u, "");
     this.#bearer = input.bearerToken;
     this.#fetch = input.fetch ?? globalThis.fetch;
+    this.#version = input.version ?? 1;
   }
 
   async wait(
@@ -324,7 +339,7 @@ export class AgentDeliveryHttpClient {
     timeoutMs: number,
     signal?: AbortSignal,
   ): Promise<AgentDeliveryPage> {
-    const url = new URL(`${this.#baseUrl}/agent/v1/deliveries`);
+    const url = new URL(`${this.#baseUrl}/agent/v${this.#version}/deliveries`);
     url.searchParams.set("after_seq", String(afterSeq));
     url.searchParams.set("timeout_ms", String(timeoutMs));
     let response: Response;
