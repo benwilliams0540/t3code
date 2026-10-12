@@ -1,9 +1,8 @@
 name: Rooms Focused
 
-# Manual only. The main CI workflow targets Blacksmith runners that this fork
-# cannot use, so this workflow exists as a runnable recipe for the Rooms test
-# and typecheck scope on GitHub-hosted runners. It does not run on its own:
-# trigger it from the Actions tab when a run is worth the runner time.
+# Manual only. This workflow runs the Rooms test and typecheck scope on
+# GitHub-hosted runners. It does not run on pull requests or pushes: trigger it
+# from the Actions tab when focused hosted validation is needed.
 
 on:
   workflow_dispatch:
