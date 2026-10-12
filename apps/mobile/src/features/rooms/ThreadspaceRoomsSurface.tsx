@@ -1,3 +1,4 @@
+import { roomsLegacyChannelHistoryItems } from "@t3tools/client-runtime/rooms/agent-turns";
 import {
   roomsConversationHistoryItems,
   roomsConversationBindingLabel,
@@ -1315,7 +1316,7 @@ function ChannelDestination(props: {
         ) : (
           (props.conversation?.selectedId
             ? roomsConversationHistoryItems(props.feed.items)
-            : props.feed.items
+            : roomsLegacyChannelHistoryItems(props.feed.items)
           ).map((item) => {
             const writer = props.workspace.principals.find(
               (principal) => principal.id === item.attribution.writer_principal_id,

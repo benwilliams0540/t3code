@@ -6,6 +6,7 @@ import {
   ROOMS_AGENT_DELAY_MS,
   roomsAgentTurnAnnouncement,
   roomsAgentTurnCopy,
+  roomsLegacyChannelHistoryItems,
 } from "./agentTurns.ts";
 
 const source = (seq: number, type: string) => ({
@@ -49,6 +50,51 @@ const update = (
 });
 
 describe("Rooms Agent turn projection", () => {
+  it("keeps conversation messages in all-channel history without legacy status cards or announcements", () => {
+    const conversation = [
+      {
+        ...message(1, "h:monroe", "@Claw continue"),
+        payload: { body_markdown: "@Claw continue", conversation_id: "conversation:one" },
+      },
+      {
+        ...update(2, "running"),
+        source_event: { ...source(2, "agent.invocation-started"), schema: 2 },
+        payload: {
+          ...update(2, "running").payload,
+          conversation_id: "conversation:one",
+          binding_id: "binding:one",
+          turn_ordinal: 1,
+        },
+      },
+      {
+        ...message(3, "a:claw", "Durable reply"),
+        payload: { body_markdown: "Durable reply", conversation_id: "conversation:one" },
+      },
+    ];
+    const projected = projectRoomsAgentTurns(conversation, Date.parse("2026-09-04T12:01:00Z"));
+    expect(projected).toEqual([
+      { kind: "feed_item", item: conversation[0] },
+      { kind: "feed_item", item: conversation[2] },
+    ]);
+    expect(roomsLegacyChannelHistoryItems(conversation)).toEqual([
+      conversation[0],
+      conversation[2],
+    ]);
+    const turns = projected.flatMap((entry) => (entry.kind === "agent_turn" ? [entry.turn] : []));
+    expect(turns.map((turn) => roomsAgentTurnAnnouncement(turn, "Claw"))).toEqual([]);
+    expect(nextRoomsAgentTurnTransitionAt(turns)).toBeNull();
+    for (const conversationId of [undefined, null]) {
+      const legacy = {
+        ...update(4, "running"),
+        payload: { ...update(4, "running").payload, conversation_id: conversationId },
+      };
+      expect(roomsLegacyChannelHistoryItems([legacy])).toEqual([legacy]);
+      expect(projectRoomsAgentTurns([legacy], Date.parse("2026-09-04T12:01:00Z"))[0]).toMatchObject(
+        { kind: "agent_turn", turn: { status: "delayed" } },
+      );
+    }
+  });
+
   it("folds lifecycle updates and the correlated reply into one attributed turn", () => {
     const projected = projectRoomsAgentTurns(
       [
