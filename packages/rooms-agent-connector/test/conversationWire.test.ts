@@ -51,12 +51,12 @@ describe("service-produced continuing conversation fixtures", () => {
     });
     expect(started.invocation.invokingThread).toBeNull();
     expect(started.invocation.turnState).toBe("ready");
-    const settled = await client(fixture.terminal).getTurn(started.invocation.id);
+    const settled = await client(fixture.terminal).getTurn(started.invocation.id, scope);
     expect(settled.invocation.status).toBe("succeeded");
     expect(settled.invocation.outbox?.terminalStatus).toBe("succeeded");
   });
   it("reads the service's filtered pinned context with actual message attribution", async () => {
-    const start = await client(fixture.start).getTurn(wire.id);
+    const start = await client(fixture.start).getTurn(wire.id, scope);
     const messages = await client(fixture.context, (url) => {
       const query = new URL(url).searchParams;
       expect(query.get("context_cutoff_seq")).toBe("11");
@@ -93,7 +93,7 @@ describe("service-produced continuing conversation fixtures", () => {
       project_id: "real-project",
       thread_id: "real-thread",
     };
-    await expect(client(native).getTurn(wire.id)).rejects.toMatchObject({
+    await expect(client(native).getTurn(wire.id, scope)).rejects.toMatchObject({
       code: "rooms_runtime_unsupported",
     });
     await expect(
@@ -104,7 +104,7 @@ describe("service-produced continuing conversation fixtures", () => {
     ).rejects.toMatchObject({ code: "rooms_server_contract_drift" });
   });
   it("rejects advancing context scope/head and non-advancing cursor rather than looping", async () => {
-    const start = await client(fixture.start).getTurn(wire.id);
+    const start = await client(fixture.start).getTurn(wire.id, scope);
     const foreign = structuredClone(fixture.context);
     foreign.conversation.id = "conversation:other";
     await expect(client(foreign).context(start.invocation)).rejects.toMatchObject({
@@ -117,4 +117,16 @@ describe("service-produced continuing conversation fixtures", () => {
       code: "rooms_server_contract_drift",
     });
   });
+});
+
+it("replayed v2 invocation reads carry the frozen connector scope required by the service", async () => {
+  const result = await client(fixture.terminal, (url, init) => {
+    expect(new URL(url).pathname).toBe(`/agent/v2/invocations/${encodeURIComponent(wire.id)}`);
+    expect(init?.method).toBe("GET");
+    expect(init?.headers).toMatchObject({
+      "x-rooms-connector-id": scope.connectorId,
+      "x-rooms-configuration-epoch": String(scope.configurationEpoch),
+    });
+  }).getTurn(wire.id, scope);
+  expect(result.invocation.status).toBe("succeeded");
 });
