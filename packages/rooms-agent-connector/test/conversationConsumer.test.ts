@@ -196,7 +196,14 @@ class ServiceHarness implements RoomsConversationClient, RoomsInvocationClient {
         input.status === "failed" &&
         input.safeErrorCode === "connector_cancelled" &&
         ["queued", "ready"].includes(turn.turnState!);
-      if (turn.turnState !== "accepted" && !safeCancel)
+      const safePreAcceptance =
+        turn.turnState === "dispatching" &&
+        turn.runtimeRunId === null &&
+        input.status === "failed" &&
+        ["provider_request_rejected", "provider_unavailable", "connector_cancelled"].includes(
+          input.safeErrorCode!,
+        );
+      if (turn.turnState !== "accepted" && !safeCancel && !safePreAcceptance)
         throw new Error("runtime acceptance must be reconciled before finish");
       if (this.failResultBeforeCommit) {
         this.failResultBeforeCommit = false;
@@ -601,3 +608,32 @@ it("cache-loss resume uncertainty retains the real durable run ID", async () => 
     restarted.close();
   }
 });
+
+it.each([
+  ["gateway_request_rejected", "failed", "provider_request_rejected"],
+  ["gateway_scope_required", "failed", "provider_request_rejected"],
+  ["gateway_authentication_failed", "failed", "provider_request_rejected"],
+  ["gateway_unavailable", "unavailable", "provider_unavailable"],
+  ["invocation_cancelled", "cancelled", "connector_cancelled"],
+] as const)(
+  "settles definite pre-acceptance %s without inventing a run receipt",
+  async (code, kind, safeCode) => {
+    const h = make();
+    h.runtime.beforeAcceptanceError = new GatewayTransportError({
+      kind,
+      code,
+      safeMessage: "Definite pre-acceptance outcome.",
+      retryable: false,
+    });
+    try {
+      expect((await handle(h)).kind).toBe("settled");
+      expect(h.service.replies[0]?.safeErrorCode).toBe(safeCode);
+      expect([...h.service.turns.values()][0]?.runtimeRunId).toBeNull();
+      expect(h.service.runtimeReceipts).toHaveLength(0);
+      h.runtime.beforeAcceptanceError = undefined;
+      expect((await handle(h, event("a", 2))).kind).toBe("settled");
+    } finally {
+      h.close();
+    }
+  },
+);
