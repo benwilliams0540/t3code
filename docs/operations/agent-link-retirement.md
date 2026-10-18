@@ -6,17 +6,21 @@ Decision recorded October 18, 2026 against Threadspace
 [Agent Link](https://github.com/StoneHub/agent-link/tree/28bad254bf7716cda9d741153ea74420680c7806)
 `28bad254bf7716cda9d741153ea74420680c7806`.
 
-Use Threadspace's existing connector for shared project agent work. Retire
-Agent Link's separate SSH/OpenClaw scaffold without importing its transport,
-profile store or prompt wrappers. Rooms remains the durable backend; runtime
+Agent Link source retirement and repository archival are complete as of October
+18, 2026. Its [preserved source](https://github.com/StoneHub/agent-link/tree/87287f84409b9003881de34097629fe5be3d2d2b)
+is historical; new shared project agent work uses Threadspace's existing
+connector. No transport, profile store or prompt wrappers were imported.
+Rooms remains the durable backend; runtime
 execution stays in the connector and OpenClaw. This decision does not establish
 designated-host or installed-client acceptance.
 [#11](https://github.com/benwilliams0540/t3code/issues/11) and
 [#26](https://github.com/benwilliams0540/t3code/issues/26) own that remaining work.
 
 Monroe confirmed that this is an early prototype consolidation: there will be
-two active repositories, `t3code` and `t3rooms`. Integrate this decision on `main`
-and finish Agent Link retirement now. Runtime testing and feature parity are
+two active repositories, `t3code` and `t3rooms`. This decision was integrated on
+`main` in [PR #50](https://github.com/benwilliams0540/t3code/pull/50).
+The [Rooms #12 conclusion](https://github.com/benwilliams0540/t3rooms/issues/12#issuecomment-6247181760)
+establishes that no backend code change was needed. Runtime testing and feature parity are
 later Threadspace work, not prerequisites to consolidating the product.
 
 ## Capability disposition
@@ -38,10 +42,14 @@ reconciliation or automatic transcript migration.
 
 These replace shared-work workflows, without CLI compatibility or personal-agent
 memory parity. No Agent Link runtime consumer was found in the inspected
-Threadspace client/connector sources. Other hosts/repositories require their own
-inventory before removing installations or claiming global retirement. Agent
-Link's deprecation owner owns that inventory and repository notice; this
-repository supplies the replacement decision and existing backlog.
+Threadspace client/connector sources. Product retirement is complete; no
+deprecation work remains assigned to another chat. Removing any existing
+installation or private profile remains a separate, scoped operation. Agent Link
+issue #2 remains open in the read-only archive as historical tracking; do not
+unarchive the repository solely to close it. The archive's frozen README and
+retirement guide still describe archival as pending; GitHub's completed archive
+state and this active guide supersede that pre-archive wording. Current product
+work belongs in Threadspace's existing backlog.
 
 ## Current connector trace
 
@@ -115,10 +123,12 @@ repository supplies the replacement decision and existing backlog.
 
 ## Retirement decision and later product work
 
-Retire Agent Link as an active standalone project and keep its source history
-recoverable. No compatibility shim, new transport or personal-memory migration
-is required for this consolidation. Keep existing private profiles/history
-intact. References should direct new work to Threadspace's existing owners.
+Agent Link is retired as an active standalone project, with its source history
+preserved in the archived repository. No compatibility shim, new transport or
+personal-memory migration is required for this consolidation. Existing private
+profiles/history stay intact. Fleet's Windows controller reference was
+[reconciled](https://github.com/StoneHub/fleet/commit/82a9bbb1e6e72e96cf9decd01156a713a8191727)
+to direct new shared-work integration to Threadspace's existing owners.
 
 The following are future product work under #11/#26, not retirement or merge
 gates. Complete them as the prototype develops:
