@@ -5,6 +5,10 @@ defines the useful workspace; [roadmap #26](https://github.com/benwilliams0540/t
 records delivery and acceptance. Rooms is the product's durable backend. The
 existing T3 coding runtime remains an execution path within Threadspace.
 
+[Agent Link reconciliation](../operations/agent-link-retirement.md) maps the
+standalone scaffold's profiles/probe/brief/ask/handoff workflows to these owners,
+with explicit limits for private memory and intended-host acceptance.
+
 ## Dependency direction
 
 ```mermaid

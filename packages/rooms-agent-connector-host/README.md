@@ -5,6 +5,9 @@ OpenClaw agent and one configured channel. It owns configuration and process
 supervision; the backend owns durable conversations, bindings and turn order.
 See [product architecture](../../docs/architecture/threadspace.md).
 
+For the Agent Link replacement decision, existing client call sites and safe
+retirement conditions, see [Agent Link reconciliation](../../docs/operations/agent-link-retirement.md).
+
 The host reads Rooms and Gateway credentials from the intended owner-only files.
 It opens no listening service and stores no provider credentials in room records.
 Local SQLite files retain delivery checkpoints, mapping and accepted-run receipts;
@@ -68,3 +71,9 @@ connector supplies no approval UI bridge and never auto-approves. A yielded or
 unreconciled runtime state remains visible as uncertain. Actual tool/approval
 behavior and the designated host's runtime version need integration acceptance;
 protocol fixtures alone do not establish them.
+
+SIGINT/SIGTERM stops the foreground host; stop its supervisor separately if it
+would restart it. Stopping does not revoke credentials or cancel an accepted
+run. Keep checkpoint/receipt state for reconciliation. Durable agent disable
+and credential revocation belong to Rooms governance and require their own
+authorization; there is no client uninstall command in this package.
