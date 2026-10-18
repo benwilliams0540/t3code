@@ -14,6 +14,11 @@ designated-host or installed-client acceptance.
 [#11](https://github.com/benwilliams0540/t3code/issues/11) and
 [#26](https://github.com/benwilliams0540/t3code/issues/26) own that remaining work.
 
+Monroe confirmed that this is an early prototype consolidation: there will be
+two active repositories, `t3code` and `t3rooms`. Integrate this decision on `main`
+and finish Agent Link retirement now. Runtime testing and feature parity are
+later Threadspace work, not prerequisites to consolidating the product.
+
 ## Capability disposition
 
 Agent Link's `agent_link.py` stores routing hints in `profiles.json`, probes SSH
@@ -108,16 +113,19 @@ repository supplies the replacement decision and existing backlog.
   scoped agent catalog. It has no invocation-start, generic reply or connector
   control operation; it is not an unrestricted transient-agent handoff interface.
 
-## Retirement and acceptance conditions
+## Retirement decision and later product work
 
-Agent Link can be marked deprecated as a standalone scaffold with these
-limitations stated. Calling Threadspace its accepted operational replacement
-requires the remaining #11/#26 proof:
+Retire Agent Link as an active standalone project and keep its source history
+recoverable. No compatibility shim, new transport or personal-memory migration
+is required for this consolidation. Keep existing private profiles/history
+intact. References should direct new work to Threadspace's existing owners.
 
-1. The deprecation owner inventories known consumers/installations on their
-   actual hosts, records any personal-agent workflow still needing replacement,
-   and updates references. Do not infer absence elsewhere from this Mac or
-   automatically delete profiles/private history.
+The following are future product work under #11/#26, not retirement or merge
+gates. Complete them as the prototype develops:
+
+1. If an existing consumer surfaces, record its actual shared-work need in the
+   appropriate Threadspace issue. Do not infer private-history sharing consent
+   from its old Agent Link configuration.
 2. An authorized operator runs host v2 readiness against compatible installed
    Rooms/OpenClaw versions. Record revisions, protocol and configuration
    provenance without credentials. A fixture pass is insufficient.
