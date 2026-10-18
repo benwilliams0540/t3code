@@ -13,11 +13,13 @@ Keep concrete unfinished areas here with an owning issue. In-code markers use
 - **Sample product flow is retired** ([#46](https://github.com/benwilliams0540/t3code/issues/46)). The September 4 decision in `foundations.md` is implemented: only Local and Shared are selectable. Old Sample source preferences normalize to the existing Shared connect/sign-in flow; existing Local/Shared preferences, server profiles and room/project bindings remain. Certified workspace fixtures and their decoder contracts stay as test/reference data, with no production fixture renderer.
 - **Status header has no health fact.** `RoomsInteractiveDashboard.tsx` carries a `TODO(rooms)`; a real fact needs native T3 mirroring or project-impact telemetry (benwilliams0540/t3rooms#1). Do not fake one.
 - **Native thread linking shows nothing.** `t3_environments` and `t3_mirrored_events` are empty on staging; the Rails adapter that mirrors T3 events was never run against a real environment. This is what would let Ben and Monroe see each other's agent work.
-- **OpenClaw conversations are isolated per invocation.** The transport derives
-  its session key from the invocation ID and uses restricted request options.
-  [#11](https://github.com/benwilliams0540/t3code/issues/11) owns persistent
-  continuation and the actual tool/approval integration proof. Existing replies
-  do not establish a continuing work session.
+- **OpenClaw continuation source is delivered; host acceptance remains.** V2
+  conversations resolve the persisted runtime binding and inherit host tool and
+  approval policy. Legacy isolated invocations retain invocation-derived
+  sessions and restricted options.
+  [#11](https://github.com/benwilliams0540/t3code/issues/11) owns the actual
+  tool/approval integration proof. See [Agent Link reconciliation](../operations/agent-link-retirement.md)
+  for workflow replacements and the limits of that source evidence.
 
 ## Desktop build and sign-in
 
