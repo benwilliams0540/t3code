@@ -46,8 +46,10 @@ Threadspace client/connector sources. Product retirement is complete; no
 deprecation work remains assigned to another chat. Removing any existing
 installation or private profile remains a separate, scoped operation. Agent Link
 issue #2 remains open in the read-only archive as historical tracking; do not
-unarchive the repository solely to close it. Current product work belongs in
-Threadspace's existing backlog.
+unarchive the repository solely to close it. The archive's frozen README and
+retirement guide still describe archival as pending; GitHub's completed archive
+state and this active guide supersede that pre-archive wording. Current product
+work belongs in Threadspace's existing backlog.
 
 ## Current connector trace
 
