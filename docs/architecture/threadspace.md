@@ -118,8 +118,14 @@ authenticated transport and connection generation. Local navigation bindings
 confer no file access. Reads are bounded, request-only observations with source,
 checkout and sharing identity; account switches and mismatched responses clear
 the view. Backend `docs/operations/shared-project-files.md` owns host setup and
-revocation details. Runtime tool exposure and intended-host/installed acceptance
-remain separate from this source slice.
+revocation details. `packages/rooms-agent-openclaw` exposes five optional project
+read tools through OpenClaw's normal plugin registration. They use runtime-provided
+session identity and the backend's bound runtime project routes; personal or
+unbound sessions fail closed. It shares the client response decoder and adds no
+agent loop or story tools. Tool output may enter normal runtime/room history;
+backend request-only retention does not erase those downstream copies. Its README
+owns setup and disable instructions. Intended-host installation and actual
+two-client/agent acceptance remain separate from source proof.
 
 ## Compatibility and acceptance
 

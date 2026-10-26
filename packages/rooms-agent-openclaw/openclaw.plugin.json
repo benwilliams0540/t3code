@@ -1,0 +1,57 @@
+{
+  "id": "rooms-projects",
+  "name": "Rooms shared project reads",
+  "description": "Read explicitly shared project files and changes from an initialized Rooms conversation.",
+  "activation": {
+    "onCapabilities": ["tool"]
+  },
+  "contracts": {
+    "tools": [
+      "rooms_project_list",
+      "rooms_project_entries",
+      "rooms_project_file",
+      "rooms_project_changes",
+      "rooms_project_diff"
+    ]
+  },
+  "toolMetadata": {
+    "rooms_project_list": {
+      "optional": true
+    },
+    "rooms_project_entries": {
+      "optional": true
+    },
+    "rooms_project_file": {
+      "optional": true
+    },
+    "rooms_project_changes": {
+      "optional": true
+    },
+    "rooms_project_diff": {
+      "optional": true
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["baseUrl", "bearerFile", "roomId", "agentId"],
+    "properties": {
+      "baseUrl": {
+        "type": "string",
+        "minLength": 1
+      },
+      "bearerFile": {
+        "type": "string",
+        "minLength": 1
+      },
+      "roomId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "agentId": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}
