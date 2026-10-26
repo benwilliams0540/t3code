@@ -51,6 +51,13 @@ const Diff = Schema.Struct({
   unstaged: Schema.String,
   untracked: Schema.NullOr(Schema.String),
 });
+export const roomsSharedProjectDecoders = {
+  list: Schema.decodeUnknownSync(List),
+  entries: Schema.decodeUnknownSync(Entries),
+  file: Schema.decodeUnknownSync(File),
+  changes: Schema.decodeUnknownSync(Changes),
+  diff: Schema.decodeUnknownSync(Diff),
+};
 export type RoomsSharedProject = typeof Project.Type;
 export type RoomsProjectEntries = typeof Entries.Type;
 export type RoomsProjectChanges = typeof Changes.Type;
@@ -100,18 +107,18 @@ export function createRoomsSharedProjectsClient(
   }
   return {
     list: async (room: string) => {
-      const result = await request(root(room), "GET", Schema.decodeUnknownSync(List));
+      const result = await request(root(room), "GET", roomsSharedProjectDecoders.list);
       if (result.room_id !== room) throw new RoomsProjectScopeError();
       return result;
     },
     entries: (room: string, project: string, path = "") =>
-      observe(room, project, "entries", Schema.decodeUnknownSync(Entries), path),
+      observe(room, project, "entries", roomsSharedProjectDecoders.entries, path),
     file: (room: string, project: string, path: string) =>
-      observe(room, project, "file", Schema.decodeUnknownSync(File), path),
+      observe(room, project, "file", roomsSharedProjectDecoders.file, path),
     changes: (room: string, project: string) =>
-      observe(room, project, "changes", Schema.decodeUnknownSync(Changes)),
+      observe(room, project, "changes", roomsSharedProjectDecoders.changes),
     diff: (room: string, project: string, path: string) =>
-      observe(room, project, "diff", Schema.decodeUnknownSync(Diff), path),
+      observe(room, project, "diff", roomsSharedProjectDecoders.diff, path),
   };
 }
 export type RoomsSharedProjectsClient = ReturnType<typeof createRoomsSharedProjectsClient>;
