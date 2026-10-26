@@ -24,6 +24,7 @@ import { RoomsYourThreadsNavigation } from "../threads/RoomsThreadNavigation";
 export type RoomsWorkspaceNavigate = (target: RoomsNavigationTarget) => void;
 
 export const ROOMS_PROJECT_NAVIGATION = [
+  { key: "files", label: "Files & Changes" },
   { key: "vision", label: "Vision" },
   { key: "stories", label: "Stories" },
   { key: "evidence", label: "Evidence" },

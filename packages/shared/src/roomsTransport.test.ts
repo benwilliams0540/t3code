@@ -204,3 +204,27 @@ describe("Shared Rooms request policy", () => {
     ).toThrow("not valid base64");
   });
 });
+
+describe("shared project read transport", () => {
+  const base = {
+    baseUrl: "https://rooms.example.test",
+    bearer: "test-bearer",
+    method: "GET" as const,
+  };
+  const root = "/rooms/human/v2/rooms/room:01900000-0000-7000-8000-000000000001/projects";
+  it("allows bounded project reads but rejects mutations and extra authority", () => {
+    expect(
+      resolveRoomsHumanRequestUrl({ ...base, path: `${root}/demo/file?path=src%2Fmain.ts` })
+        .pathname,
+    ).toContain("/projects/demo/file");
+    expect(() =>
+      resolveRoomsHumanRequestUrl({ ...base, method: "POST", path: `${root}/demo/file` }),
+    ).toThrow();
+    expect(() =>
+      resolveRoomsHumanRequestUrl({ ...base, path: `${root}/demo/file?path=a&root=%2Fetc` }),
+    ).toThrow();
+    expect(() =>
+      resolveRoomsHumanRequestUrl({ ...base, path: `${root}/demo/changes?after_seq=1` }),
+    ).toThrow();
+  });
+});

@@ -5,6 +5,14 @@ labels:
   - enhancement
   - needs-triage
 body:
+  - type: textarea
+    id: tldr
+    attributes:
+      label: TL;DR — product direction
+      description: In plain language, what will someone be able to do, why does it matter, and what should the first version cover?
+      placeholder: Open a room, see the project's current changes, and discuss them with a teammate and agent without copying code into chat.
+    validations:
+      required: true
   - type: markdown
     attributes:
       value: |

@@ -1,3 +1,4 @@
+import { RoomsSharedProjectSurface } from "../project/RoomsSharedProjectSurface";
 import { CircleUserRoundIcon, CopyIcon, ShieldCheckIcon, Trash2Icon } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
@@ -235,6 +236,9 @@ export function RoomsHumanWorkspaceSurfaceView({
   }
   if (surface.kind === "threads") {
     return <RoomsThreadsSurface navigate={navigate} room={room} sourceMode="shared" />;
+  }
+  if (surface.kind === "project" && surface.projectSection === "files") {
+    return <RoomsSharedProjectSurface key={room.id} roomId={room.id} />;
   }
   if (surface.kind === "project" && surface.projectSection === "stories") {
     return (

@@ -1,3 +1,4 @@
+import type { RoomsSharedProjectsClient } from "@t3tools/client-runtime/rooms/shared-projects";
 import type { RoomsConversationClient } from "@t3tools/client-runtime/rooms/conversation-client";
 import { normalizeRoomsOrigin } from "@t3tools/shared/roomsTransport";
 import {
@@ -148,6 +149,7 @@ interface RoomsDataSourceContextValue {
   readonly signOutLocal: () => Promise<void>;
   readonly connectionIdentity: string;
   readonly connectionGeneration: number;
+  readonly projectsClientFor: (request: RoomsConnectionRequest) => RoomsSharedProjectsClient;
   readonly conversationClientFor: (request: RoomsConnectionRequest) => RoomsConversationClient;
   readonly captureConnection: () => RoomsConnectionRequest;
   readonly isCurrentConnection: (request: RoomsConnectionRequest) => boolean;
@@ -897,6 +899,14 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
     },
     [connection, humanClientForRequest],
   );
+  const projectsClientFor = useCallback(
+    (request: RoomsConnectionRequest) => {
+      connection.assertCurrent(request, identityRef.current);
+      if (request.source !== "shared") throw sourceNotReadyError();
+      return humanClientForRequest(request).projects;
+    },
+    [connection, humanClientForRequest],
+  );
   const connectionIdentity = JSON.stringify([identity.source, identity.server, identity.accountId]);
 
   const value = useMemo<RoomsDataSourceContextValue>(
@@ -907,6 +917,7 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       connectionGeneration: projection.identity?.generation ?? 0,
       captureConnection,
       conversationClientFor,
+      projectsClientFor,
       isCurrentConnection,
       selectedRoom,
       selectedBySource,
@@ -969,6 +980,7 @@ export function RoomsDataSourceProvider({ children }: { readonly children: React
       projection.identity?.generation,
       captureConnection,
       conversationClientFor,
+      projectsClientFor,
       isCurrentConnection,
       mode,
       retryLocalWorkspace,

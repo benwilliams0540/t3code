@@ -108,6 +108,19 @@ layout and accessible loading/error states stay in the UI. `conversationStatus.t
 maps authoritative turn/binding states to shared human-readable labels. Queued or
 uncertain turns never inherit a misleading working label from historical events.
 
+## Shared current project reads
+
+The backend's `Rooms::SharedProjects::Reader` serves explicitly mounted source
+checkouts under host-configured room grants. Human and agent read routes share
+that service; browsing does not dispatch runtime work. The client Files & Changes
+page uses `packages/client-runtime/src/rooms/sharedProjects.ts`, the existing
+authenticated transport and connection generation. Local navigation bindings
+confer no file access. Reads are bounded, request-only observations with source,
+checkout and sharing identity; account switches and mismatched responses clear
+the view. Backend `docs/operations/shared-project-files.md` owns host setup and
+revocation details. Runtime tool exposure and intended-host/installed acceptance
+remain separate from this source slice.
+
 ## Compatibility and acceptance
 
 Live v1 auth, ordinary messages, native one-shot invocations and their history
