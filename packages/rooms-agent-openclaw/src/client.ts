@@ -19,9 +19,11 @@ export interface ProjectToolContext {
 
 export class ProjectReadError extends Error {
   readonly code: string;
-  constructor(code: string) {
+  readonly retryable: boolean;
+  constructor(code: string, retryable = false) {
     super(code);
     this.code = code;
+    this.retryable = retryable;
   }
 }
 
@@ -112,7 +114,7 @@ function readBearer(filename: string): string {
 function validPath(value: unknown, allowRoot = false): value is string {
   return (
     typeof value === "string" &&
-    value.length <= 2048 &&
+    Buffer.byteLength(value, "utf8") <= 512 &&
     ((allowRoot && value === "") ||
       (value.length > 0 &&
         !hasControl(value) &&
@@ -166,11 +168,23 @@ export async function readProject(
     // Never pass raw server errors, redirects, transport exceptions or credentials to a model.
     if (!response.ok) {
       await response.body?.cancel();
-      throw new ProjectReadError(
-        response.status === 401 || response.status === 403 || response.status === 404
-          ? "project_tools_access_denied"
-          : "project_tools_read_unavailable",
-      );
+      switch (response.status) {
+        case 401:
+        case 403:
+          throw new ProjectReadError("project_tools_access_denied");
+        case 404:
+          throw new ProjectReadError("project_tools_not_found");
+        case 409:
+          throw new ProjectReadError("project_tools_read_conflict", true);
+        case 400:
+        case 422:
+          throw new ProjectReadError("project_tools_input_invalid");
+        default:
+          throw new ProjectReadError(
+            "project_tools_read_unavailable",
+            response.status === 408 || response.status === 429 || response.status >= 500,
+          );
+      }
     }
     if (!response.body) throw new ProjectReadError("project_tools_response_invalid");
     const reader = response.body.getReader();

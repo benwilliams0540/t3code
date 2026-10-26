@@ -179,7 +179,7 @@ describe("resident agent shared project tools", () => {
     };
     expect(await tool.execute("second", input)).toEqual({
       content: [{ type: "text", text: "project_tools_access_denied" }],
-      details: { error: "project_tools_access_denied" },
+      details: { error: "project_tools_access_denied", retryable: false },
       isError: true,
     });
     expect(requests[1]!.headers.authorization).toBe("Bearer rag1.rotated-project-credential");
@@ -198,6 +198,7 @@ describe("resident agent shared project tools", () => {
     ])
       expect((await tool.execute("invalid", input)).details).toEqual({
         error: "project_tools_input_invalid",
+        retryable: false,
       });
     expect(requests).toHaveLength(0);
   });
@@ -221,6 +222,45 @@ describe("resident agent shared project tools", () => {
     }
   });
 
+  it("uses the backend's UTF-8 byte path limit, including multibyte paths", async () => {
+    const tool = tools().rooms_project_file!;
+    for (const path of ["a".repeat(512), "é".repeat(256), "😀".repeat(128)]) {
+      expect(
+        (await tool.execute("boundary", { project_id: "demo", path })).isError,
+      ).toBeUndefined();
+    }
+    const count = requests.length;
+    for (const path of ["a".repeat(513), "é".repeat(257), "😀".repeat(129)]) {
+      expect((await tool.execute("oversized", { project_id: "demo", path })).details).toEqual({
+        error: "project_tools_input_invalid",
+        retryable: false,
+      });
+    }
+    expect(requests).toHaveLength(count);
+  });
+
+  it("distinguishes invalid input, denied, missing and retryable reads without exposing server detail", async () => {
+    const cases = [
+      [401, "project_tools_access_denied", false],
+      [403, "project_tools_access_denied", false],
+      [404, "project_tools_not_found", false],
+      [409, "project_tools_read_conflict", true],
+      [422, "project_tools_input_invalid", false],
+      [503, "project_tools_read_unavailable", true],
+    ] as const;
+    const tool = tools().rooms_project_file!;
+    for (const [status, error, retryable] of cases) {
+      handler = (_request, response) => {
+        response.writeHead(status);
+        response.end("private configuration detail");
+      };
+      const result = await tool.execute("read-error", { project_id: "demo", path: "README.md" });
+      expect(result.details).toEqual({ error, retryable });
+      expect(result.isError).toBe(true);
+      expect(JSON.stringify(result)).not.toContain("private configuration detail");
+    }
+  });
+
   it("bounds responses and does not follow redirects", async () => {
     const tool = tools().rooms_project_list!;
     handler = (_request, response) => {
@@ -232,6 +272,7 @@ describe("resident agent shared project tools", () => {
     handler = (_request, response) => response.end("x".repeat(2 * 1024 * 1024 + 1));
     expect((await tool.execute("large", {})).details).toEqual({
       error: "project_tools_response_too_large",
+      retryable: false,
     });
   });
 
@@ -247,11 +288,13 @@ describe("resident agent shared project tools", () => {
     NodeFS.chmodSync(bearerFile, 0o644);
     expect((await tool.execute("bad-mode", {})).details).toEqual({
       error: "project_tools_credential_unavailable",
+      retryable: false,
     });
     NodeFS.renameSync(bearerFile, `${bearerFile}.real`);
     NodeFS.symlinkSync(`${bearerFile}.real`, bearerFile);
     expect((await tool.execute("symlink", {})).details).toEqual({
       error: "project_tools_credential_unavailable",
+      retryable: false,
     });
     expect(requests).toHaveLength(0);
   });

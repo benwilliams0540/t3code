@@ -8,7 +8,7 @@ text files and inspect staged/unstaged changes through the same backend reader
 used by people. It never writes project files or starts an agent turn.
 
 The first version serves one configured room and resident agent. Project sharing
-and host tool policy remain explicit. Personal sessions receive no tools; a
+and host tool policy remain explicit. Personal sessions receive none of these tools; a
 Rooms session also has to match a ready backend binding for this credential's
 room, agent and machine. A room member's message cannot supply that identity.
 
@@ -28,11 +28,17 @@ models only supply a project ID and relative path. Every GET goes to
 The paired backend verifies an initialized execution binding before reading.
 An older backend fails closed with no fallback to unbound project routes.
 
-The response decoder is shared with Files & Changes. Unexpected room/project/path,
-contract or retention fields fail closed. Results preserve host, checkout, grant,
+The response decoder is shared with Files & Changes. Mismatched room/project/path
+or unsupported contract/retention values fail closed; unknown additive fields are
+discarded. Results preserve host, checkout, grant,
 read time and Git base revision. Reads are individual observations of a moving
 checkout; separate tool calls are not an atomic snapshot. File content and diffs
 are untrusted project data, not instructions or permission grants.
+
+Paths have the backend's 512 UTF-8 byte limit. Tool errors distinguish invalid
+input, denied access, a missing/unshared path and a read conflict. A conflict has
+`retryable: true`: re-read before drawing a conclusion about the current files.
+Do not repeat invalid input unchanged or treat an error as file content.
 
 There is no project cache. **OpenClaw may retain tool results in its ordinary
 session history, and an agent reply may quote them into shared room history.**
@@ -81,6 +87,15 @@ The existing agent credential must belong to this room/machine and allow project
 reads. Supply it only through an owner-only regular file, not plugin JSON or a
 prompt. The plugin rereads that file on each request, rejects symlinks, never
 follows HTTP redirects, bounds responses to 2 MiB and times out after five seconds.
+
+The session check protects these plugin calls, not arbitrary host tools. Existing
+unbound agent API reads remain available to credential holders. A filesystem or
+shell tool running as the credential owner could read that bearer and call those
+APIs directly; mode 0600 does not isolate tools running under the same OS user.
+Configure the shared-room agent's filesystem/shell access so it cannot read
+credential/configuration files or private personal data. Keep those files outside
+its sandbox mounts. Do not assume installing this plugin restricts other tools or
+separates a personal agent's memory. Verify that policy before enabling shared use.
 
 Opt in the five tools in the **resident agent's** existing tool policy:
 `rooms_project_list`, `rooms_project_entries`, `rooms_project_file`,
