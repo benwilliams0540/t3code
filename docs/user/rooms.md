@@ -101,6 +101,22 @@ the thread is exactly linked to a story, the rail shows its owner, stage, eviden
 The current thread contract does not expose a selectable output inventory, so Rooms shows that
 capability as unavailable instead of fabricating attachments.
 
+## Browse project files and changes
+
+Open **Project → Files & Changes** to browse a project shared by the room's host
+owner. Choose a file to read its current contents, or choose **Changes** to inspect
+staged and unstaged edits. Use **Refresh** to read again. The view identifies the
+host and checkout, read time and base revision; a moving checkout is not one saved
+snapshot.
+
+The first version is read only. The host owner configures the shared checkout and
+exclusions on the Rooms backend; adding a local T3 project does not share it.
+A room without a configured share shows **No project shared yet**. Removing the
+share blocks later reads. Current content stays in memory and is cleared on an
+unavailable/revoked source or account switch; offline browsing is not included.
+Agent-facing read routes use the same source service. Wiring those reads into the
+intended agent runtime and installed two-client acceptance remain #23/#26 work.
+
 ## Know what is authoritative
 
 **Evidence**, **Decisions**, and **People and machines** are projections of the selected Rooms

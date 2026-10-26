@@ -26,6 +26,12 @@ export function localUnavailableSurfaceCopy(surface: LocalUnavailableSurface): {
       description: "No presence information is available locally.",
     };
   }
+  if (surface.projectSection === "files") {
+    return {
+      title: "Files & Changes",
+      description: "Connect to a shared room to browse the projects its host has shared.",
+    };
+  }
   if (surface.projectSection === "vision") {
     return { title: "Vision", description: "No vision revisions yet." };
   }

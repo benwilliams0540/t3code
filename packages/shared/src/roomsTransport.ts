@@ -90,6 +90,12 @@ function exactHumanRouteMethods(pathname: string): readonly ("GET" | "POST")[] {
   }
   const conversations = `/rooms/human/v2/rooms/${ROOM_ID}/channels/${CHANNEL_ID}/conversations`;
   const routes: readonly [RegExp, readonly ("GET" | "POST")[]][] = [
+    [
+      new RegExp(
+        `^/rooms/human/v2/rooms/${ROOM_ID}/projects(?:/[a-zA-Z0-9_-]{1,100}/(?:entries|file|changes|diff))?$`,
+      ),
+      ["GET"],
+    ],
     [new RegExp(`^${conversations}$`), ["GET", "POST"]],
     [new RegExp(`^${conversations}/${CONVERSATION_ID}$`), ["GET"]],
     [new RegExp(`^${conversations}/${CONVERSATION_ID}/messages$`), ["GET", "POST"]],
@@ -117,12 +123,15 @@ function exactHumanRouteMethods(pathname: string): readonly ("GET" | "POST")[] {
 function hasValidHumanQuery(target: URL): boolean {
   if (target.search === "") return true;
   const decodedPath = decodeURIComponent(target.pathname);
-  const allowed =
-    decodedPath.endsWith("/feed") || /\/conversations\/[^/]+\/messages$/.test(decodedPath)
-      ? new Set(["after_seq", "limit", "snapshot_head_seq"])
-      : decodedPath.endsWith("/changes")
-        ? new Set(["after_seq", "timeout_ms", "realtime", "client_id"])
-        : new Set<string>();
+  const allowed = /\/projects\/[a-zA-Z0-9_-]+\/(?:entries|file|diff)$/.test(decodedPath)
+    ? new Set(["path"])
+    : /\/projects\/[a-zA-Z0-9_-]+\/changes$/.test(decodedPath)
+      ? new Set<string>()
+      : decodedPath.endsWith("/feed") || /\/conversations\/[^/]+\/messages$/.test(decodedPath)
+        ? new Set(["after_seq", "limit", "snapshot_head_seq"])
+        : decodedPath.endsWith("/changes")
+          ? new Set(["after_seq", "timeout_ms", "realtime", "client_id"])
+          : new Set<string>();
   return [...target.searchParams.keys()].every((key) => allowed.has(key));
 }
 

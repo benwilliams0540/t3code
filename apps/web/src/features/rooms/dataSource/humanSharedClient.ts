@@ -1,4 +1,8 @@
 import {
+  createRoomsSharedProjectsClient,
+  type RoomsSharedProjectsClient,
+} from "@t3tools/client-runtime/rooms/shared-projects";
+import {
   createRoomsConversationClient,
   type RoomsConversationClient,
 } from "@t3tools/client-runtime/rooms/conversation-client";
@@ -47,6 +51,7 @@ export interface RoomsHumanTransport {
 }
 
 export interface RoomsHumanClient {
+  readonly projects: RoomsSharedProjectsClient;
   readonly conversations: RoomsConversationClient;
   readonly getSession: () => Promise<RoomsHumanSession>;
   readonly createRoom: (input: {
@@ -334,6 +339,9 @@ export function createRoomsHumanClient(
   };
 
   return {
+    projects: createRoomsSharedProjectsClient(async (path, method, parser, body) =>
+      decode(await request(path, method, body), parser),
+    ),
     conversations: createRoomsConversationClient(async (path, method, parser, body) =>
       decode(await request(path, method, body), parser),
     ),

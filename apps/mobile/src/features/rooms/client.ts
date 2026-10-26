@@ -1,3 +1,4 @@
+import { createRoomsSharedProjectsClient } from "@t3tools/client-runtime/rooms/shared-projects";
 import { createRoomsConversationClient } from "@t3tools/client-runtime/rooms/conversation-client";
 import type { RoomsHumanHttpRequest } from "@t3tools/contracts";
 import {
@@ -168,6 +169,7 @@ export function createRoomsMobileClient(options: {
 
   return {
     conversations: createRoomsConversationClient(request),
+    projects: createRoomsSharedProjectsClient(request),
     getSession: () => request("/rooms/human/v1/session", "GET", decodeSession),
     getWorkspace: async (roomId: string) => {
       const workspace = await request(`${roomPath(roomId)}/workspace`, "GET", decodeWorkspace);
