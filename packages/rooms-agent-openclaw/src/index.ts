@@ -73,8 +73,8 @@ export default {
                       : {
                           path: {
                             type: "string",
-                            maxLength: 2048,
-                            description: "Relative file or folder path.",
+                            maxLength: 512,
+                            description: "Relative file or folder path, at most 512 UTF-8 bytes.",
                           },
                         }),
                   },
@@ -97,7 +97,10 @@ export default {
                 error instanceof ProjectReadError ? error.code : "project_tools_read_unavailable";
               return {
                 content: [{ type: "text" as const, text: code }],
-                details: { error: code },
+                details: {
+                  error: code,
+                  retryable: error instanceof ProjectReadError && error.retryable,
+                },
                 isError: true,
               };
             }
