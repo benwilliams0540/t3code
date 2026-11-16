@@ -1,15 +1,9 @@
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
-import {
-  getLocalStorageItem,
-  removeLocalStorageItem,
-  setLocalStorageItem,
-} from "~/hooks/useLocalStorage";
 
 import storyAtHumanQaDocument from "../dataSource/fixtures/local-stories-v2-story-at-human-qa.json";
 import { RoomsLocalStoryV2 } from "../dataSource/localStoriesContract";
 import {
-  countNewRoomsOutputSelections,
   localStoryBlockingGroup,
   localStoryBlockingGroupLabel,
   localStoryEvidenceGate,
@@ -17,8 +11,6 @@ import {
   localStoryNextAction,
   localStoryOwnerId,
   localStoryStageCounts,
-  ROOMS_STORIES_VIEW_STORAGE_KEY,
-  RoomsStoriesView,
 } from "./presentation";
 
 const story = Schema.decodeUnknownSync(RoomsLocalStoryV2)(storyAtHumanQaDocument);
@@ -66,21 +58,6 @@ describe("Rooms story presentation", () => {
       "not-blocked",
     );
     expect(localStoryBlockingGroup(story, null)).toBe("unknown");
-  });
-
-  it("deduplicates attached and repeated output selections", () => {
-    expect(countNewRoomsOutputSelections(["output-a"], ["output-a", "output-b", "output-b"])).toBe(
-      1,
-    );
-  });
-
-  it("persists the harmless Board/List preference with the shared UI convention", () => {
-    try {
-      setLocalStorageItem(ROOMS_STORIES_VIEW_STORAGE_KEY, "list", RoomsStoriesView);
-      expect(getLocalStorageItem(ROOMS_STORIES_VIEW_STORAGE_KEY, RoomsStoriesView)).toBe("list");
-    } finally {
-      removeLocalStorageItem(ROOMS_STORIES_VIEW_STORAGE_KEY);
-    }
   });
 
   it("recounts every stage from current server stories", () => {

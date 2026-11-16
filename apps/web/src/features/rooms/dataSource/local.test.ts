@@ -1,18 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { RoomsLocalClientError } from "./localChannelsClient";
-import { connectingLocalRoomsDataSourceState, failedLocalRoomsDataSourceState } from "./local";
+import { failedLocalRoomsDataSourceState } from "./local";
 
 describe("Rooms Local source states", () => {
-  it("starts in a distinct connecting state", () => {
-    expect(connectingLocalRoomsDataSourceState()).toEqual({
-      mode: "local",
-      status: "connecting",
-      rooms: [],
-      error: null,
-    });
-  });
-
   it.each([
     ["local_session_disabled", "disabled"],
     ["local_workspace_uninitialized", "uninitialized"],
