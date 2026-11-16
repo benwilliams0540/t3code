@@ -23,6 +23,11 @@ const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const MAX_TRUSTED_CONTEXT_BYTES = 4_096;
 const REQUIRED_METHODS = ["agent", "agent.wait", "chat.history", "sessions.abort"] as const;
+// A sessions_yield turn continues in further runs on the same session. Each hand-off adds one run.
+const MAX_FOLLOWED_RUNS = 8;
+// OpenClaw derives a continuation run ID from the session key and its child run IDs, so it is
+// longer than the 128-character bound applied to the run IDs Rooms records.
+const MAX_FOLLOWED_RUN_ID_LENGTH = 1_024;
 const AUTHENTICATION_ERROR_DETAIL_CODES = new Set([
   "AUTH_REQUIRED",
   "AUTH_UNAUTHORIZED",
@@ -187,6 +192,8 @@ class GatewayRpcConnection {
   #connected = false;
   #connecting = false;
   #closed = false;
+  #failure: Error | undefined;
+  readonly #failureListeners = new Set<(error: Error) => void>();
   #maxPayload = PRECONNECT_MAX_BYTES;
   #serverVersion: string | undefined;
   readonly #ready: Promise<void>;
@@ -263,6 +270,16 @@ class GatewayRpcConnection {
   onEvent(listener: (event: EventFrame) => void): () => void {
     this.#eventListeners.add(listener);
     return () => this.#eventListeners.delete(listener);
+  }
+
+  /** Reports a connection failure to a caller that is waiting on events, not on a request. */
+  onFailure(listener: (error: Error) => void): () => void {
+    if (this.#failure) {
+      listener(this.#failure);
+      return () => undefined;
+    }
+    this.#failureListeners.add(listener);
+    return () => this.#failureListeners.delete(listener);
   }
 
   takeAgentTerminalResponse(runId: string): unknown {
@@ -659,6 +676,9 @@ class GatewayRpcConnection {
   #fail(error: Error): void {
     if (this.#closed) return;
     this.#closed = true;
+    this.#failure = error;
+    for (const listener of this.#failureListeners) listener(error);
+    this.#failureListeners.clear();
     this.#rejectReady?.(error);
     this.#resolveReady = undefined;
     this.#rejectReady = undefined;
@@ -1064,7 +1084,11 @@ export class OpenClawGatewayTransport implements ResidentAgentGatewayTransport {
         invocation.runtimeBinding &&
         submitted &&
         !definite &&
-        !(acceptedRunId && error instanceof GatewayTransportError && error.runStopped)
+        !(
+          acceptedRunId &&
+          error instanceof GatewayTransportError &&
+          (error.runStopped || error.kind === "uncertain")
+        )
       ) {
         throw new GatewayTransportError({
           kind: "uncertain",
@@ -1106,7 +1130,9 @@ export class OpenClawGatewayTransport implements ResidentAgentGatewayTransport {
         invocation.runtimeBinding &&
         !(
           error instanceof GatewayTransportError &&
-          (error.code === "gateway_session_missing" || error.runStopped)
+          (error.code === "gateway_session_missing" ||
+            error.runStopped ||
+            error.kind === "uncertain")
         )
       ) {
         throw new GatewayTransportError({
@@ -1164,160 +1190,330 @@ export class OpenClawGatewayTransport implements ResidentAgentGatewayTransport {
     initialTerminal?: unknown,
     abortMode: "cancel" | "detach" = "cancel",
   ): Promise<GatewayRunOutcome> {
-    let streamedText: string | undefined;
+    const binding = invocation.runtimeBinding;
+    // Rooms serializes the dedicated session per conversation, so a run that starts on its key
+    // while this turn is open is this turn's continuation. OpenClaw reports no parent run ID.
+    const knownRunIds = new Set([runId]);
+    const startedRunIds: string[] = [];
+    const streamedTextByRun = new Map<string, string>();
+    let onRunStarted: (() => void) | undefined;
     const removeListener = connection.onEvent((event) => {
-      if (event.event !== "agent" || !isObject(event.payload) || event.payload.runId !== runId)
+      if (event.event !== "agent" || !isObject(event.payload)) return;
+      const { runId: eventRunId, stream, data } = event.payload;
+      if (typeof eventRunId !== "string" || !isObject(data)) return;
+      if (stream === "assistant") {
+        if (knownRunIds.has(eventRunId) && typeof data.text === "string")
+          streamedTextByRun.set(eventRunId, data.text);
         return;
-      if (event.payload.stream !== "assistant" || !isObject(event.payload.data)) return;
-      if (typeof event.payload.data.text === "string") streamedText = event.payload.data.text;
+      }
+      if (
+        binding === undefined ||
+        stream !== "lifecycle" ||
+        data.phase !== "start" ||
+        event.payload.sessionKey !== sessionKey ||
+        knownRunIds.has(eventRunId) ||
+        knownRunIds.size > MAX_FOLLOWED_RUNS + 1 ||
+        eventRunId.length === 0 ||
+        eventRunId.length > MAX_FOLLOWED_RUN_ID_LENGTH
+      )
+        return;
+      knownRunIds.add(eventRunId);
+      startedRunIds.push(eventRunId);
+      onRunStarted?.();
     });
     try {
-      const timeoutMs = Math.max(0, Date.parse(invocation.deadline) - this.#now());
-      let wait: unknown;
-      try {
-        wait = await connection.request(
-          "agent.wait",
-          { runId, timeoutMs },
-          { timeoutMs: timeoutMs + this.#waitRequestGraceMs, ...(signal ? { signal } : {}) },
+      let currentRunId = runId;
+      for (let followedRuns = 0; ; followedRuns += 1) {
+        const wait = await this.#waitForRun(
+          connection,
+          invocation,
+          currentRunId,
+          signal,
+          abortMode,
         );
-      } catch (error) {
-        if (
-          error instanceof GatewayTransportError &&
-          (error.kind === "cancelled" || error.kind === "timed_out")
-        ) {
-          if (invocation.runtimeBinding && error.kind === "cancelled" && abortMode === "detach")
-            throw new GatewayTransportError({
-              kind: "uncertain",
-              code: "gateway_run_detached",
-              safeMessage:
-                "Connector stopped waiting; the accepted runtime run remains available for reconciliation.",
-              retryable: false,
-            });
-          const aborted = await this.#bestEffortAbort(connection, runId);
-          if (invocation.runtimeBinding && !aborted)
-            throw new GatewayTransportError({
-              kind: "uncertain",
-              code: "gateway_abort_unknown",
-              safeMessage:
-                "The accepted run cancellation is uncertain; later turns remain blocked.",
-              retryable: false,
-            });
-        }
-        if (
-          invocation.runtimeBinding &&
-          error instanceof GatewayTransportError &&
-          ["cancelled", "timed_out"].includes(error.kind)
-        )
-          throw new GatewayTransportError({
-            kind: error.kind,
-            code: error.code,
-            safeMessage: error.message,
-            retryable: false,
-            runStopped: true,
+        const handedOff =
+          binding !== undefined &&
+          wait.status === "ok" &&
+          wait.yielded === true &&
+          wait.livenessState === "paused";
+        if (!handedOff)
+          return await this.#settleRun(connection, invocation, sessionKey, wait, {
+            followed: currentRunId !== runId,
+            streamedText: streamedTextByRun.get(currentRunId),
+            terminal:
+              currentRunId === runId
+                ? (initialTerminal ?? connection.takeAgentTerminalResponse(runId))
+                : undefined,
           });
-        throw error;
-      }
-      if (!isObject(wait) || typeof wait.status !== "string" || wait.runId !== runId) {
-        throw new GatewayTransportError({
-          kind: "failed",
-          code: "gateway_wait_invalid",
-          safeMessage: "OpenClaw Gateway returned an invalid wait result.",
-          retryable: false,
+        if (followedRuns >= MAX_FOLLOWED_RUNS)
+          throw new GatewayTransportError({
+            kind: "uncertain",
+            code: "gateway_continuation_limit",
+            safeMessage:
+              "OpenClaw handed this turn off more times than the connector follows; reconcile on the host.",
+            retryable: false,
+          });
+        currentRunId = await this.#nextSessionRun(connection, invocation, {
+          take: () => startedRunIds.shift(),
+          subscribe: (listener) => {
+            onRunStarted = listener;
+          },
+          signal,
+          abortMode,
         });
       }
-      if (invocation.runtimeBinding && (wait.yielded === true || wait.livenessState === "yielded"))
-        throw new GatewayTransportError({
-          kind: "uncertain",
-          code: "gateway_approval_pending",
-          safeMessage:
-            "OpenClaw yielded for host handling. This connector cannot resolve approvals; reconcile on the host.",
-          retryable: false,
-        });
-      if (invocation.runtimeBinding && !["ok", "error", "timeout"].includes(wait.status))
-        throw new GatewayTransportError({
-          kind: "uncertain",
-          code: "gateway_wait_invalid",
-          safeMessage: "OpenClaw has not provided a recognized terminal run state.",
-          retryable: false,
-        });
-      if (wait.status === "timeout") {
-        const alreadyStopped =
-          invocation.runtimeBinding &&
-          wait.stopReason === "rpc" &&
-          typeof wait.endedAt === "number";
-        const aborted = alreadyStopped || (await this.#bestEffortAbort(connection, runId));
+    } finally {
+      removeListener();
+    }
+  }
+
+  /**
+   * Waits for the run OpenClaw starts on the bound session after a sessions_yield hand-off.
+   * Between the yielded run and its continuation there is no run this connector can abort, so
+   * a wait that stops early leaves the turn uncertain instead of reporting it stopped.
+   */
+  #nextSessionRun(
+    connection: GatewayRpcConnection,
+    invocation: ResidentAgentInvocation,
+    input: {
+      readonly take: () => string | undefined;
+      readonly subscribe: (listener: (() => void) | undefined) => void;
+      readonly signal: AbortSignal | undefined;
+      readonly abortMode: "cancel" | "detach";
+    },
+  ): Promise<string> {
+    const stopped = (): GatewayTransportError =>
+      input.abortMode === "detach"
+        ? new GatewayTransportError({
+            kind: "uncertain",
+            code: "gateway_run_detached",
+            safeMessage:
+              "Connector stopped waiting; the accepted runtime run remains available for reconciliation.",
+            retryable: false,
+          })
+        : new GatewayTransportError({
+            kind: "uncertain",
+            code: "gateway_abort_unknown",
+            safeMessage:
+              "The turn was cancelled during a worker hand-off with no run to stop; later turns remain blocked.",
+            retryable: false,
+          });
+    const started = input.take();
+    if (started !== undefined) return Promise.resolve(started);
+    if (input.signal?.aborted) return Promise.reject(stopped());
+    return new Promise<string>((resolve, reject) => {
+      let settled = false;
+      let removeFailureListener: () => void = () => undefined;
+      const finish = (settle: () => void) => {
+        if (settled) return;
+        settled = true;
+        NodeTimers.clearTimeout(timer);
+        input.signal?.removeEventListener("abort", onAbort);
+        removeFailureListener();
+        input.subscribe(undefined);
+        settle();
+      };
+      const onAbort = () => finish(() => reject(stopped()));
+      const timer = NodeTimers.setTimeout(
+        () =>
+          finish(() =>
+            reject(
+              new GatewayTransportError({
+                kind: "uncertain",
+                code: "gateway_continuation_unobserved",
+                safeMessage:
+                  "OpenClaw handed this turn off and no continuing run started before the invocation deadline.",
+                retryable: false,
+              }),
+            ),
+          ),
+        Math.max(0, Date.parse(invocation.deadline) - this.#now()),
+      );
+      input.signal?.addEventListener("abort", onAbort, { once: true });
+      input.subscribe(() => {
+        const next = input.take();
+        if (next !== undefined) finish(() => resolve(next));
+      });
+      removeFailureListener = connection.onFailure((error) => finish(() => reject(error)));
+      if (settled) removeFailureListener();
+    });
+  }
+
+  async #waitForRun(
+    connection: GatewayRpcConnection,
+    invocation: ResidentAgentInvocation,
+    runId: string,
+    signal: AbortSignal | undefined,
+    abortMode: "cancel" | "detach",
+  ): Promise<Readonly<Record<string, unknown>> & { readonly status: string }> {
+    const timeoutMs = Math.max(0, Date.parse(invocation.deadline) - this.#now());
+    let wait: unknown;
+    try {
+      wait = await connection.request(
+        "agent.wait",
+        { runId, timeoutMs },
+        { timeoutMs: timeoutMs + this.#waitRequestGraceMs, ...(signal ? { signal } : {}) },
+      );
+    } catch (error) {
+      if (
+        error instanceof GatewayTransportError &&
+        (error.kind === "cancelled" || error.kind === "timed_out")
+      ) {
+        if (invocation.runtimeBinding && error.kind === "cancelled" && abortMode === "detach")
+          throw new GatewayTransportError({
+            kind: "uncertain",
+            code: "gateway_run_detached",
+            safeMessage:
+              "Connector stopped waiting; the accepted runtime run remains available for reconciliation.",
+            retryable: false,
+          });
+        const aborted = await this.#bestEffortAbort(connection, runId);
         if (invocation.runtimeBinding && !aborted)
           throw new GatewayTransportError({
             kind: "uncertain",
             code: "gateway_abort_unknown",
-            safeMessage:
-              "The accepted run timeout could not be reconciled; later turns remain blocked.",
+            safeMessage: "The accepted run cancellation is uncertain; later turns remain blocked.",
             retryable: false,
           });
-        return {
-          status: "timed_out",
-          failure: {
-            code: "agent_timed_out",
-            safeMessage: "OpenClaw did not finish before the invocation deadline.",
-            retryable: false,
-          },
-          ...(connection.serverVersion ? { agentVersion: connection.serverVersion } : {}),
-        };
       }
-      if (wait.status !== "ok") {
-        return {
-          status: "failed",
-          failure: {
-            code: "agent_run_failed",
-            safeMessage: "OpenClaw failed to complete the resident-agent invocation.",
-            retryable: false,
-          },
-          ...(connection.serverVersion ? { agentVersion: connection.serverVersion } : {}),
-        };
-      }
-      const history = await connection.request<unknown>("chat.history", {
-        sessionKey,
-        agentId: this.#agentId,
-        limit: 4,
-        maxChars: CONTEXT_LIMITS.maxReplyBytes,
+      if (
+        invocation.runtimeBinding &&
+        error instanceof GatewayTransportError &&
+        ["cancelled", "timed_out"].includes(error.kind)
+      )
+        throw new GatewayTransportError({
+          kind: error.kind,
+          code: error.code,
+          safeMessage: error.message,
+          retryable: false,
+          runStopped: true,
+        });
+      throw error;
+    }
+    if (!isObject(wait) || typeof wait.status !== "string" || wait.runId !== runId) {
+      throw new GatewayTransportError({
+        kind: "failed",
+        code: "gateway_wait_invalid",
+        safeMessage: "OpenClaw Gateway returned an invalid wait result.",
+        retryable: false,
       });
-      const terminal = initialTerminal ?? connection.takeAgentTerminalResponse(runId);
-      const replyMarkdown = sanitizeReply(
-        invocation.runtimeBinding
-          ? (extractTerminalAgentText(terminal) ??
-              streamedText ??
-              extractBoundRunText(history, wait, invocation.runtimeBinding))
-          : (extractLastAssistantText(history) ??
-              extractTerminalAgentText(terminal) ??
-              streamedText),
-      );
-      if (replyMarkdown === undefined) {
-        if (invocation.runtimeBinding && terminal === undefined)
-          throw new GatewayTransportError({
-            kind: "uncertain",
-            code: "gateway_reply_unreconciled",
-            safeMessage:
-              "OpenClaw reported completion but this turn has no correlated reply; prior session replies are not reused.",
-            retryable: false,
-          });
-        return {
-          status: "failed",
-          failure: {
-            code: "agent_reply_missing",
-            safeMessage: "OpenClaw completed without the one required reply.",
-            retryable: false,
-          },
-          ...(connection.serverVersion ? { agentVersion: connection.serverVersion } : {}),
-        };
-      }
+    }
+    return wait as Readonly<Record<string, unknown>> & { readonly status: string };
+  }
+
+  async #settleRun(
+    connection: GatewayRpcConnection,
+    invocation: ResidentAgentInvocation,
+    sessionKey: string,
+    wait: Readonly<Record<string, unknown>> & { readonly status: string },
+    run: {
+      readonly followed: boolean;
+      readonly streamedText: string | undefined;
+      readonly terminal: unknown;
+    },
+  ): Promise<GatewayRunOutcome> {
+    const runId = String(wait.runId);
+    // A sessions_yield hand-off (yielded and paused) is followed by the caller. Any other yield,
+    // or a run that ended blocked, waits on the host; this connector cannot resolve approvals.
+    if (
+      invocation.runtimeBinding &&
+      (wait.yielded === true ||
+        wait.livenessState === "yielded" ||
+        (wait.status === "ok" && wait.livenessState === "blocked"))
+    )
+      throw new GatewayTransportError({
+        kind: "uncertain",
+        code: "gateway_approval_pending",
+        safeMessage:
+          "OpenClaw yielded for host handling. This connector cannot resolve approvals; reconcile on the host.",
+        retryable: false,
+      });
+    if (invocation.runtimeBinding && !["ok", "error", "timeout"].includes(wait.status))
+      throw new GatewayTransportError({
+        kind: "uncertain",
+        code: "gateway_wait_invalid",
+        safeMessage: "OpenClaw has not provided a recognized terminal run state.",
+        retryable: false,
+      });
+    if (wait.status === "timeout") {
+      const alreadyStopped =
+        invocation.runtimeBinding && wait.stopReason === "rpc" && typeof wait.endedAt === "number";
+      const aborted = alreadyStopped || (await this.#bestEffortAbort(connection, runId));
+      if (invocation.runtimeBinding && !aborted)
+        throw new GatewayTransportError({
+          kind: "uncertain",
+          code: "gateway_abort_unknown",
+          safeMessage:
+            "The accepted run timeout could not be reconciled; later turns remain blocked.",
+          retryable: false,
+        });
       return {
-        status: "completed",
-        replyMarkdown,
+        status: "timed_out",
+        failure: {
+          code: "agent_timed_out",
+          safeMessage: "OpenClaw did not finish before the invocation deadline.",
+          retryable: false,
+        },
         ...(connection.serverVersion ? { agentVersion: connection.serverVersion } : {}),
       };
-    } finally {
-      removeListener();
     }
+    if (wait.status !== "ok") {
+      return {
+        status: "failed",
+        failure: {
+          code: "agent_run_failed",
+          safeMessage: "OpenClaw failed to complete the resident-agent invocation.",
+          retryable: false,
+        },
+        ...(connection.serverVersion ? { agentVersion: connection.serverVersion } : {}),
+      };
+    }
+    const history = await connection.request<unknown>("chat.history", {
+      sessionKey,
+      agentId: this.#agentId,
+      limit: 4,
+      maxChars: CONTEXT_LIMITS.maxReplyBytes,
+    });
+    // Only the run started by this connector's agent request has a terminal agent response.
+    // A followed run reports its reply in the wait result instead.
+    const terminalReply = run.followed && isObject(wait.terminalReply) ? wait.terminalReply : null;
+    const replyMarkdown = sanitizeReply(
+      invocation.runtimeBinding
+        ? ((run.followed
+            ? terminalReply?.disposition === "visible" && typeof terminalReply.text === "string"
+              ? terminalReply.text
+              : undefined
+            : extractTerminalAgentText(run.terminal)) ??
+            run.streamedText ??
+            extractBoundRunText(history, wait, invocation.runtimeBinding))
+        : (extractLastAssistantText(history) ??
+            extractTerminalAgentText(run.terminal) ??
+            run.streamedText),
+    );
+    if (replyMarkdown === undefined) {
+      if (invocation.runtimeBinding && run.terminal === undefined && terminalReply === null)
+        throw new GatewayTransportError({
+          kind: "uncertain",
+          code: "gateway_reply_unreconciled",
+          safeMessage:
+            "OpenClaw reported completion but this turn has no correlated reply; prior session replies are not reused.",
+          retryable: false,
+        });
+      return {
+        status: "failed",
+        failure: {
+          code: "agent_reply_missing",
+          safeMessage: "OpenClaw completed without the one required reply.",
+          retryable: false,
+        },
+        ...(connection.serverVersion ? { agentVersion: connection.serverVersion } : {}),
+      };
+    }
+    return {
+      status: "completed",
+      replyMarkdown,
+      ...(connection.serverVersion ? { agentVersion: connection.serverVersion } : {}),
+    };
   }
 
   async #bestEffortAbort(connection: GatewayRpcConnection, runId: string): Promise<boolean> {
@@ -1345,8 +1541,13 @@ export const OPENCLAW_GATEWAY_PROTOCOL_EVIDENCE = Object.freeze({
   requestMethods: REQUIRED_METHODS,
   continuationMethods: ["sessions.create", "sessions.resolve"] as const,
   approvalSupport: "host policy only; no connector approval UI or auto-approval",
+  // sessions_yield ends its run as yielded and paused. The wait result names no continuation,
+  // so the connector follows the next lifecycle start on the bound session key.
+  handOffSupport: "sessions_yield followed through agent lifecycle start events on the session",
   inspectedSourceVersion: "2026.7.1",
   inspectedSourceCommit: "0790d9f593ad30c940ed93b5872a8cf6d6f3cf8c",
+  handOffInspectedSourceVersion: "2026.11.4",
+  handOffInspectedSourceCommit: "d843d6af39a42cd3c30084edbeabeece732fd93a",
   sourcePaths: [
     "packages/gateway-protocol/src/schema/frames.ts",
     "packages/gateway-protocol/src/schema/agent.ts",
