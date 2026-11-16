@@ -1184,3 +1184,301 @@ describe("continued turn cancellation boundaries", () => {
     expect(aborted).toEqual([{ runId: "run-active", agentId: "rooms" }]);
   });
 });
+
+describe("worker hand-off continuation", () => {
+  const turn = continuedInvocation();
+  const sessionKey = turn.runtimeBinding.sessionKey;
+  const followUp = (suffix = "yield-1") =>
+    `announce:requester-settle:rooms:${sessionKey}:a4df6319-2c01-413c-9be2-8beee469cda8:${suffix}`;
+  const lifecycleStart = (runId: string, key = sessionKey) => ({
+    type: "event",
+    event: "agent",
+    payload: {
+      runId,
+      sessionKey: key,
+      sessionId: turn.runtimeBinding.sessionId,
+      agentId: "rooms",
+      stream: "lifecycle",
+      data: { phase: "start", startedAt: 100 },
+      seq: 1,
+      ts: 100,
+    },
+  });
+  const yielded = (runId: unknown) => ({
+    runId,
+    status: "ok",
+    stopReason: "end_turn",
+    livenessState: "paused",
+    yielded: true,
+    terminalReply: { disposition: "empty" },
+  });
+  const visible = (runId: unknown, text: string) => ({
+    runId,
+    status: "ok",
+    stopReason: "stop",
+    livenessState: "working",
+    terminalReply: { disposition: "visible", text },
+  });
+  // Answers everything except agent.wait, which each test scripts per run ID.
+  const handOffTransport = (input: {
+    readonly onWait: (runId: string, frame: Frame, socket: FakeWebSocket) => void;
+    readonly waits?: string[];
+    readonly aborted?: unknown[];
+    readonly now?: number;
+  }) =>
+    createTransport({
+      ...(input.now === undefined ? {} : { now: input.now }),
+      server: (frame, socket) => {
+        if (frame.method === "connect") socket.emit(hello(frame.id!, continuationMethods));
+        else if (frame.method === "sessions.resolve")
+          respond(socket, frame, { ok: true, key: sessionKey });
+        else if (frame.method === "agent")
+          respond(socket, frame, { runId: "run-1", status: "accepted" });
+        else if (frame.method === "agent.wait") {
+          const runId = String(frame.params?.runId);
+          input.waits?.push(runId);
+          input.onWait(runId, frame, socket);
+        } else if (frame.method === "chat.history")
+          respond(socket, frame, {
+            sessionId: turn.runtimeBinding.sessionId,
+            sessionKey,
+            messages: [{ role: "assistant", content: "stale prior turn", timestamp: 1 }],
+          });
+        else if (frame.method === "sessions.abort") {
+          input.aborted?.push(frame.params);
+          respond(socket, frame, {
+            ok: true,
+            status: "aborted",
+            abortedRunId: frame.params?.runId,
+          });
+        }
+      },
+    });
+
+  it("follows a yielded run to the reply of the run that continues its session", async () => {
+    const waits: string[] = [];
+    const aborted: unknown[] = [];
+    expect(followUp().length).toBeGreaterThan(128);
+    const transport = handOffTransport({
+      waits,
+      aborted,
+      onWait: (runId, frame, socket) => {
+        if (runId === "run-1") {
+          respond(socket, frame, yielded(runId));
+          socket.emit(lifecycleStart(followUp()));
+        } else respond(socket, frame, visible(runId, "The worker could not see the host."));
+      },
+    });
+    expect(await transport.invoke(turn, { onAccepted: () => undefined })).toMatchObject({
+      status: "completed",
+      replyMarkdown: "The worker could not see the host.",
+    });
+    expect(waits).toEqual(["run-1", followUp()]);
+    expect(aborted).toEqual([]);
+  });
+
+  it("follows two chained hand-offs in order", async () => {
+    const waits: string[] = [];
+    const transport = handOffTransport({
+      waits,
+      onWait: (runId, frame, socket) => {
+        if (runId === "run-1") {
+          respond(socket, frame, yielded(runId));
+          socket.emit(lifecycleStart(followUp("yield-1")));
+        } else if (runId === followUp("yield-1")) {
+          respond(socket, frame, yielded(runId));
+          socket.emit(lifecycleStart(followUp("yield-2")));
+        } else respond(socket, frame, visible(runId, "Both workers finished."));
+      },
+    });
+    expect(await transport.invoke(turn, { onAccepted: () => undefined })).toMatchObject({
+      status: "completed",
+      replyMarkdown: "Both workers finished.",
+    });
+    expect(waits).toEqual(["run-1", followUp("yield-1"), followUp("yield-2")]);
+  });
+
+  it("ignores run starts on other sessions and the original run's own start", async () => {
+    const waits: string[] = [];
+    const transport = handOffTransport({
+      waits,
+      onWait: (runId, frame, socket) => {
+        if (runId === "run-1") {
+          socket.emit(lifecycleStart("run-1"));
+          socket.emit(lifecycleStart("worker-run", "agent:rooms:subagent:worker-1"));
+          socket.emit(
+            lifecycleStart(
+              "other-conversation",
+              continuedInvocation({ conversation: "b" }).runtimeBinding.sessionKey,
+            ),
+          );
+          respond(socket, frame, yielded(runId));
+          socket.emit(lifecycleStart(followUp()));
+        } else respond(socket, frame, visible(runId, "Followed the right run."));
+      },
+    });
+    expect(await transport.invoke(turn, { onAccepted: () => undefined })).toMatchObject({
+      status: "completed",
+      replyMarkdown: "Followed the right run.",
+    });
+    expect(waits).toEqual(["run-1", followUp()]);
+  });
+
+  it("keeps a continuing run that starts before the yielded wait result arrives", async () => {
+    const waits: string[] = [];
+    const transport = handOffTransport({
+      waits,
+      onWait: (runId, frame, socket) => {
+        if (runId === "run-1") {
+          socket.emit(lifecycleStart(followUp()));
+          respond(socket, frame, yielded(runId));
+        } else respond(socket, frame, visible(runId, "Buffered start."));
+      },
+    });
+    expect(await transport.invoke(turn, { onAccepted: () => undefined })).toMatchObject({
+      status: "completed",
+      replyMarkdown: "Buffered start.",
+    });
+    expect(waits).toEqual(["run-1", followUp()]);
+  });
+
+  it("stays uncertain when no continuing run starts before the deadline", async () => {
+    const waits: string[] = [];
+    const aborted: unknown[] = [];
+    const transport = handOffTransport({
+      waits,
+      aborted,
+      now: Date.parse(turn.deadline),
+      onWait: (runId, frame, socket) => respond(socket, frame, yielded(runId)),
+    });
+    await expect(transport.invoke(turn, { onAccepted: () => undefined })).rejects.toMatchObject({
+      kind: "uncertain",
+      code: "gateway_continuation_unobserved",
+    });
+    expect(waits).toEqual(["run-1"]);
+    expect(aborted).toEqual([]);
+  });
+
+  it.each([
+    ["cancel", "gateway_abort_unknown"],
+    ["detach", "gateway_run_detached"],
+  ] as const)(
+    "stays uncertain when %s stops the wait between runs, without aborting a finished run",
+    async (abortMode, code) => {
+      const controller = new AbortController();
+      const aborted: unknown[] = [];
+      const transport = handOffTransport({
+        aborted,
+        onWait: (runId, frame, socket) => {
+          respond(socket, frame, yielded(runId));
+          setTimeout(() => controller.abort(), 0);
+        },
+      });
+      await expect(
+        transport.invoke(turn, {
+          signal: controller.signal,
+          abortMode,
+          onAccepted: () => undefined,
+        }),
+      ).rejects.toMatchObject({ kind: "uncertain", code });
+      expect(aborted).toEqual([]);
+    },
+  );
+
+  it.each([
+    ["blocked on an approval", { status: "ok", livenessState: "blocked" }],
+    ["yielded without pausing", { status: "ok", livenessState: "yielded", yielded: true }],
+  ])("keeps a run %s as a pending host approval", async (_label, state) => {
+    const waits: string[] = [];
+    const transport = handOffTransport({
+      waits,
+      onWait: (runId, frame, socket) => {
+        respond(socket, frame, { runId, ...state });
+        socket.emit(lifecycleStart(followUp()));
+      },
+    });
+    await expect(transport.invoke(turn, { onAccepted: () => undefined })).rejects.toMatchObject({
+      kind: "uncertain",
+      code: "gateway_approval_pending",
+    });
+    expect(waits).toEqual(["run-1"]);
+  });
+
+  it("aborts the continuing run, not the finished one, when it times out", async () => {
+    const aborted: unknown[] = [];
+    const transport = handOffTransport({
+      aborted,
+      onWait: (runId, frame, socket) => {
+        if (runId === "run-1") {
+          respond(socket, frame, yielded(runId));
+          socket.emit(lifecycleStart(followUp()));
+        } else respond(socket, frame, { runId, status: "timeout" });
+      },
+    });
+    expect(await transport.invoke(turn, { onAccepted: () => undefined })).toMatchObject({
+      status: "timed_out",
+      failure: { code: "agent_timed_out" },
+    });
+    expect(aborted).toEqual([{ runId: followUp(), agentId: "rooms" }]);
+  });
+
+  it("reports a missing reply when the continuing run ends without visible text", async () => {
+    const transport = handOffTransport({
+      onWait: (runId, frame, socket) => {
+        if (runId === "run-1") {
+          socket.emit({
+            type: "event",
+            event: "agent",
+            payload: { runId, stream: "assistant", data: { text: "Spawning a worker." } },
+          });
+          respond(socket, frame, yielded(runId));
+          socket.emit(lifecycleStart(followUp()));
+        } else
+          respond(socket, frame, {
+            runId,
+            status: "ok",
+            livenessState: "working",
+            terminalReply: { disposition: "empty" },
+          });
+      },
+    });
+    expect(await transport.invoke(turn, { onAccepted: () => undefined })).toMatchObject({
+      status: "failed",
+      failure: { code: "agent_reply_missing" },
+    });
+  });
+
+  it("stops following after the hand-off limit", async () => {
+    const waits: string[] = [];
+    const transport = handOffTransport({
+      waits,
+      onWait: (runId, frame, socket) => {
+        respond(socket, frame, yielded(runId));
+        socket.emit(lifecycleStart(followUp(`yield-${waits.length}`)));
+      },
+    });
+    await expect(transport.invoke(turn, { onAccepted: () => undefined })).rejects.toMatchObject({
+      kind: "uncertain",
+      code: "gateway_continuation_limit",
+    });
+    expect(waits).toHaveLength(9);
+  });
+
+  it("follows a hand-off when resuming a run whose continuation has not started yet", async () => {
+    const waits: string[] = [];
+    const transport = handOffTransport({
+      waits,
+      onWait: (runId, frame, socket) => {
+        if (runId === "run-1") {
+          respond(socket, frame, yielded(runId));
+          socket.emit(lifecycleStart(followUp()));
+        } else respond(socket, frame, visible(runId, "Resumed across the hand-off."));
+      },
+    });
+    expect(await transport.resume(turn, "run-1")).toMatchObject({
+      status: "completed",
+      replyMarkdown: "Resumed across the hand-off.",
+    });
+    expect(waits).toEqual(["run-1", followUp()]);
+  });
+});

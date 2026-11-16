@@ -67,10 +67,21 @@ run-specific receipt. Missing or replaced sessions remain blocked for deliberate
 host reconciliation; they are never silently recreated.
 
 Continuing work uses the runtime's configured tools and approval policy. This
-connector supplies no approval UI bridge and never auto-approves. A yielded or
-unreconciled runtime state remains visible as uncertain. Actual tool/approval
-behavior and the designated host's runtime version need integration acceptance;
-protocol fixtures alone do not establish them.
+connector supplies no approval UI bridge and never auto-approves. A run that
+ends blocked on an approval, or an unreconciled runtime state, remains visible
+as uncertain. Actual tool/approval behavior and the designated host's runtime
+version need integration acceptance; protocol fixtures alone do not establish
+them.
+
+When the agent hands work to a worker and yields (`sessions_yield`), its run
+ends without a reply and OpenClaw later starts another run on the same session
+to write it. The connector follows that hand-off: it watches for the next run
+that starts on the bound session, waits for it and posts its reply as the
+turn's result, for up to eight hand-offs in one turn. The invocation deadline
+(120 seconds) covers the whole chain, so a worker that needs longer leaves the
+turn uncertain. Rooms still records only the first run ID. If the connector
+restarts or stops during a hand-off it cannot find the continuing run again,
+and that turn stays uncertain for host reconciliation.
 
 SIGINT/SIGTERM stops the foreground host; stop its supervisor separately if it
 would restart it. Stopping does not revoke credentials or cancel an accepted
