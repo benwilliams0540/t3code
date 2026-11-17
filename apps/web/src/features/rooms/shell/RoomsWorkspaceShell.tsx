@@ -32,7 +32,7 @@ import {
 } from "./roomsSidebarWidth";
 import { RoomsWorkspaceSurfaceView } from "./RoomsWorkspaceSurface";
 import { RoomsSourceStatePanel } from "./RoomsSourceStatePanel";
-import { ThreadspaceBrand, ThreadspaceThemeControl } from "./ThreadspaceIdentity";
+import { ThreadspaceBrand } from "./ThreadspaceIdentity";
 
 function subscribeToViewportWidth(onChange: () => void): () => void {
   window.addEventListener("resize", onChange);
@@ -194,7 +194,6 @@ function RoomsBreadcrumbBar({
       >
         {roomsSurfaceSourceLabel(room.sourceMode)}
       </span>
-      <ThreadspaceThemeControl />
     </header>
   );
 }

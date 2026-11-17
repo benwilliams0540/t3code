@@ -1,4 +1,3 @@
-import { useTheme } from "~/hooks/useTheme";
 import { cn } from "~/lib/utils";
 
 export function ThreadspaceMark({ className }: { readonly className?: string }) {
@@ -48,42 +47,6 @@ export function ThreadspaceBrand({
           SPACE
         </span>
       )}
-    </div>
-  );
-}
-
-export function ThreadspaceThemeControl() {
-  const { resolvedTheme, setTheme } = useTheme();
-  return (
-    <div
-      aria-label="Threadspace appearance"
-      className="threadspace-theme-control flex shrink-0 overflow-hidden border border-border font-mono text-[10px] tracking-[0.12em] uppercase"
-      role="group"
-    >
-      <button
-        aria-pressed={resolvedTheme === "dark"}
-        className={cn(
-          "h-7 px-2.5 text-muted-foreground transition-colors hover:text-foreground",
-          resolvedTheme === "dark" && "bg-foreground text-background hover:text-background",
-        )}
-        onClick={() => setTheme("dark")}
-        title="Use Threadspace dark appearance"
-        type="button"
-      >
-        Dark
-      </button>
-      <button
-        aria-pressed={resolvedTheme === "light"}
-        className={cn(
-          "h-7 border-l border-border px-2.5 text-muted-foreground transition-colors hover:text-foreground",
-          resolvedTheme === "light" && "bg-foreground text-background hover:text-background",
-        )}
-        onClick={() => setTheme("light")}
-        title="Use Threadspace Paper appearance"
-        type="button"
-      >
-        Paper
-      </button>
     </div>
   );
 }
