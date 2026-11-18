@@ -1,3 +1,4 @@
+import { roomsIsCurrentPrincipal } from "@t3tools/client-runtime/rooms/human-wire";
 import { BotIcon, CircleUserRoundIcon, MonitorIcon, type LucideIcon } from "lucide-react";
 
 import type { RoomsInteractiveWorkspace } from "../dataSource/humanSharedContract";
@@ -7,19 +8,22 @@ interface InteractivePrincipal {
   readonly type: "human" | "agent" | "machine";
   readonly display_name: string | null;
   readonly role?: "observer" | "operator" | "admin" | null | undefined;
+  readonly enabled?: boolean | undefined;
 }
 
 function PrincipalGroup({
   currentPrincipalId,
   icon: Icon,
   label,
-  principals,
+  principals: declared,
 }: {
   readonly currentPrincipalId: string;
   readonly icon: LucideIcon;
   readonly label: string;
   readonly principals: readonly InteractivePrincipal[];
 }) {
+  const principals = declared.filter(roomsIsCurrentPrincipal);
+  const retired = declared.length - principals.length;
   return (
     <section>
       <h2 className="flex items-center gap-2 text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
@@ -53,6 +57,12 @@ function PrincipalGroup({
           </p>
         )}
       </div>
+      {retired > 0 ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          {retired} retired {retired === 1 ? "registration" : "registrations"} hidden. Their past
+          messages still show their names.
+        </p>
+      ) : null}
     </section>
   );
 }
