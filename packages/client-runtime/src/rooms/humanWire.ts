@@ -177,3 +177,12 @@ export const RoomsConversationMessage = Schema.Struct({
 });
 export type RoomsConversationCreated = typeof RoomsConversationCreated.Type;
 export type RoomsConversationMessage = typeof RoomsConversationMessage.Type;
+
+/**
+ * Disabled Agents, and machines whose registrations are all disabled, stay in the workspace
+ * directory so past messages keep their attribution. Only the rest are current participants.
+ * Servers before the `enabled` field omit it, so a missing value counts as current.
+ */
+export function roomsIsCurrentPrincipal(principal: { readonly enabled?: boolean | undefined }) {
+  return principal.enabled !== false;
+}

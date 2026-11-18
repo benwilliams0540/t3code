@@ -18,6 +18,7 @@ export const RoomsHumanPrincipal = Schema.Struct({
   type: Schema.Literals(["human", "agent", "machine"]),
   display_name: Schema.NullOr(Schema.String),
   role: Schema.optionalKey(Schema.NullOr(RoomsHumanRole)),
+  enabled: Schema.optionalKey(Schema.Boolean),
 });
 export type RoomsHumanPrincipal = typeof RoomsHumanPrincipal.Type;
 
