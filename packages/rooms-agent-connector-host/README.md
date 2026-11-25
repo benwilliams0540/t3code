@@ -81,7 +81,15 @@ turn's result, for up to eight hand-offs in one turn. The invocation deadline
 (120 seconds) covers the whole chain, so a worker that needs longer leaves the
 turn uncertain. Rooms still records only the first run ID. If the connector
 restarts or stops during a hand-off it cannot find the continuing run again,
-and that turn stays uncertain for host reconciliation.
+and that turn stays uncertain until OpenClaw drops the first run's wait result
+(about an hour). After that the run reports a timeout, and the turn ends as
+timed out once the Gateway confirms no run with that ID is still active.
+
+Stopping a run needs a run-specific receipt, with one exception: when the
+Gateway rejects the abort because no active run has that ID (`INVALID_REQUEST`
+with `SESSION_MUTATION_TARGET_REQUIRED`), the run has already stopped and the
+turn ends as timed out or cancelled. Without this, a turn whose run had already
+ended kept being reclaimed every lease and blocked its conversation.
 
 SIGINT/SIGTERM stops the foreground host; stop its supervisor separately if it
 would restart it. Stopping does not revoke credentials or cancel an accepted

@@ -1482,3 +1482,84 @@ describe("worker hand-off continuation", () => {
     expect(waits).toEqual(["run-1", followUp()]);
   });
 });
+
+describe("aborting a run the Gateway no longer has", () => {
+  const turn = continuedInvocation();
+  const rejectAbort = (socket: FakeWebSocket, frame: Frame, detailCode: string) =>
+    socket.emit({
+      type: "res",
+      id: frame.id,
+      ok: false,
+      error: {
+        code: "INVALID_REQUEST",
+        message: "session mutation target is unavailable",
+        details: { code: detailCode, method: "sessions.abort" },
+      },
+    });
+  const staleRunTransport = (input: {
+    readonly abortDetailCode: string;
+    readonly methods: string[];
+    readonly aborts: unknown[];
+  }) =>
+    createTransport({
+      // Reclaimed long after its deadline: agent.wait answers with a bare timeout.
+      now: Date.parse(turn.deadline) + 6 * 24 * 60 * 60 * 1000,
+      server: (frame, socket) => {
+        input.methods.push(frame.method!);
+        if (frame.method === "connect") socket.emit(hello(frame.id!, continuationMethods));
+        else if (frame.method === "sessions.resolve")
+          respond(socket, frame, { ok: true, key: turn.runtimeBinding.sessionKey });
+        else if (frame.method === "agent.wait")
+          respond(socket, frame, { runId: "run-stale", status: "timeout" });
+        else if (frame.method === "sessions.abort") {
+          input.aborts.push(frame.params);
+          rejectAbort(socket, frame, input.abortDetailCode);
+        }
+      },
+    });
+
+  it("ends a reclaimed turn as timed out when no active run has its ID", async () => {
+    const methods: string[] = [];
+    const aborts: unknown[] = [];
+    const transport = staleRunTransport({
+      abortDetailCode: "SESSION_MUTATION_TARGET_REQUIRED",
+      methods,
+      aborts,
+    });
+    expect(await transport.resume(turn, "run-stale")).toMatchObject({
+      status: "timed_out",
+      failure: { code: "agent_timed_out" },
+    });
+    expect(methods).toEqual(["connect", "sessions.resolve", "agent.wait", "sessions.abort"]);
+    expect(aborts).toEqual([{ runId: "run-stale", agentId: "rooms" }]);
+  });
+
+  it("stays uncertain when the Gateway rejects the abort for another reason", async () => {
+    const transport = staleRunTransport({
+      abortDetailCode: "SESSION_MUTATION_AUTHORIZATION_CHANGED",
+      methods: [],
+      aborts: [],
+    });
+    await expect(transport.resume(turn, "run-stale")).rejects.toMatchObject({
+      kind: "uncertain",
+      code: "gateway_abort_unknown",
+    });
+  });
+
+  it("reports a cancelled turn as stopped when its run already ended", async () => {
+    const controller = new AbortController();
+    const transport = createTransport({
+      server: (frame, socket) => {
+        if (frame.method === "connect") socket.emit(hello(frame.id!, continuationMethods));
+        else if (frame.method === "sessions.resolve")
+          respond(socket, frame, { ok: true, key: turn.runtimeBinding.sessionKey });
+        else if (frame.method === "agent.wait") controller.abort();
+        else if (frame.method === "sessions.abort")
+          rejectAbort(socket, frame, "SESSION_MUTATION_TARGET_REQUIRED");
+      },
+    });
+    await expect(
+      transport.resume(turn, "run-ended", { signal: controller.signal }),
+    ).rejects.toMatchObject({ kind: "cancelled", runStopped: true });
+  });
+});
