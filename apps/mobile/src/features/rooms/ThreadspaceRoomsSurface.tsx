@@ -4,9 +4,10 @@ import {
   roomsConversationBindingLabel,
   roomsConversationTurnLabel,
 } from "@t3tools/client-runtime/rooms/conversation-status";
-import type {
-  RoomsConversation,
-  RoomsConversationProjection,
+import {
+  roomsIsCurrentPrincipal,
+  type RoomsConversation,
+  type RoomsConversationProjection,
 } from "@t3tools/client-runtime/rooms/human-wire";
 import { Image } from "expo-image";
 import { BlurView } from "expo-blur";
@@ -196,10 +197,10 @@ function ThreadspaceHeader(props: {
     (principal) => principal.type === "human",
   ).length;
   const agents = props.workspace.principals.filter(
-    (principal) => principal.type === "agent",
+    (principal) => principal.type === "agent" && roomsIsCurrentPrincipal(principal),
   ).length;
   const machines = props.workspace.principals.filter(
-    (principal) => principal.type === "machine",
+    (principal) => principal.type === "machine" && roomsIsCurrentPrincipal(principal),
   ).length;
   const waiting = props.stories.filter((story) =>
     roomsStoryNeedsHuman(story, props.workspace.principal.id),
@@ -1065,9 +1066,9 @@ function NetworkDestination(props: { readonly workspace: RoomsHumanWorkspace }) 
       </Plate>
 
       {types.map((type) => {
-        const principals = props.workspace.principals.filter(
-          (principal) => principal.type === type,
-        );
+        const declared = props.workspace.principals.filter((principal) => principal.type === type);
+        const principals = declared.filter(roomsIsCurrentPrincipal);
+        const retired = declared.length - principals.length;
         return (
           <View className="mt-5" key={type}>
             <View className="mb-2 flex-row items-center">
@@ -1129,6 +1130,12 @@ function NetworkDestination(props: { readonly workspace: RoomsHumanWorkspace }) 
                 })}
               </View>
             )}
+            {retired > 0 ? (
+              <Text className={`mt-2 text-[12px] leading-[17px] ${mutedClass}`}>
+                {retired} retired {retired === 1 ? "registration" : "registrations"} hidden. Their
+                past messages still show their names.
+              </Text>
+            ) : null}
           </View>
         );
       })}

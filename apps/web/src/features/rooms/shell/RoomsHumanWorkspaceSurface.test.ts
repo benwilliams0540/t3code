@@ -119,4 +119,42 @@ describe("shared Rooms capability UI", () => {
     const markup = renderToStaticMarkup(createElement(RoomsInteractivePresent, { workspace }));
     expect(markup.match(/>You</g)).toHaveLength(1);
   });
+
+  it("lists only current Agents and machines and notes the retired ones", () => {
+    const agent = (suffix: string, enabled?: boolean) => ({
+      id: `a:0198f7e2-1234-789a-8abc-12345678${suffix}`,
+      type: "agent" as const,
+      display_name: "Claw",
+      role: "operator" as const,
+      ...(enabled === undefined ? {} : { enabled }),
+    });
+    const machine = (suffix: string, enabled: boolean) => ({
+      id: `m:0198f7e2-1234-789a-8abc-12345678${suffix}`,
+      type: "machine" as const,
+      display_name: "fcfdev OpenClaw host",
+      role: null,
+      enabled,
+    });
+    const workspace = decodeWorkspace({
+      ...base,
+      capabilities,
+      principals: [
+        { ...base.principal },
+        agent("0001", false),
+        agent("0002", true),
+        agent("0003"),
+        machine("0001", false),
+        machine("0002", true),
+      ],
+    });
+    const markup = renderToStaticMarkup(createElement(RoomsInteractivePresent, { workspace }));
+
+    expect(markup).not.toContain("a:0198f7e2-1234-789a-8abc-123456780001");
+    expect(markup).toContain("a:0198f7e2-1234-789a-8abc-123456780002");
+    // Servers that predate `enabled` omit it; those Agents stay listed.
+    expect(markup).toContain("a:0198f7e2-1234-789a-8abc-123456780003");
+    expect(markup).not.toContain("m:0198f7e2-1234-789a-8abc-123456780001");
+    expect(markup).toContain("m:0198f7e2-1234-789a-8abc-123456780002");
+    expect(markup.match(/1 retired registration hidden/g)).toHaveLength(2);
+  });
 });
