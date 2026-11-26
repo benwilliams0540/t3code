@@ -117,6 +117,14 @@ function safeGatewayError(frame: ResponseFrame): GatewayTransportError {
       retryable: false,
     });
   }
+  if (remoteCode === "INVALID_REQUEST" && detailCode === "SESSION_MUTATION_TARGET_REQUIRED") {
+    return new GatewayTransportError({
+      kind: "failed",
+      code: "gateway_target_unavailable",
+      safeMessage: "OpenClaw Gateway found no session for the request.",
+      retryable: false,
+    });
+  }
   if (remoteCode === "UNAVAILABLE") {
     return new GatewayTransportError({
       kind: "unavailable",
@@ -1529,9 +1537,12 @@ export class OpenClawGatewayTransport implements ResidentAgentGatewayTransport {
         receipt.abortedRunId === runId &&
         receipt.status === "aborted"
       );
-    } catch {
-      // Without a run-specific receipt the continuing queue remains blocked.
-      return false;
+    } catch (error) {
+      // A run-only abort names its session through the Gateway's active-run registry. OpenClaw
+      // rejects it as SESSION_MUTATION_TARGET_REQUIRED when no active run has this ID, so the
+      // run is no longer running and there is nothing left to stop. Without that answer or a
+      // run-specific receipt the continuing queue remains blocked.
+      return error instanceof GatewayTransportError && error.code === "gateway_target_unavailable";
     }
   }
 }
@@ -1544,6 +1555,9 @@ export const OPENCLAW_GATEWAY_PROTOCOL_EVIDENCE = Object.freeze({
   // sessions_yield ends its run as yielded and paused. The wait result names no continuation,
   // so the connector follows the next lifecycle start on the bound session key.
   handOffSupport: "sessions_yield followed through agent lifecycle start events on the session",
+  // sessions.abort with only a run ID resolves its target from active runs; an unknown run is
+  // rejected INVALID_REQUEST / SESSION_MUTATION_TARGET_REQUIRED and is treated as already stopped.
+  abortInactiveRun: "SESSION_MUTATION_TARGET_REQUIRED means no active run; nothing to stop",
   inspectedSourceVersion: "2026.7.1",
   inspectedSourceCommit: "0790d9f593ad30c940ed93b5872a8cf6d6f3cf8c",
   handOffInspectedSourceVersion: "2026.11.4",
